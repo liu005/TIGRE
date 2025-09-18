@@ -27,7 +27,6 @@ def cuda_raise_errors(error_code):
         raise TigreCudaCallError('Atb:',error_code)
 
 
-
 def _Atb_ext(np.ndarray[np.float32_t, ndim=3] projections, geometry, np.ndarray[np.float32_t, ndim=2] angles, backprojection_type="FDK", mode="cone", gpuids=None):
 
     cdef c_GpuIds* c_gpuids = convert_to_c_gpuids(gpuids)
@@ -70,8 +69,6 @@ def _Atb_ext(np.ndarray[np.float32_t, ndim=3] projections, geometry, np.ndarray[
             cuda_raise_errors(voxel_backprojection2(c_projections, c_geometry[0], c_model, c_angles, total_projections, c_gpuids[0]))
         else:
             cuda_raise_errors(voxel_backprojection(c_projections, c_geometry[0], c_model, c_angles, total_projections, c_gpuids[0]))
-
-
     else:
         cuda_raise_errors(voxel_backprojection_parallel(c_projections, c_geometry[0], c_model, c_angles, total_projections, c_gpuids[0]))
 
@@ -85,6 +82,5 @@ def _Atb_ext(np.ndarray[np.float32_t, ndim=3] projections, geometry, np.ndarray[
     PyArray_ENABLEFLAGS(model, np.NPY_OWNDATA) # Attribute new memory owner
 
     free_c_geometry(c_geometry)
-
 
     return model

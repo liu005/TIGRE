@@ -5,8 +5,31 @@ from __future__ import print_function
 import copy
 
 import numpy as np
+import cupy as cp
 from tigre.utilities.Atb import Atb
 from tigre.utilities.filtering import filtering
+from tigre.utilities.redundancy_weighting import redundancy_weighting, zeropadding 
+from scipy.spatial.transform import Rotation
+import gc
+from numba import cuda
+
+class device_manager:
+    """
+    Context manager, either CPU or nVidia GPU
+    """
+    def __init__(self, arr):
+        try:
+            self.device = arr.device
+        except AttributeError:
+            self.device = "cpu"
+            
+    def __enter__(self):
+        print(f"Using device: {self.device}")
+        return self.device
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+    
 
 
 def FDK(proj, geo, angles, **kwargs):
@@ -70,115 +93,59 @@ def FDK(proj, geo, angles, **kwargs):
                         PYTHON : Reuben Lindroos
     """
     verbose = kwargs["verbose"] if "verbose" in kwargs else False
-
     gpuids = kwargs["gpuids"] if "gpuids" in kwargs else None
     dowang = kwargs["dowang"] if "dowang" in kwargs else True
 
-    def zeropadding(proj, geo):
-        zgeo = copy.deepcopy(geo)
-        padwidth = int(2 * geo.offDetector[1] / geo.dDetector[1])
-        zgeo.offDetector[1] = geo.offDetector[1] - \
-            padwidth / 2 * geo.dDetector[1]
-        zgeo.nDetector[1] = abs(padwidth) + geo.nDetector[1]
-        zgeo.sDetector[1] = zgeo.nDetector[1] * zgeo.dDetector[1]
 
-        theta = (geo.sDetector[1] / 2 - abs(geo.offDetector[1])
-                 ) * np.sign(geo.offDetector[1])
-
-        if geo.offDetector[1] > 0:
-            zproj = np.zeros(
-                (proj.shape[0] , proj.shape[1], proj.shape[2]+ padwidth), dtype=proj.dtype)
-            for ii in range(proj.shape[0]):
-                zproj[ii,:, :] = np.concatenate(
-                    (np.zeros((proj.shape[1], padwidth)), proj[ii,:,:]), axis=1)
-        else:
-            zproj = np.zeros(
-                (proj.shape[0] , proj.shape[1] , proj.shape[2]+ abs(padwidth)), dtype=proj.dtype)
-            for ii in range(proj.shape[0]):
-                zproj[ii, :, :] = np.concatenate(
-                    (proj[ ii,:, :], np.zeros((proj.shape[1], abs(padwidth)))), axis=1)
-
-        return zproj, zgeo, theta
-
-    def preweighting2(proj, geo, theta):
-        """
-        Preweighting using Wang function
-
-        :param proj: np.array(dtype=float32),
-        Data input in the form of 3d
-
-        :param geo: tigre.utilities.geometry.Geometry
-        Geometry of detector and image (see examples/Demo code)
-
-        :param theta: np.array(dtype=float32)
-        Angles of projection, shape = (nangles,3) or (nangles,)
-
-        :return: np.array(dtype=float32), np.array(dtype=float32)
-
-        """
-        offset = geo.offDetector[1]
-        offset = offset + (geo.DSD / geo.DSO) #* geo.COR
-
-        us = np.arange(-geo.nDetector[1]/2 + 0.5, geo.nDetector[1] /
-                       2 - 0.5 + 1) * geo.dDetector[1] + abs(offset)
-        us = us * geo.DSO / geo.DSD
-        abstheta = np.abs(theta * geo.DSO / geo.DSD)
-
-        w = np.ones(proj[0, :, :].shape)
-
-        for ii in range(geo.nDetector[1]):
-            t = us[ii]
-            if np.abs(t) <= abstheta:
-                w[:,ii] = 0.5 * (np.sin((np.pi / 2) * np.arctan(t /
-                                  geo.DSO) / (np.arctan(abstheta / geo.DSO))) + 1)
-            if t < -abstheta:
-                w[:,ii] = 0
-
-        if theta < 0:
-            w = np.fliplr(w)
-
-        proj_w = proj.copy()  # preallocation
-        for ii in range(proj.shape[0]):
-            proj_w[ii, :, :,] = proj[ii, :, :] * w * 2
-
-        return proj_w, w
-
-    if not np.any(geo.offDetector):
-        dowang = False
+    xp = cp.get_array_module(proj)
         
     if dowang:
         if verbose:
             print('FDK: applying detector offset weights')
-        # Zero-padding to avoid FFT-induced aliasing
-        zproj, zgeo, theta = zeropadding(proj, geo)
-        # Preweighting using Wang function to save memory
-        proj, _ = preweighting2(zproj, zgeo, theta)
-
-        # Replace original proj and geo
-        # proj = proj_w;
-        geo = zgeo
-
-    
-    geo = copy.deepcopy(geo)
+        with device_manager(proj):
+            # Preweighting using Wang function
+            proj *= xp.asarray(redundancy_weighting(geo))
+   
     geo.check_geo(angles)
     geo.checknans()
     geo.filter = kwargs["filter"] if "filter" in kwargs else None
-    # Weight
-    proj_filt = np.zeros(proj.shape, dtype=np.float32)
-    xv = np.arange((-geo.nDetector[1] / 2) + 0.5,
-                   1 + (geo.nDetector[1] / 2) - 0.5) * geo.dDetector[1]
-    yv = np.arange((-geo.nDetector[0] / 2) + 0.5,
-                   1 + (geo.nDetector[0] / 2) - 0.5) * geo.dDetector[0]
-    (yy, xx) = np.meshgrid(xv, yv)
-
-    w = geo.DSD[0] / np.sqrt((geo.DSD[0] ** 2 + xx ** 2 + yy ** 2))
-    np.multiply(proj, w, out=proj_filt)
-
-    proj_filt = filtering(proj_filt, geo, angles,
+    
+    if abs(geo.COR).any() > 0:
+        # Zero-padding to avoid FFT-induced aliasing
+        proj, geo = zeropadding(proj, geo)
+        
+    # Intensity Weight
+    if geo.rotDetector.any():
+        R_d = xp.array(Rotation.from_euler('XYZ', geo.rotDetector).as_matrix())
+    DSD = xp.array(geo.DSD)
+    
+    for i in range(proj.shape[0]):
+        # detector offset
+        xv = xp.linspace(-geo.nDetector[1] / 2 + 0.5, geo.nDetector[1] / 2 - 0.5,
+                       geo.nDetector[1] ) * geo.dDetector[1] + geo.offDetector[i,1]
+        yv = xp.linspace(-geo.nDetector[0] / 2 + 0.5, geo.nDetector[0] / 2 - 0.5,
+                       geo.nDetector[0] ) * geo.dDetector[0] + geo.offDetector[i,0]
+        (yy, xx) = xp.meshgrid(xv, yv)
+        zz = yy*0 + DSD[i]
+        xyz = xp.vstack( (xx.ravel(), yy.ravel(), zz.ravel()) )
+        # detector rotation
+        if geo.rotDetector.any():
+            xyz = xp.matmul(R_d[i], xyz)
+        # apply intensity weight    
+        proj[i] *= (xyz[2,:] / xp.linalg.norm(xyz, axis=0)).reshape(xx.shape)
+            
+    proj_filt = filtering(proj, geo, angles,
                           parker=False, verbose=verbose)
-    # geo.proj = proj_filt
-
-    return Atb(proj_filt, geo, geo.angles, "FDK", gpuids=gpuids)
+    
+    # clean up gpu memory and reset before running Atb()
+    del proj
+    gc.collect()
+    cuda.close()
+    
+    # FDK back projection
+    rec = Atb(proj_filt, geo, geo.angles, "FDK", gpuids=gpuids)
+            
+    return rec
 
 
 fdk = FDK

@@ -26,8 +26,10 @@ from .utilities.Atb import Atb
 from .utilities.visualization.plotproj import plotproj, plotProj, plotSinogram
 from .utilities.visualization.plotimg import plotimg, plotImg
 from .utilities.visualization.plot_geometry import plot_geometry
+from .utilities.visualization.animate_geometry import animate_geometry
 from .utilities.visualization.plot_angles import plot_angles
 from .utilities.CTnoise import add
 from .utilities.common_geometry import staticDetectorGeo, staticDetLinearSourceGeo, ArbitrarySourceDetMoveGeo
+from .utilities.computeCOR import computeCOR
 
 from . import algorithms

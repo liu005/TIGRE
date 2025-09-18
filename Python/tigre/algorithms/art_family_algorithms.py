@@ -59,7 +59,7 @@ class OS_SART(IterativeReconAlg):
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
 
 
-ossart = decorator(OS_SART, name="ossart")
+os_sart = decorator(OS_SART, name="os_sart")
 
 
 class SART_TV(IterativeReconAlg):  
@@ -108,9 +108,9 @@ class SART_TV(IterativeReconAlg):
 sart_tv = decorator(SART_TV, name="sart_tv")
 
 
-class OSSART_TV(IterativeReconAlg):  
+class OS_SART_TV(IterativeReconAlg):  
     __doc__ = (
-        "OSSART_TV solves Cone Beam CT image reconstruction using Oriented Subsets\n"
+        "OS_SART_TV solves Cone Beam CT image reconstruction using Oriented Subsets\n"
         "Simultaneous Algebraic Reconstruction Technique with TV regularization algorithm\n"
         "OSSART_TV(PROJ,GEO,ALPHA,NITER,BLOCKSIZE=20,TVLAMBDA=50,TVITER=50) \n"
         "solves the reconstruction problem using the projection data PROJ taken\n"
@@ -149,4 +149,4 @@ class OSSART_TV(IterativeReconAlg):
             if Quameasopts is not None:
                 self.error_measurement(res_prev, i)
 
-ossart_tv = decorator(OSSART_TV, name="ossart_tv")
+os_sart_tv = decorator(OS_SART_TV, name="os_sart_tv")

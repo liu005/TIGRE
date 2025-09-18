@@ -107,7 +107,7 @@ plt.gca().legend(("SIRT", "OS-SART", "SART"))
 
 ##CC plot
 plt.figure()
-plt.plot(np.vstack((qualitySIRT[0, :], qualityOSSART[0, :], qualitySART[0, :])).T)
+plt.plot(np.vstack((qualitySIRT[1, :], qualityOSSART[1, :], qualitySART[1, :])).T)
 plt.title("Evolution of CC per iteration")
 plt.xlabel("Iteration")
 plt.ylabel("CC")
@@ -115,7 +115,7 @@ plt.gca().legend(("SIRT", "OS-SART", "SART"))
 
 ##MSSIM plot
 plt.figure()
-plt.plot(np.vstack((qualitySIRT[0, :], qualityOSSART[0, :], qualitySART[0, :])).T)
+plt.plot(np.vstack((qualitySIRT[2, :], qualityOSSART[2, :], qualitySART[2, :])).T)
 plt.title("Evolution of MSSIM per iteration")
 plt.xlabel("Iteration")
 plt.ylabel("MSSIM")
@@ -124,7 +124,7 @@ plt.gca().legend(("SIRT", "OS-SART", "SART"))
 
 ##UQI plot
 plt.figure()
-plt.plot(np.vstack((qualitySIRT[0, :], qualityOSSART[0, :], qualitySART[0, :])).T)
+plt.plot(np.vstack((qualitySIRT[3, :], qualityOSSART[3, :], qualitySART[3, :])).T)
 plt.title("Evolution of UQI per iteration")
 plt.xlabel("Iteration")
 plt.ylabel("UQI")
