@@ -4,9 +4,9 @@ from __future__ import print_function
 
 from .art_family_algorithms import sart
 from .art_family_algorithms import sirt
-from .art_family_algorithms import ossart
+from .art_family_algorithms import os_sart
 from .art_family_algorithms import sart_tv
-from .art_family_algorithms import ossart_tv
+from .art_family_algorithms import os_sart_tv
 from .ista_algorithms import fista
 from .ista_algorithms import ista
 from .iterative_recon_alg import iterativereconalg
@@ -33,9 +33,9 @@ from .statistical_algorithms import mlem
 __all__ = [
     "sart",
     "sirt",
-    "ossart",
+    "os_sart",
     "sart_tv",
-    "ossart_tv",
+    "os_sart_tv",
     "iterativereconalg",
     "FDK",
     "asd_pocs",
@@ -49,7 +49,12 @@ __all__ = [
     "fbp",
     "cgls",
     "lsqr",
+    "hybrid_lsqr",
     "lsmr",
+    "irn_tv_cgls",
+    "hybrid_flsqr_tv",
+    "ab_gmres",
+    "ba_gmres",
     "fista",
     "ista",
     "mlem",

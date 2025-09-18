@@ -39,7 +39,7 @@ def order_subsets(angles, blocksize, mode):
         index_alpha = np.arange(angles.shape[0])
 
         if mode is None or mode == "ordered":
-            return list(angles), list(index_alpha)
+            return [angles], [index_alpha] 
 
         if mode == "random" or mode == "random2":
             np.random.shuffle(index_alpha)

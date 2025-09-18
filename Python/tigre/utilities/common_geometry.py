@@ -4,7 +4,7 @@ from scipy.spatial.transform import Rotation
 from .geometry import Geometry
 
 # Tomosymthesis
-def staticDetectorGeo(geo,angles,rot=0) -> Geometry:
+def staticDetectorGeo(geo, angles, rot=0) -> Geometry:
     """
     # angles: angle off the axis between the source and detector centre (on x-y plane)
     #         when angles=0, the source is perpendicular to the detector
@@ -12,52 +12,76 @@ def staticDetectorGeo(geo,angles,rot=0) -> Geometry:
     """
     ngeo = copy.deepcopy(geo)
     R = ngeo.DSD-ngeo.DSO
-    rot = rot/180*np.pi
-    ngeo.DSD = ngeo.DSO + R*np.cos(angles)
-    ngeo.offDetector = np.vstack([0*angles, R*np.sin(angles)]).T
-    ngeo.rotDetector = np.vstack([0*angles, 0*angles, -angles]).T
-    angles += rot
-    ngeo.angles = np.vstack([angles, 0*angles, 0*angles]).T
+    rot = np.deg2rad(rot)
+    
+    angles = np.asarray(angles)
+    zero_arr = np.zeros_like(angles)
+    cos_ang, sin_ang = np.cos(angles), np.sin(angles)   
+    offDet0, offDet1 = ngeo.offDetector
+    
+    # Compute new DSD, DSO
+    ngeo.DSD = ngeo.DSO + R * cos_ang - sin_ang * offDet1 
+    ngeo.DSO = zero_arr + ngeo.DSO
+
+    # Update offDetector
+    ngeo.offDetector = np.column_stack((offDet0 + zero_arr, 
+                                R * sin_ang + cos_ang * offDet1))
+
+    # Apply detector rotation
+    s_ang = np.column_stack((zero_arr, zero_arr, -angles))
+    if hasattr(ngeo, 'rotDetector'):
+        detector_ang = Rotation.from_euler('XYZ', s_ang).apply(ngeo.rotDetector)
+        ngeo.rotDetector = detector_ang + s_ang
+    else:
+        ngeo.rotDetector = s_ang
+    
+    # Update angles
+    ngeo.angles = np.column_stack((angles + rot, zero_arr, zero_arr))
     
     return ngeo
 
-# Linear scan of source
-def staticDetLinearSourceGeo(geo,s_pos,s_rot=0,rot=0) -> Geometry:
+# Linear source
+def staticDetLinearSourceGeo(geo, s_pos, s_rot=0, rot=0) -> Geometry:
     """
-    # s_pos: distance along source scanning linear trajectory 
+    # s_pos: distance from centre along source scanning linear trajectory 
     #        when s_pos = 0, source is aligned to the origin and detector center on x-axis
     # s_rot: rotation angle between the source linear trajectory and detector (looking from top on x-y plane, anticlockwise)
     # rot: source and detector rotation angle around the origin (looking from top on x-y plane, anticlockwise) 
     """
-    ngeo = copy.deepcopy(geo)
-    if np.isscalar(s_rot):
-        s_rot = s_rot * np.ones_like(s_pos)
-    s_rot = s_rot / 180 *np.pi
-    if np.isscalar(rot):
-        rot = rot * np.ones_like(s_pos)
-    if len(s_pos) != len(rot) or len(s_pos) != len(s_rot):
-        raise("Inputs length do not match")
-    
-    rot = rot/180*np.pi 
-               
+    ngeo = copy.deepcopy(geo)    
+    s_pos = np.asarray(s_pos)
+    s_rot = np.deg2rad(np.asarray(s_rot))
+    rot = np.deg2rad(np.asarray(rot))
+                   
     ang  = np.arctan2(s_pos*np.cos(s_rot), ngeo.DSO + s_pos*np.sin(s_rot)) 
+    zero_arr = np.zeros_like(ang)
     R = ngeo.DSD - ngeo.DSO
-    if hasattr(ngeo,"offDetector"):
-        ngeo.offDetector = ngeo.offDetector.astype(np.float32) + np.array([ang*0, R*np.sin(ang)]).T 
+    cos_ang, sin_ang = np.cos(ang), np.sin(ang)
+    offDet0, offDet1 = ngeo.offDetector
+    
+    # Compute new DSD, DSO
+    ngeo.DSO = np.sqrt(ngeo.DSO**2 + s_pos**2) 
+    ngeo.DSD = ngeo.DSO + R * cos_ang - sin_ang * offDet1 
+    
+    # Update offDetector
+    ngeo.offDetector = np.column_stack((offDet0 + zero_arr, 
+                                R * sin_ang + cos_ang * offDet1))
+    
+    # Apply detector rotation
+    s_ang = np.column_stack((zero_arr, zero_arr, -ang))
+    if hasattr(ngeo, 'rotDetector'):
+        proj_rot = Rotation.from_euler('XYZ', s_ang).apply(ngeo.rotDetector)
+        ngeo.rotDetector = proj_rot + s_ang
     else:
-        ngeo.offDetector = np.array([ang*0, R*np.sin(ang)]).T 
-    if hasattr(ngeo,"rotDetector"):    
-        ngeo.rotDetector += np.array([0*ang, 0*ang, -ang]).T   
-    else:
-        ngeo.rotDetector = np.array([0*ang, 0*ang, -ang]).T 
-    ngeo.DSO = np.sqrt((s_pos*np.cos(s_rot))**2 + (ngeo.DSO + s_pos*np.sin(s_rot))**2)
-    ngeo.DSD = np.sqrt((s_pos*np.cos(s_rot))**2 + (ngeo.DSD + s_pos*np.sin(s_rot))**2)
-    ang += rot    
-    ngeo.angles = np.vstack([ang, 0*ang, 0*ang]).T
+        ngeo.rotDetector = s_ang
+
+    # Update angles
+    ngeo.angles = np.column_stack((ang + rot, zero_arr, zero_arr))
+    
     return ngeo
+        
 
-
-def ArbitrarySourceDetMoveGeo(geo,s_pos,d_pos=None,d_rot=None) -> Geometry:
+def ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos=None, d_rot=None) -> Geometry:
     """
     # Source and Detector can move arbitrarily while the object is fixed
     #
@@ -65,9 +89,8 @@ def ArbitrarySourceDetMoveGeo(geo,s_pos,d_pos=None,d_rot=None) -> Geometry:
     #   ----------
     #   geo:   standard cone beam geometry
     #   s_pos: nx3 array, source movement coordinates (x,y,z), in mm
-    #           default s_pos = (DSO, 0, 0), source is on x-axis (+) 
     #   d_pos: nx3 array, detector centre movement coordinates (x,y,z), in mm 
-    #           default d_pos = (DSO-DSD, 0, 0), detector centre on x-axis (-)
+    #           default d_pos = oposite s_pos, detector centre facing origin
     #   d_rot: nx3 array, detector rotation angles (roll, pitch, yaw) in degrees, 
     #           default - no rotation, detector facing origin
     #   Note:
@@ -78,63 +101,183 @@ def ArbitrarySourceDetMoveGeo(geo,s_pos,d_pos=None,d_rot=None) -> Geometry:
     #   geometry with arbitrarily specified movements of source and detector
     #
     """
-    s_pos = np.array(s_pos) if isinstance(s_pos,list) else s_pos
     ngeo = copy.deepcopy(geo)
-    if s_pos.ndim != 2:
-        raise("Input s_pos should be an n x 3 array")
-    else:
-        n = s_pos.shape[0]
-    if s_pos.shape[1] != 3:
-        raise("Input s_pos should be an n x 3 array")
+    
+    # Source position
+    s_pos = np.asarray(s_pos, dtype=np.float64)
+    
+    if s_pos.ndim != 2 or s_pos.shape[1] != 3:
+        raise ValueError("Input s_pos should be an n x 3 array")
+        
+    n = s_pos.shape[0]
+    DS = ngeo.DSD-ngeo.DSO
+    
+    # source euler angles away from x-axis in "XYZ" order
+    s_ang = compute_xyz_euler(s_pos)
+    
+    # Compute source rotation
+    Rs = Rotation.from_euler('XYZ', s_ang).as_matrix()
+
+    # Detector position
     if d_pos is None:
-        d_pos = np.repeat([[ngeo.DSO-ngeo.DSD, 0, 0]], n, axis=0)
-    elif isinstance(d_pos,list):
-        d_pos = np.array(d_pos)
+        d_pos = np.einsum('nij,j->ni', Rs, np.array([-DS, 0, 0]))
+    
     if d_rot is None:
         d_rot = np.zeros((n,3))
-    elif isinstance(d_rot,list):
-        d_rot = np.array(d_rot)
-    if s_pos.shape != d_pos.shape or s_pos.shape != d_rot.shape:
-        raise("Inputs dimensions do not match")        
+            
+    d_pos = np.asarray(d_pos, dtype=np.float64)
     
-    d_rot = d_rot / 180*np.pi
+    if s_pos.shape != d_pos.shape or s_pos.shape != d_rot.shape:
+        raise ValueError("Inputs dimensions do not match")        
     
     # source and detector vector lengths and directions
-    rs = np.linalg.norm(s_pos, axis=1)
-    ns = s_pos / np.tile(rs, (3,1)).T
-    rd = np.linalg.norm(d_pos, axis=1)
-    nd = d_pos / np.tile(rd, (3,1)).T
+    rs = np.linalg.norm(s_pos, axis=1, keepdims=True)
+    rd = np.linalg.norm(d_pos, axis=1, keepdims=True)
     
-    # source euler angles (intrinsic) away from x-axis in "ZYZ" order
-    s0 = np.zeros_like(s_pos)
-    s0[:,0] = s_pos[:,0]
-    s_ang = euler_from_vecs(s0, s_pos, order="zyz")   
-    
+    ns = s_pos / rs
+    nd = d_pos / rd
+            
     # check angles between OS and OD
     sd_cross = np.cross(ns, nd)
     # note: A x B = ||A||.||B||sin(theta)
     sd_ang = np.arcsin(sd_cross)
-    if (abs(sd_ang) >= np.pi/2).any():  
-        raise RuntimeError("Source and detector are not always on different sides (some angle<=90 degree)")        
+    if np.any(sd_ang >= np.pi/2):  
+        raise RuntimeError("Source and detector must always on opposite sides")        
     
-    # detector angles from ray
-    d_cross = np.cross(-ns, nd) 
-    d_ang = np.arcsin(d_cross)
-    pd = d_cross * np.tile(rd, (3,1)).T  
+    # Compute detector offset in xyz
+    d_offset = np.array([0, ngeo.offDetector[1], ngeo.offDetector[0]])
     
-    if hasattr(ngeo,"offDetector"):
-        ngeo.offDetector = ngeo.offDetector.astype(np.float64) + np.vstack([pd[:,1], -pd[:,2]]).T
-    else:
-        ngeo.offDetector = np.vstack([pd[:,1], -pd[:,2]]).T
+    # find planes perpendicular to the beam, while the detector centre positions are on the planes, 
+    # and return the intersection points of the beam with the planes
+    Int, D = find_intersection_planes(d_pos + d_offset, -ns)
+       
+    # Compute new DSD, DSO
+    ngeo.DSO = rs.flatten()  
+    ngeo.DSD = ngeo.DSO + abs(D) 
+    
+    # Update offDetector
+    shift = d_pos - Int
+    dd = np.linalg.norm(shift, axis=1, keepdims=True) * np.sign(shift)
+    ngeo.offDetector = np.column_stack((dd[:,2], dd[:,1])) + Rotation.from_euler('XYZ', sd_ang).apply(d_offset)[:,2:0:-1]
         
-    if hasattr(ngeo,"rotDetector"):
-        ngeo.rotDetector += d_ang + d_rot
+    # Update rotDetector
+    if hasattr(ngeo, 'rotDetector'):
+        d_rot += ngeo.rotDetector
     else:
-        ngeo.rotDetector = d_ang + d_rot
-    ngeo.DSO = np.linalg.norm(s_pos, axis=1) 
-    ngeo.DSD = np.linalg.norm(s_pos-d_pos, axis=1) 
-    ngeo.angles = s_ang 
+        # need this line to add attribute
+        setattr(ngeo, 'rotDetector', None)
+    ngeo.rotDetector = Rotation.from_euler('XYZ', -sd_ang).apply( d_rot - sd_ang )
+        
+    ngeo.angles = s_ang
     return ngeo
+
+
+def find_intersection_planes(plane_points, normal, line_points=None):
+    """
+    Finds the equations of planes perpendicular to normal vectors that pass through a series given points.
+    Then returns the intersections of the lines with direction normal to that planes
+
+    Parameters:
+    points : array-like, shape (3,n) - A point on the plane (x0, y0, z0)
+    normal : array-like, shape (3,n) - The normal vector (A, B, C)
+
+    Returns:
+    intersection : The intersection of the plane with the beam
+    D:    The plane equation coefficients (A, B, C, D) representing Ax + By + Cz = D
+    """
+    plane_points = np.asarray(plane_points)
+    normal = np.asarray(normal)
+    line_points = 0*plane_points if line_points == None else np.asarray(line_points)
+
+    # Compute D = A*x0 + B*y0 + C*z0
+    A, B, C = normal[:,0], normal[:,1], normal[:,2]
+    D = np.einsum('ij,ij->i', normal, plane_points)
+
+    # Compute denominator
+    x0, y0, z0 = line_points[:,0], line_points[:,1], line_points[:,2]
+    denominator = A**2 + B**2 + C**2
+    
+    # Compute t
+    t = (D - (A*x0 + B*y0 + C*z0)) / denominator
+    
+    # Inersection points
+    intersection = np.column_stack((x0 + A*t, y0 + B*t, z0 +C*t))
+
+    return intersection, D
+
+
+def compute_xyz_euler(points):
+    """
+    Converts 3D points (x, y, z) into Euler angles (XYZ convention) relative to (1,0,0).
+    
+    Parameters:
+    points : array-like, shape (N,3) - List of 3D points [(x1, y1, z1), (x2, y2, z2), ...]
+    
+    Returns:
+        euler_angles : ndarray, shape (N,3) - Euler angles (roll, pitch, yaw) for each point
+        roll (phi)   -> Rotation about X-axis (set to 0, since it’s a direction vector)
+        pitch (theta) -> Rotation about Y-axis
+        yaw (psi)    -> Rotation about Z-axis
+    """
+    points = np.asarray(points)
+
+    # Compute vector magnitudes
+    r = np.linalg.norm(points[:,:2], axis=1)
+    
+    yaw = np.arctan2(points[:,1], points[:,0])  # Rotation about Z-axis
+    pitch = np.arctan2(points[:,2], r)          # Rotation about Y-axis
+    roll = np.zeros_like(yaw)                   # Roll set to zero since we're only aligning a direction vector
+
+    return np.column_stack((roll, pitch, yaw))
+
+
+def centre_of_rotation_3D(P1, D1, P2, D2):
+    """
+    Finds the centre of rotation between two 3D lines.
+    
+    P1, D1 : Point and direction vector of first line.
+    P2, D2 : Point and direction vector of second line.
+    
+    Returns:
+    - Centre of rotation if the lines are not parallel.
+    - None if the lines are parallel (no unique centre).
+    """
+    # Convert to numpy arrays
+    P1, D1, P2, D2 = map(np.array, (P1, D1, P2, D2))
+
+    # Cross product to find normal vector
+    N = np.cross(D1, D2)
+    norm_N = np.linalg.norm(N)
+    
+    # If lines are parallel, no unique center of rotation
+    if norm_N < 1e-6:
+        return None
+
+    # Compute the perpendicular vector between the lines
+    V = P2 - P1
+    
+    # Solve for λ and μ (projection scalars)
+    n = D1.shape[0]
+    centre = np.zeros((n,3))
+    for i in range(n):
+        A = np.array([D1[i,:], -D2, N[i,:]]).T  # System matrix
+        b = V[i,:]
+    
+        # Solve least squares if no exact solution
+        try:
+            lambda_mu_nu = np.linalg.lstsq(A, b, rcond=None)[0]
+            λ, μ, _ = lambda_mu_nu
+        except np.linalg.LinAlgError:
+            return None
+    
+        # Compute closest points on both lines
+        C1 = P1[i,:] + λ * D1[i,:]
+        C2 = P2 + μ * D2
+
+        # Centre of rotation (midpoint of closest points)
+        centre[i] = (C1 + C2) / 2
+
+    return centre
 
 
 def ArbitrarySourceDetectorFixedObject(
@@ -236,38 +379,38 @@ def ArbitrarySourceDetectorFixedObject(
     return geometry
 
     
-def euler_from_vecs(a_vec,b_vec,order="xyz"):
-    """
-    Calculate Euler angles from two vectors
+# def euler_from_vecs(a_vec,b_vec,order="xyz"):
+#     """
+#     Calculate Euler angles from two vectors
 
-    Parameters
-    ----------
-    a_vec : np.array of (n,3) or (3,)
-        A vector(s).
-    b_vec : np.array of (n,3) or (3,)
-        B vector(s).
-    order : string, optional
-        Order of the euler angles in rotations. The default is "xyz".
+#     Parameters
+#     ----------
+#     a_vec : np.array of (n,3) or (3,)
+#         A vector(s).
+#     b_vec : np.array of (n,3) or (3,)
+#         B vector(s).
+#     order : string, optional
+#         Order of the euler angles in rotations. The default is "xyz".
 
-    Returns
-    -------
-    euler : np.array of (n,3) or (3,)
-        Euler angles of rotations.
+#     Returns
+#     -------
+#     euler : np.array of (n,3) or (3,)
+#         Euler angles of rotations.
 
-    """
-    na = 1 if a_vec.ndim<2 else a_vec.shape[0]
-    nb = 1 if b_vec.ndim<2 else b_vec.shape[0]
-    n = max(na,nb)
-    a_vec = np.repeat([a_vec], n, axis=0) if a_vec.ndim<2 else a_vec
-    b_vec = np.repeat([b_vec], n, axis=0) if b_vec.ndim<2 else b_vec
-    euler = np.zeros_like(a_vec,dtype=np.float64)
-    for i in range(n):
-        R = rotation_from_vecs(a_vec[i,:],b_vec[i,:])
-        euler[i,:] = Rotation.from_matrix(R).as_euler(order)
-        for j in range(3):
-            if abs(euler[i,j]) < 2e-8: # very small angle
-                euler[i,j] = 0 
-    return euler
+#     """
+#     na = 1 if a_vec.ndim<2 else a_vec.shape[0]
+#     nb = 1 if b_vec.ndim<2 else b_vec.shape[0]
+#     n = max(na,nb)
+#     a_vec = np.repeat([a_vec], n, axis=0) if a_vec.ndim<2 else a_vec
+#     b_vec = np.repeat([b_vec], n, axis=0) if b_vec.ndim<2 else b_vec
+#     euler = np.zeros_like(a_vec,dtype=np.float64)
+#     for i in range(n):
+#         R = rotation_from_vecs(a_vec[i,:],b_vec[i,:])
+#         euler[i,:] = Rotation.from_matrix(R).as_euler(order)
+#         for j in range(3):
+#             if abs(euler[i,j]) < 2e-8: # very small angle
+#                 euler[i,j] = 0 
+#     return euler
 
 
 def rotation_from_vecs(v1, v2):
