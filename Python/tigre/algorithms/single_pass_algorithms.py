@@ -95,6 +95,14 @@ def FDK(proj, geo, angles, **kwargs):
     verbose = kwargs["verbose"] if "verbose" in kwargs else False
     gpuids = kwargs["gpuids"] if "gpuids" in kwargs else None
     dowang = kwargs["dowang"] if "dowang" in kwargs else True
+    # Per-view ramp-scale controls (see utilities/filtering.py):
+    #   dbeta        - explicit per-view angular weights for exotic
+    #                  trajectories (else derived from `angles`; the
+    #                  ArbitrarySource* helpers may attach geo.dbeta).
+    #   legacy_scale - reproduce the historical single-scalar ramp scale
+    #                  (constant magnification, uniform full-2*pi assumption).
+    dbeta = kwargs.get("dbeta", getattr(geo, "dbeta", None))
+    legacy_scale = kwargs.get("legacy_scale", False)
 
 
     xp = cp.get_array_module(proj)
@@ -138,7 +146,8 @@ def FDK(proj, geo, angles, **kwargs):
         proj[i] *= (xyz[2,:] / xp.linalg.norm(xyz, axis=0)).reshape(xx.shape)
             
     proj_filt = filtering(proj, geo, angles,
-                          parker=False, verbose=verbose)
+                          parker=False, verbose=verbose,
+                          dbeta=dbeta, legacy_scale=legacy_scale)
     
     # clean up gpu memory and reset before running Atb()
     del proj
