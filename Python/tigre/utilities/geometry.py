@@ -131,55 +131,85 @@ class Geometry(object):
 
     def __check_and_repmat__(self, attrib, angles):
         """
-        Checks whether the attribute is a single value and repeats it into an array if it is
-
-        :rtype: None
-        :param attrib: string
-        :param angles: np.ndarray
+        Normalize geometry fields to TIGRE‑compatible shapes and dtypes.
+        Produces:
+            DSO, DSD, COR → (n_proj,)
+            offOrigin     → (n_proj, 3)
+            offDetector   → (n_proj, 2)
+            rotDetector   → (n_proj, 3)
+        All float32.
         """
-        old_attrib = getattr(self, attrib)
-
-        if type(old_attrib) in [float, int, np.float32, np.float64, np.int32]:
-            new_attrib = np.tile(old_attrib, (angles.shape[0], 1))
-            setattr(self, attrib, new_attrib)
-
-        elif type(old_attrib) == np.ndarray:
-            if old_attrib.ndim == 1:
-                if old_attrib.shape in [(3,), (2,)] and attrib not in ["DSD", "DSO", "COR"]:
-                    new_attrib = np.tile(old_attrib, (angles.shape[0], 1))
-                    setattr(self, attrib, new_attrib)
-                elif old_attrib.shape in [(1,)]:
-                    new_attrib = np.tile(old_attrib, (angles.shape[0], 1))
-                    setattr(self, attrib, new_attrib)
-                elif old_attrib.shape == (angles.shape[0],):
-                    pass
-            else:
-                if old_attrib.shape == (angles.shape[0], old_attrib.shape[1]):
-                    pass
-                else:
-                    raise AttributeError(
-                        attrib
-                        + " with shape: "
-                        + str(old_attrib.shape)
-                        + " not compatible with shapes: "
-                        + str(
-                            [
-                                (angles.shape[0],),
-                                (angles.shape[0], old_attrib.shape[1]),
-                                (3,),
-                                (2,),
-                                (1,),
-                            ]
-                        )
-                    )
-
-        else:
-            raise TypeError(
-                "Data type not understood for: geo."
-                + attrib
-                + " with type = "
-                + str(type(getattr(self, attrib)))
-            )
+        old = getattr(self, attrib)
+        n = angles.shape[0]
+    
+        # --- Expected shapes per attribute -------------------------------------
+        expected_shapes = {
+            "DSO": (n,),
+            "DSD": (n,),
+            "COR": (n,),
+            "offOrigin": (n, 3),
+            "offDetector": (n, 2),
+            "rotDetector": (n, 3),
+        }
+        target_shape = expected_shapes[attrib]
+    
+        # --- Scalars ------------------------------------------------------------
+        if isinstance(old, (float, int, np.floating, np.integer)):
+            # broadcast scalar to target shape
+            new = np.full(target_shape, float(old), dtype=np.float32)
+            setattr(self, attrib, new)
+            return
+    
+        # --- Convert to array ---------------------------------------------------
+        arr = np.asarray(old)
+    
+        # --- 1D arrays ----------------------------------------------------------
+        if arr.ndim == 1:
+            # Correct shape already
+            if arr.shape == target_shape:
+                setattr(self, attrib, arr.astype(np.float32))
+                return
+    
+            # (1,) → broadcast
+            if arr.shape == (1,):
+                new = np.full(target_shape, float(arr[0]), dtype=np.float32)
+                setattr(self, attrib, new)
+                return
+    
+            # (3,) or (2,) → broadcast for vector fields
+            if attrib == "offOrigin" and arr.shape == (3,):
+                new = np.tile(arr.astype(np.float32), (n, 1))
+                setattr(self, attrib, new)
+                return
+    
+            if attrib == "offDetector" and arr.shape == (2,):
+                new = np.tile(arr.astype(np.float32), (n, 1))
+                setattr(self, attrib, new)
+                return
+    
+            if attrib == "rotDetector" and arr.shape == (3,):
+                new = np.tile(arr.astype(np.float32), (n, 1))
+                setattr(self, attrib, new)
+                return
+    
+            raise ValueError(f"{attrib} has invalid 1D shape {arr.shape}")
+    
+        # --- 2D arrays ----------------------------------------------------------
+        if arr.ndim == 2:
+            # (n,1) → reshape to (n,)
+            if arr.shape == (n, 1) and attrib in ["DSO", "DSD", "COR"]:
+                setattr(self, attrib, arr.reshape(n).astype(np.float32))
+                return
+    
+            # Correct shapes for vector fields
+            if arr.shape == target_shape:
+                setattr(self, attrib, arr.astype(np.float32))
+                return
+    
+            raise ValueError(f"{attrib} has invalid 2D shape {arr.shape}")
+    
+        # --- Unsupported type ---------------------------------------------------
+        raise TypeError(f"Unsupported type for {attrib}: {type(old)}")
 
     def _verbose_output(self):
         for obj in inspect.getmembers(self):

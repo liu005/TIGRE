@@ -27,19 +27,35 @@ print(gpuids)
 geo = tigre.geometry(mode="cone", nVoxel=np.array([256, 256, 256]), default=True)
 geo.dDetector = np.array([0.8, 0.8]) * 2  # size of each pixel            (mm)
 geo.sDetector = geo.dDetector * geo.nDetector
+geo.COR = 0
 # print(geo)
 
 nangles = 128
 angles = np.linspace(0, 2 * np.pi, nangles, endpoint=False, dtype=np.float32)
 
+
 # Prepare projection data
 head = sample_loader.load_head_phantom(geo.nVoxel)
+
+
+# ## debug
+# print("DSO:", geo.DSO) 
+# print("DSO type:", type(geo.DSO)) 
+# print("DSO shape:", getattr(geo.DSO, "shape", None)) 
+# print("offOrigin shape:", getattr(geo.offOrigin, "shape", None)) 
+# print("offDetector shape:", getattr(geo.offDetector, "shape", None)) 
+# print("rotDetector shape:", getattr(geo.rotDetector, "shape", None)) 
+# print("DSD shape:", getattr(geo.DSD, "shape", None))
+# print("COR shape:", getattr(geo.COR, "shape", None))
+# ## end debug
+
+
 proj = tigre.Ax(head, geo, angles, gpuids=gpuids)
 test = tigre.Atb(proj,geo,angles,backprojection_type="matched",gpuids=gpuids)
 # Reconstruct
 niter = 20
 fdkout = algs.fdk(proj, geo, angles, gpuids=gpuids)
-ossart = algs.ossart(proj, geo, angles, niter, blocksize=20, gpuids=gpuids)
+ossart = algs.os_sart(proj, geo, angles, niter, blocksize=20, gpuids=gpuids)
 
 # Measure Quality
 # 'RMSE', 'MSSIM', 'SSD', 'UQI'

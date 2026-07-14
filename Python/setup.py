@@ -26,29 +26,58 @@ if no_pinned:
 
 IS_WINDOWS = sys.platform == "win32"
 
+# Automatically detects all GPUs in the system and compiles only the required compute capabilities
+def detect_gpu_compute_capabilities():
+    """
+    Detect compute capability of all GPUs using nvidia-smi.
+    Returns a sorted list like ['86','89'].
+    """
+    try:
+        output = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+            encoding="utf-8"
+        )
+        caps = set()
 
+        for line in output.strip().split("\n"):
+            cap = line.strip().replace(".", "")
+            if cap:
+                caps.add(cap)
+        if not caps:
+            caps = {"75"} # fall back minimum
+
+        return sorted(caps, key=int)
+
+    except Exception:
+        print("WARNING: Could not detect GPU compute capability, using default list")
+        return []
+    
 # Code from https://github.com/pytorch/pytorch/blob/master/torch/utils/cpp_extension.py
 
 CC_COMPATIBILITY_TABLE = [
-    # gencode, code, support_begin, suport_end
-    (20, 20,    1,  1.0),
-    (30, 30,    1, 11.0), 
-    (35, 35,    1, 12.0),
-    (37, 37,    1, 12.0), 
-    (50, 50,  6.5, 999), 
-    (52, 52,  6.5, 999 ), 
-    (60, 60,  8.0, 999 ), 
-    (61, 61,  8.0, 999 ), 
-    (70, 70,  9.0, 999 ), 
+    (20, 20,  3.0, 8.0),
+    (21, 21,  3.0, 8.0),
+    (30, 30,  4.2, 10.2),
+    (32, 32,  4.2, 10.2),
+    (35, 35,  5.0, 11.4),
+    (37, 37,  6.5, 11.4), 
+    (50, 50,  6.5, 11.8), 
+    (52, 52,  6.5, 11.8), 
+    (60, 60,  8.0, 12.8), 
+    (61, 61,  8.0, 12.8), 
+    (70, 70,  9.0, 12.8), 
     (75, 75, 10.0, 999 ), # From CUDA 10
     (80, 80, 11.0, 999 ), # From CUDA 11.0
     (86, 86, 11.1, 999 ), # From CUDA 11.1
-    (87, 87, 11.5, 999 ), 
-    (90, 90, 11.8, 999 ), # From CUDA 12
+    (87, 87, 11.5, 999 ),
+    (89, 89, 11.8, 999 ),
+    (90, 90, 12.0, 999 ), # From CUDA 12
+    (100, 100, 12.6, 999),
+    (120, 120, 12.8, 999)
 ]
 
 COMPUTE_CAPABILITY_ARGS = [
-    "-gencode=arch=compute_70,code=compute_70", # allows forward compiling
+#    "-gencode=arch=compute_70,code=compute_70", # allows forward compiling
     "--ptxas-options=-v",
     "-c",
     "--default-stream=per-thread",
@@ -124,24 +153,39 @@ def _is_cuda_file(path):
 
 CUDA, CUDA_VERSION = locate_cuda()
 
-cuda_version = 11.0
+#cuda_version = 13.0
 try:
     cuda_version = float(CUDA_VERSION)
 except ValueError:
     cuda_list = re.findall('\d+', CUDA_VERSION)
     cuda_version = float( str(cuda_list[0] + '.' + cuda_list[1]))
 
-# Insert CUDA arguments depedning on the version
-for item in CC_COMPATIBILITY_TABLE:
-    support_begin = item[2]
-    support_end   = item[3]
-    if cuda_version < support_begin:
-        continue
-    if cuda_version >= support_end:
-        continue
-    str_arg = f"-gencode=arch=compute_{item[0]},code=sm_{item[1]}"
-    COMPUTE_CAPABILITY_ARGS.insert(0, str_arg)
+# Auto detect gpus
+gpu_caps = detect_gpu_compute_capabilities()
 
+if gpu_caps:
+    print("Detected GPU compute capabilities:", gpu_caps)
+    for cap in gpu_caps:
+        COMPUTE_CAPABILITY_ARGS.insert(
+            0, f"-gencode=arch=compute_{cap},code=sm_{cap}"
+        )
+else:
+    # fallback to original behavior
+    for item in CC_COMPATIBILITY_TABLE:
+        support_begin = item[2]
+        support_end = item[3]
+        if cuda_version < support_begin:
+            continue
+        if cuda_version >= support_end:
+            continue
+        str_arg = f"-gencode=arch=compute_{item[0]},code=sm_{item[1]}"
+        COMPUTE_CAPABILITY_ARGS.insert(0, str_arg)
+
+if gpu_caps and float(CUDA_VERSION) >= 12:
+    COMPUTE_CAPABILITY_ARGS.append(
+        f"-gencode=arch=compute_{gpu_caps[-1]},code=compute_{gpu_caps[-1]}"
+    )        
+        
 # Obtain the numpy include directory.  This logic works across numpy versions.
 try:
     NUMPY_INCLUDE = numpy.get_include()

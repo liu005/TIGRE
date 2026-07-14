@@ -1,4 +1,4 @@
-function [res,resL2,qualMeasOut] = FISTA(proj,geo,angles,niter,varargin)
+function [res,resL2,qualMeasOut] = FISTA(proj,geo,angles,maxiter,varargin)
 % FISTA is a quadratically converging algorithm, modified from FISTA.
 %
 % It is based on the lazy-start FISTA modification in the following work:
@@ -61,10 +61,10 @@ if nargout<2 && measurequality
     warning("Image metrics requested but none catched as output. Call the algorithm with 3 outputs to store them")
     measurequality=false;
 end
-qualMeasOut=zeros(length(QualMeasOpts),niter);
+qualMeasOut=zeros(length(QualMeasOpts),maxiter);
 
 
-resL2=zeros(1,niter);
+resL2=zeros(1,maxiter);
 if nargout>1
     computeL2=true;
 else
@@ -79,8 +79,8 @@ t = 1;
 r = 1/4;
 
 
-for ii = 1:niter
-    if measurequality && ~strcmp(QualMeasOpts,'error_norm')
+for ii = 1:maxiter
+    if measurequality & ~strcmp(QualMeasOpts,'error_norm')
         res_prev = res; % only store if necessary
     end
     if (ii==1);tic;end
@@ -109,7 +109,7 @@ for ii = 1:niter
     end
 
     if (ii==1)&&(verbose==1)
-        expected_time=toc*niter;
+        expected_time=toc*maxiter;
         disp('FISTA');
         disp(['Expected duration   :    ',secs2hms(expected_time)]);
         disp(['Expected finish time:    ',datestr(datetime('now')+seconds(expected_time))]);

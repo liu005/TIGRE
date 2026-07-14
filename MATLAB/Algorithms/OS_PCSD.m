@@ -78,8 +78,8 @@ if nargout<3 && measurequality
     warning("Image metrics requested but none catched as output. Call the algorithm with 3 outputs to store them")
     measurequality=false;
 end
-qualMeasOut=zeros(length(QualMeasOpts),niter);
-resL2=zeros(1,niter);
+qualMeasOut=zeros(length(QualMeasOpts),maxiter);
+resL2=zeros(1,maxiter);
 if nargout>1
     computeL2=true;
 else
@@ -137,6 +137,7 @@ while ~stop_criteria %POCS
     if measurequality && ~strcmp(QualMeasOpts,'error_norm')
         res_prev = f; % only store if necessary
     end
+    f0 = f;
     if (iter==0 && verbose==1);tic;end
     iter=iter+1;
     
@@ -181,6 +182,7 @@ while ~stop_criteria %POCS
     
     % Compute L2 error of actual image. Ax-b
     dd=im3Dnorm(Ax(f,geo,angles,'gpuids',gpuids)-proj,'L2');
+    errorL2 = [dd];
     
     % Compute change in the image after last SART iteration
     dp_vec=(f-f0);
@@ -231,15 +233,15 @@ while ~stop_criteria %POCS
     if computeL2
         geo.offOrigin=offOrigin;
         geo.offDetector=offDetector;
-        resL2(ii)=im3Dnorm(proj-Ax(f,geo,angles,'gpuids',gpuids),'L2');                       % Compute error norm2 of b-Ax
+        errornow=im3Dnorm(proj-Ax(f,geo,angles,'gpuids',gpuids),'L2');                       % Compute error norm2 of b-Ax
         % If the error is not minimized.
-        if  iter~=1 && resL2(ii)>resL2(ii-1)
+        if  iter~=1 && errornow>errorL2(end)
             if verbose
                 disp(['Convergence criteria met, exiting on iteration number:', num2str(iter)]);
             end
             return;
         end
-        
+        errorL2 = [errorL2, errornow];
     end
     
     

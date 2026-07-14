@@ -26,6 +26,7 @@
 clear;
 close all;
 %% PARALLEL BEAM 2D
+disp('Parallel beam 2D:')
 
 % VARIABLE                                   DESCRIPTION                    UNITS
 %-------------------------------------------------------------------------------------
@@ -76,8 +77,11 @@ plotImg([imgOSSART;imgASDPOCS ],'Dim',3,'Slice',1); %top is ASD_POCS, bottom OSS
 %% And now Fan Beam
 %% 
 % The same thing!
+clear;
+close all;
 
 %% FAN BEAM 2D
+disp('Fan beam 2D:')
 
 % VARIABLE                                   DESCRIPTION                    UNITS
 %-------------------------------------------------------------------------------------

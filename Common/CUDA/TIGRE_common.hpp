@@ -10,15 +10,16 @@
 #if defined(IS_FOR_PYTIGRE)
 #ifndef IS_FOR_MATLAB_TIGRE
     #define IS_FOR_MATLAB_TIGRE 0
-#endif  // IS_FOR_MATLAB_TIGRE
-void mexPrintf(const char*, ...);
-void mexErrMsgIdAndTxt(const char* pcTag, const char* pcMsg);
-void mexWarnMsgIdAndTxt(const char* pcTag, const char* pcMsg);
+#endif
+// Provide dummy mex functions for Python build
+inline void mexPrintf(const char*, ...) {}
+inline void mexErrMsgIdAndTxt(const char* , const char* ) {}
+inline void mexWarnMsgIdAndTxt(const char* , const char* ) {}
 #else
 #ifndef IS_FOR_MATLAB_TIGRE
     #define IS_FOR_MATLAB_TIGRE 1
-#endif  // IS_FOR_MATLAB_TIGRE
+#endif
 #include "mex.h"
 #include "tmwtypes.h"
-#endif  // IS_TIGRE_FOR_PYTHON
+#endif  // IS_FOR_PYTIGRE
 #endif  // _COMMON_HPP_20201017_

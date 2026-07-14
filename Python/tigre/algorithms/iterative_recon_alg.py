@@ -12,6 +12,7 @@ from tigre.utilities.Ax import Ax
 from tigre.utilities.im3Dnorm import im3DNORM
 from tigre.utilities.init_multigrid import init_multigrid
 from tigre.utilities.order_subsets import order_subsets
+from tigre.utilities.redundancy_weighting import redundancy_weighting
 from tigre.utilities.Measure_Quality import Measure_Quality as MQ
 from tigre.utilities.gpu import GpuIds
 
@@ -170,7 +171,8 @@ class IterativeReconAlg(object):
             "hyper",
             "fista_p",
             "fista_q",
-            "niter_outer"
+            "niter_outer",
+            "dowang"
         ]
         self.__dict__.update(options)
         self.__dict__.update(**kwargs)
@@ -214,16 +216,21 @@ class IterativeReconAlg(object):
         :return: None
         """
         geox = copy.deepcopy(self.geo)
-        geox.sVoxel[1:] = geox.sVoxel[1:] * 1.1  # a bit larger to avoid zeros in projections
+        geox.sVoxel[1:] = geox.sDetector[1] * 1.1  # a bit larger to avoid zeros in projections
         geox.sVoxel[0] = max(geox.sDetector[0], geox.sVoxel[0])
 
         geox.nVoxel = np.array([2, 2, 2])
         geox.dVoxel = geox.sVoxel / geox.nVoxel
         W = Ax(
-            np.ones(geox.nVoxel, dtype=np.float32), geox, self.angles, "Siddon", gpuids=self.gpuids
+            np.ones(geox.nVoxel, dtype=np.float32), geox, geox.angles, "Siddon", gpuids=self.gpuids
         )
-        W[W <= min(self.geo.dVoxel / 2)] = np.inf
+        W[W <= min(self.geo.dVoxel) / 4] = np.inf
         W = 1.0 / W
+#        W[W > 0.1] = 0.1
+        
+        # redudancy weights
+        W *= redundancy_weighting(self.geo)
+        
         setattr(self, "W", W)
 
     def set_v(self):
@@ -239,20 +246,19 @@ class IterativeReconAlg(object):
             if geo.mode != "parallel":
 
                 geox = copy.deepcopy(self.geo)
-                geox.angles = self.angleblocks[i]
-
+                
+                # subset of projection geometry
                 geox.DSD = geo.DSD[self.angle_index[i]]
                 geox.DSO = geo.DSO[self.angle_index[i]]
+                # expand the detector to avoid zeros in backprojection
+                maxsz = np.max(np.atleast_2d(geox.sVoxel + geox.offOrigin[self.angle_index[i]]), axis=0)
+                geox.sDetector = np.maximum(geox.sDetector, np.array([maxsz[0], maxsz[2]]) * (geox.DSD / geox.DSO).max())
+                geox.dDetector = geox.sDetector / geox.nDetector
                 geox.offOrigin = geo.offOrigin[self.angle_index[i], :]
                 geox.offDetector = geo.offDetector[self.angle_index[i], :]
                 geox.rotDetector = geo.rotDetector[self.angle_index[i], :]
                 geox.COR = geo.COR[self.angle_index[i]]
 
-                # shrink the volume size to avoid zeros in backprojection
-                geox.sVoxel = (
-                    geox.sVoxel * np.max(geox.sVoxel[1:] / np.linalg.norm(geox.sVoxel[1:])) * 0.9
-                )
-                geox.dVoxel = geox.sVoxel / geox.nVoxel
                 proj_one = np.ones(
                     (len(self.angleblocks[i]), geo.nDetector[0], geo.nDetector[1]), dtype=np.float32
                 )
@@ -262,7 +268,7 @@ class IterativeReconAlg(object):
 
             else:
                 V[i] *= len(self.angleblocks[i])
-        V[V==0.0] = np.inf       
+        V[V==0.0] = np.inf 
 
         self.V = V
 
@@ -284,7 +290,7 @@ class IterativeReconAlg(object):
                     print("init multigrid complete.")
             if init == "FDK":
                 self.res = np.maximum(FDK(self.proj, self.geo, self.angles),0)
-
+                pass
 
         elif isinstance(init, np.ndarray):
             if (self.geo.nVoxel == init.shape).all():
@@ -302,6 +308,7 @@ class IterativeReconAlg(object):
         self.angleblocks, self.angle_index = order_subsets(
             self.angles, self.blocksize, self.OrderStrategy
         )
+        pass
 
     def run_main_iter(self):
         """
@@ -326,19 +333,22 @@ class IterativeReconAlg(object):
 
         for j in range(len(self.angleblocks)):
 
-            if self.blocksize == 1:
-                angle = np.array([self.angleblocks[j]], dtype=np.float32)
-                angle_indices = np.array([self.angle_index[j]], dtype=np.int32)
+            # if self.blocksize == 1:
+            #     angle = np.array([self.angleblocks[j]], dtype=np.float32)
+            #     angle_indices = np.array([self.angle_index[j]], dtype=np.int32)
 
-            else:
-                angle = self.angleblocks[j]
-                angle_indices = self.angle_index[j]
-                # slice parameters if needed
+            # else:
+            #     angle = self.angleblocks[j]
+            #     angle_indices = self.angle_index[j]
+            angle = self.angleblocks[j].astype(np.float32)
+            angle_indices = self.angle_index[j].astype(np.int32)
+            # slice parameters if needed
             geo.offOrigin = self.geo.offOrigin[angle_indices]
             geo.offDetector = self.geo.offDetector[angle_indices]
             geo.rotDetector = self.geo.rotDetector[angle_indices]
             geo.DSD = self.geo.DSD[angle_indices]
             geo.DSO = self.geo.DSO[angle_indices]
+            geo.COR = self.geo.COR[angle_indices]
 
             self.update_image(geo, angle, j)
 
@@ -359,7 +369,7 @@ class IterativeReconAlg(object):
         if self.Quameasopts is not None:
             self.lq[:, iter] = MQ(self.res, res_prev, self.Quameasopts)
         if self.computel2:
-            # compute l2 borm for b-Ax
+            # compute l2 norm for b-Ax
             errornow = im3DNORM(
                 self.proj - Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids), 2
             )

@@ -100,7 +100,7 @@ cgls = decorator(CGLS, name="cgls")
 
 class LSQR(IterativeReconAlg): 
     __doc__ = (
-        " LSQR solves the CBCT problem using the  least squares\n"
+        " LSQR solves the CBCT problem using the least squares\n"
         "  LSQR(PROJ,GEO,ANGLES,NITER) solves the reconstruction problem\n"
         "  using the projection data PROJ taken over ALPHA angles, corresponding\n"
         "  to the geometry described in GEO, using NITER iterations."
@@ -432,8 +432,10 @@ class LSMR(IterativeReconAlg):
                 if self.re_init_at_iteration + 1 == i or not self.restart:
                     print("LSMR exited due to divergence.")
                     return self.res
-                self.re_init_at_iteration=iter
-                iter=iter-1
+                self.re_init_at_iteration = i
+                i = i - 1
+#                self.re_init_at_iteration=iter
+#                iter=iter-1
                 self.initialize_algo()
                 break
 lsmr = decorator(LSMR, name="lsmr")

@@ -64,7 +64,7 @@ if nargout<2 && measurequality
     warning("Image metrics requested but none catched as output. Call the algorithm with 3 outputs to store them")
     measurequality=false;
 end
-qualMeasOut=zeros(length(QualMeasOpts),niter);
+qualMeasOut=zeros(length(QualMeasOpts),maxiter);
 
 % does detector rotation exists?
 if ~isfield(geo,'rotDetector')
@@ -222,8 +222,8 @@ end
 end
 
 
-function [beta,beta_red,f0,ng,verbose,epsilon,QualMeasOpts,nonneg,gpuids,redundancy_weights]=parse_inputs(proj,geo,angles,argin)
-opts=     {'lambda','lambda_red','init','tviter','verbose','maxl2err','qualmeas','nonneg','gpuids','redundancy_weighting'};
+function [beta,beta_red,f0,ng,verbose,epsilon,QualMeasOpts,nonneg,gpuids,redundancy_weights,gt]=parse_inputs(proj,geo,angles,argin)
+opts=     {'lambda','lambda_red','init','tviter','verbose','maxl2err','qualmeas','nonneg','gpuids','redundancy_weighting','groundtruth'};
 defaults=ones(length(opts),1);
 % Check inputs
 nVarargs = length(argin);
@@ -354,6 +354,12 @@ for ii=1:length(opts)
                 redundancy_weights = true;
             else
                 redundancy_weights = val;
+            end
+        case 'groundtruth'
+            if default
+                gt=nan;
+            else
+                gt=val;
             end
         otherwise
             error('TIGRE:PCSD:InvalidInput',['Invalid input name:', num2str(opt),'\n No such option in PCSD()']);

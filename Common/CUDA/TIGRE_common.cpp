@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include "TIGRE_common.hpp"
+
+// Functions already defined inline in TIGRE_common.hpp for Python builds.
+// Avoid redefining them here to prevent GCC redefinition errors.
+/*
 void mexPrintf(const char* format, ...) {
     PRINT_HERE("");
     va_list argpointer;
@@ -17,4 +21,5 @@ void mexErrMsgIdAndTxt(const char* pcTag, const char* pcMsg) {
 void mexWarnMsgIdAndTxt(const char* pcTag, const char* pcMsg) {
     PRINT_HERE("%s %s\n", pcTag, pcMsg);
 }
+*/
 #endif  // IS_FOR_PYTIGRE
