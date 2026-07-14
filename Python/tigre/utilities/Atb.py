@@ -7,10 +7,13 @@ from .gpu import GpuIds
 
 
 def Atb(projections, geo, angles, backprojection_type="FDK", **kwargs):
+    # O(1) dtype checks. The previous np.isreal(projections).all() materialized
+    # a full projection-sized boolean array (~7 GB for 720x3072x3072) just to
+    # verify realness - the dtype kind already tells us, allocation-free.
+    if projections.dtype.kind == "c":
+        raise ValueError("Complex types not compatible for back projection.")
     if projections.dtype != np.float32:
         raise TypeError("Input data should be float32, not " + str(projections.dtype))
-    if not np.isreal(projections).all():
-        raise ValueError("Complex types not compatible for back projection.")
     geox = copy.deepcopy(geo)
     geox.check_geo(angles)
     """

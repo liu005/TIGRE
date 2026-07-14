@@ -7,8 +7,8 @@ import copy
 import numpy as np
 import cupy as cp
 from tigre.utilities.Atb import Atb
-from tigre.utilities.filtering import filtering
-from tigre.utilities.redundancy_weighting import redundancy_weighting, zeropadding 
+from tigre.utilities.filtering import filtering, fdk_weight_filter_chunked
+from tigre.utilities.redundancy_weighting import redundancy_weighting, zeropadding, zeropad_geometry
 from scipy.spatial.transform import Rotation
 import gc
 from numba import cuda
@@ -103,57 +103,51 @@ def FDK(proj, geo, angles, **kwargs):
     #                  (constant magnification, uniform full-2*pi assumption).
     dbeta = kwargs.get("dbeta", getattr(geo, "dbeta", None))
     legacy_scale = kwargs.get("legacy_scale", False)
+    #   redundancy_factor - ray-multiplicity constant K (K=2/c): None (default)
+    #                  auto-derives 1 for a full 2*pi circle, 2 for a short
+    #                  scan (single coverage; pair with Parker weighting).
+    redundancy_factor = kwargs.get("redundancy_factor", None)
 
 
-    xp = cp.get_array_module(proj)
-        
+    # Wang redundancy weight map (host, (V, U)). `angles` is passed so the
+    # weights are auto-skipped for short/partial scans, where Wang's full-360
+    # opposing-view assumption does not hold and the ramp would survive as
+    # one-sided shading. An all-ones map is dropped entirely (no-op multiply).
+    wang = None
     if dowang:
         if verbose:
             print('FDK: applying detector offset weights')
-        with device_manager(proj):
-            # Preweighting using Wang function. `angles` is passed so the
-            # weights are auto-skipped (all-ones) for short/partial scans,
-            # where Wang's full-360 opposing-view assumption does not hold
-            # and the ramp would survive as one-sided shading.
-            proj *= xp.asarray(redundancy_weighting(geo, angles))
-   
+        w = redundancy_weighting(geo, angles)
+        if (w != 1).any():
+            wang = w
+
     geo.check_geo(angles)
     geo.checknans()
     geo.filter = kwargs["filter"] if "filter" in kwargs else None
-    
+
+    # COR/offset-induced detector extension: geometry math only - the actual
+    # zero-padding of the data happens chunk-by-chunk inside the fused filter
+    # (the old zeropadding() materialized a SECOND full-size padded stack).
     if abs(geo.COR).any() > 0:
-        # Zero-padding to avoid FFT-induced aliasing
-        proj, geo = zeropadding(proj, geo)
-        
-    # Intensity Weight
-    if geo.rotDetector.any():
-        R_d = xp.array(Rotation.from_euler('XYZ', geo.rotDetector).as_matrix())
-    DSD = xp.array(geo.DSD)
-    
-    for i in range(proj.shape[0]):
-        # detector offset
-        xv = xp.linspace(-geo.nDetector[1] / 2 + 0.5, geo.nDetector[1] / 2 - 0.5,
-                       geo.nDetector[1] ) * geo.dDetector[1] + geo.offDetector[i,1]
-        yv = xp.linspace(-geo.nDetector[0] / 2 + 0.5, geo.nDetector[0] / 2 - 0.5,
-                       geo.nDetector[0] ) * geo.dDetector[0] + geo.offDetector[i,0]
-        (yy, xx) = xp.meshgrid(xv, yv)
-        zz = yy*0 + DSD[i]
-        xyz = xp.vstack( (xx.ravel(), yy.ravel(), zz.ravel()) )
-        # detector rotation
-        if geo.rotDetector.any():
-            xyz = xp.matmul(R_d[i], xyz)
-        # apply intensity weight    
-        proj[i] *= (xyz[2,:] / xp.linalg.norm(xyz, axis=0)).reshape(xx.shape)
-            
-    proj_filt = filtering(proj, geo, angles,
-                          parker=False, verbose=verbose,
-                          dbeta=dbeta, legacy_scale=legacy_scale)
-    
+        geo, pad_left, pad_right = zeropad_geometry(geo)
+    else:
+        pad_left = pad_right = 0
+
+    # Fused, chunked pre-weight + ramp filter: [Wang] -> [COR pad] -> cosine
+    # intensity weight -> per-view-scaled ramp filter, streamed in angle
+    # chunks so the device never holds more than the (possibly resident)
+    # input stack plus one chunk. Returns the host float32 stack for Atb.
+    with device_manager(proj):
+        proj_filt = fdk_weight_filter_chunked(
+            proj, geo, angles, pad_left=pad_left, pad_right=pad_right,
+            wang=wang, dbeta=dbeta, legacy_scale=legacy_scale,
+            redundancy_factor=redundancy_factor, verbose=verbose)
+
     # clean up gpu memory and reset before running Atb()
     del proj
     gc.collect()
 #    cuda.close()
-    
+
     # FDK back projection
     rec = Atb(proj_filt, geo, geo.angles, "FDK", gpuids=gpuids)
             

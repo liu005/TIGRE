@@ -7,10 +7,11 @@ from .gpu import GpuIds
 
 
 def Ax(img, geo, angles, projection_type="Siddon", **kwargs):
+    # O(1) dtype checks (np.isreal(img).all() allocated a full-size bool array).
+    if img.dtype.kind == "c":
+        raise ValueError("Complex types not compatible for projection.")
     if img.dtype != np.float32:
         raise TypeError("Input data should be float32, not " + str(img.dtype))
-    if not np.isreal(img).all():
-        raise ValueError("Complex types not compatible for projection.")
     if any(img.shape != geo.nVoxel):
         raise ValueError(
             "Input data should be of shape geo.nVoxel: "

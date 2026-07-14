@@ -120,6 +120,40 @@ def redundancy_weighting(geo, angles=None):
     return w.astype(np.float32)
 
 
+def zeropad_geometry(geo):
+    """Geometry-only half of zeropadding(): compute the COR/offset-induced
+    detector extension WITHOUT touching projection data.
+
+    Returns (zgeo, pad_left, pad_right): a deep-copied geometry with
+    nDetector[1] extended by pad_left+pad_right columns and offDetector
+    shifted accordingly. Pad side follows zeropadding()'s convention (leading
+    edge of axis -1 when the effective offset is positive, trailing edge
+    otherwise). pad_left == pad_right == 0 means no padding is needed.
+
+    Splitting this out lets callers pad the projections chunk-by-chunk (the
+    original zeropadding() materializes a SECOND full-size padded stack via
+    xp.pad - a ~27 GB duplicate on a full-resolution scan). deepcopy is used
+    (zeropadding()'s copy.copy shares the offDetector/nDetector arrays with
+    the caller's geometry and silently mutates them).
+    """
+    zgeo = copy.deepcopy(geo)
+
+    offDet1 = np.atleast_2d(geo.offDetector)[0, 1]
+    offDet1 += np.atleast_1d(geo.DSD)[0] / np.atleast_1d(geo.DSO)[0] * np.atleast_1d(geo.COR)[0]
+
+    width = int(np.fix(2 * offDet1 / geo.dDetector[1])) + 1
+    if np.isscalar(zgeo.DSO):
+        zgeo.offDetector[1] = zgeo.offDetector[1] - width / 2 * geo.dDetector[1]
+    else:
+        zgeo.offDetector[:, 1] = zgeo.offDetector[:, 1] - width / 2 * geo.dDetector[1]
+
+    zgeo.nDetector[1] += abs(width)
+    zgeo.sDetector[1] = zgeo.nDetector[1] * zgeo.dDetector[1]
+
+    pad_left, pad_right = (width, 0) if offDet1 > 0 else (0, abs(width))
+    return zgeo, pad_left, pad_right
+
+
 def zeropadding(proj, geo):
     """
     Zero padding the projections and modify geometry accordingly
