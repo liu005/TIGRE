@@ -103,8 +103,11 @@ def FDK(proj, geo, angles, **kwargs):
         if verbose:
             print('FDK: applying detector offset weights')
         with device_manager(proj):
-            # Preweighting using Wang function
-            proj *= xp.asarray(redundancy_weighting(geo))
+            # Preweighting using Wang function. `angles` is passed so the
+            # weights are auto-skipped (all-ones) for short/partial scans,
+            # where Wang's full-360 opposing-view assumption does not hold
+            # and the ramp would survive as one-sided shading.
+            proj *= xp.asarray(redundancy_weighting(geo, angles))
    
     geo.check_geo(angles)
     geo.checknans()

@@ -2,21 +2,64 @@ import numpy as np
 import copy
 import cupy as cp
 
-    
-def apply_redudancy_weights(geo, verbose=True) -> bool:
+
+def scan_arc(angles):
+    """Total angular arc (radians) covered by a projection-angle array.
+
+    Accepts (n,) or (n, 3) (TIGRE Euler convention - the in-plane rotation is
+    the first column). Robust to rotation direction and wrap-around via
+    np.unwrap. Returns 0.0 for a single projection or None input.
+    """
+    if angles is None:
+        return None
+    a = np.asarray(angles, dtype=float)
+    if a.ndim > 1:
+        a = a[:, 0]
+    if a.size < 2:
+        return 0.0
+    return float(np.ptp(np.unwrap(a)))
+
+
+def apply_redudancy_weights(geo, verbose=True, angles=None) -> bool:
     """
     Check if Wang redundancy weights should be applied
+
+    Wang weighting (displaced-detector redundancy weighting) assumes a FULL
+    360-degree circular scan: it ramps one side of the detector and relies on
+    the opposing (beta + pi) views to complement the ramp back to uniform
+    coverage. On a short/partial scan those opposing views do not exist, so
+    the ramp survives into the reconstruction as a gross one-sided shading
+    ("teardrop"). When ``angles`` is provided, the scan arc is checked and
+    Wang weights are skipped for anything meaningfully short of 2*pi.
 
     Parameters
     ----------
     geo : Object
-        The Tigre geometry 
+        The Tigre geometry
+    angles : array-like, optional
+        Projection angles, shape (n,) or (n, 3). If given, Wang weights are
+        only applied for a (near-)full 2*pi scan. If None (legacy callers),
+        no span check is performed.
 
     Returns
     -------
     True if applicable
 
     """
+    if angles is not None:
+        arc = scan_arc(angles)
+        a = np.asarray(angles, dtype=float)
+        a = a[:, 0] if a.ndim > 1 else a
+        # tolerance: two median angular steps (also covers the common
+        # "endpoint=False" full circle, whose arc is 2*pi - one step)
+        step = float(np.median(np.abs(np.diff(np.unwrap(a))))) if a.size > 1 else 0.0
+        if arc < 2.0 * np.pi - max(2.0 * step, 1e-6):
+            if verbose:
+                print('Wang weights: short scan detected '
+                      f'(arc {np.degrees(arc):.1f} deg < 360 deg), '
+                      'Wang weights not being applied')
+            return False
+
     if (np.atleast_2d(geo.offDetector).shape[0] > 1) and np.ptp(np.atleast_2d(geo.offDetector)[:, 1]) > 0:
         if verbose:
             print('Wang weights: varying offDetector detected, Wang weights not being applied')
@@ -39,19 +82,23 @@ def apply_redudancy_weights(geo, verbose=True) -> bool:
     return True
 
 
-def redundancy_weighting(geo):
+def redundancy_weighting(geo, angles=None):
     """
     Preweighting using Wang function
-    Ref: 
+    Ref:
         Wang, Ge. X-ray micro-CT with a displaced detector array. Medical Physics, 2002,29(7):1634-1636.
+
+    angles : optional projection angles, (n,) or (n, 3). When given, the
+    weights are only computed for a (near-)full 2*pi scan - see
+    apply_redudancy_weights. Short scans get an all-ones weight (no-op).
     """
 
     if not hasattr(geo,'COR'):
         geo.COR=np.array([0])
-    
+
     w = np.ones((geo.nDetector[0], geo.nDetector[1]), dtype=np.float32)
-    
-    if apply_redudancy_weights(geo):
+
+    if apply_redudancy_weights(geo, angles=angles):
         offset = np.atleast_2d(geo.offDetector)[0, 1]
         DSD = np.atleast_2d(geo.DSD)[0]
         DSO = np.atleast_2d(geo.DSO)[0]
