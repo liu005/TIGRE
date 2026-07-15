@@ -14,7 +14,6 @@ class device_manager:
             self.device = "cpu"
             
     def __enter__(self):
-        print(f"Using device: {self.device}")
         return self.device
     
     def __exit__(self, exc_type, exc_value, traceback):
