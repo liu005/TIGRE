@@ -65,9 +65,9 @@ def apply_redudancy_weights(geo, verbose=True, angles=None) -> bool:
             print('Wang weights: varying offDetector detected, Wang weights not being applied')
         return False
     
-    if np.atleast_2d(geo.offDetector)[0, 1] == 0: 
-        if verbose:
-            print('0 Detector offset, no Wang weights needed')
+    # Centred detector: nothing to weight. The routine common case - stays
+    # silent (unlike the informative skip messages above/below).
+    if np.atleast_2d(geo.offDetector)[0, 1] == 0:
         return False
     
     if (len(np.atleast_2d(geo.DSO)) > 1) and len(np.unique(geo.DSO)) > 1:
