@@ -178,7 +178,7 @@ def plot_geometry(ogeo,angles=np.linspace(0,2*np.pi,100),pos=None,rotation="SD",
     ax.set_box_aspect((limX[1]-limX[0], limY[1]-limY[0], limZ[1]-limZ[0]))
 
     # set up plot
-    roll, pitch, yaw = geo.rotDetector[:,0]/np.pi*180, geo.rotDetector[:,1]/np.pi*180, geo.rotDetector[:,1]/np.pi*180
+    roll, pitch, yaw = geo.rotDetector[:,0]/np.pi*180, geo.rotDetector[:,1]/np.pi*180, geo.rotDetector[:,2]/np.pi*180
     plt.title('Current CBCT geometry at angles {} (deg), in scale'.format(list(map('{:.1f}'.format,geo.angles[pos]/np.pi*180))) \
              +'\n\nDetector rotation [{:.1f} - {:.1f}, {:.1f} - {:.1f}, {:.1f} - {:.1f}] (deg)'.format(roll[0],roll[-1],pitch[0],pitch[-1],yaw[0],yaw[-1]))       
     ax.set_xlabel('X');
