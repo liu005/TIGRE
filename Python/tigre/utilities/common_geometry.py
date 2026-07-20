@@ -128,11 +128,20 @@ def ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos=None, d_rot=None) -> Geometry:
     
     if d_rot is None:
         d_rot = np.zeros((n,3))
-            
+
     d_pos = np.asarray(d_pos, dtype=np.float64)
-    
+    d_rot = np.asarray(d_rot, dtype=np.float64)
+
     if s_pos.shape != d_pos.shape or s_pos.shape != d_rot.shape:
-        raise ValueError("Inputs dimensions do not match")        
+        raise ValueError("Inputs dimensions do not match")
+
+    # d_rot is documented/passed in DEGREES (docstring above); convert to
+    # radians here so it combines correctly with sd_ang (radians) below and
+    # so the resulting ngeo.rotDetector is in TIGRE's own radian convention.
+    # Bug fixed 2026-07-20: this conversion was missing, so following the
+    # documented degrees API produced a rotDetector ~57x too large (e.g. a
+    # 0.25 deg input tilt came back as 0.251 RADIANS =~ 14.4 deg).
+    d_rot = np.radians(d_rot)
     
     # source and detector vector lengths and directions
     rs = np.linalg.norm(s_pos, axis=1, keepdims=True)
