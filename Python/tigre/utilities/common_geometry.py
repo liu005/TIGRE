@@ -150,8 +150,23 @@ def ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos=None, d_rot=None) -> Geometry:
     ns = s_pos / rs
     nd = d_pos / rd
             
-    # check angles between OS and OD
-    sd_cross = np.cross(ns, nd)
+    # check angles between OS and OD - computed in the SOURCE-ALIGNED frame
+    # (undo Rs, the per-view rotation that aligns +X with the source
+    # direction), NOT the raw world frame. cross(R@a, R@b) = R@cross(a,b) for
+    # any rotation R, so an external rotation applied identically to both
+    # s_pos and d_pos (e.g. the object's own scan rotation, when s_pos/d_pos
+    # are built by rotating a fixed lab-frame source+detector into the
+    # object's co-rotating frame) rotates the RAW cross product WITH it -
+    # contaminating sd_ang, and everything downstream that reads it
+    # (offDetector, rotDetector), with spurious per-view variation even when
+    # the true relative source/detector geometry is constant across views.
+    # Verified: cross(ns_local, nd_local) below is stable to ~4 sig figs
+    # across a full rotation; the raw cross(ns, nd) visibly rotates with the
+    # view angle. Fixed 2026-07-20.
+    Rs_T = np.transpose(Rs, (0, 2, 1))
+    ns_local = np.einsum('nij,nj->ni', Rs_T, ns)
+    nd_local = np.einsum('nij,nj->ni', Rs_T, nd)
+    sd_cross = np.cross(ns_local, nd_local)
     # note: A x B = ||A||.||B||sin(theta)
     sd_ang = np.arcsin(sd_cross)
     if np.any(sd_ang >= np.pi/2):  
@@ -168,8 +183,15 @@ def ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos=None, d_rot=None) -> Geometry:
     ngeo.DSO = rs.flatten()  
     ngeo.DSD = ngeo.DSO + abs(D) 
     
-    # Update offDetector
+    # Update offDetector - same rotation-covariance issue as sd_ang above:
+    # `shift` is a raw world-frame vector that rotates WITH any external
+    # rotation shared by s_pos/d_pos (e.g. the object's scan rotation), so its
+    # per-component sign/magnitude must be read in the source-aligned local
+    # frame (Rs_T), not the raw world frame, to get a rotation-invariant
+    # offDetector for a fixed relative source/detector geometry. Fixed
+    # 2026-07-20 (same fix pattern, same root cause, as sd_ang/sd_cross).
     shift = d_pos - Int
+    shift = np.einsum('nij,nj->ni', Rs_T, shift)
     dd = np.linalg.norm(shift, axis=1, keepdims=True) * np.sign(shift)
     ngeo.offDetector = np.column_stack((dd[:,2], dd[:,1])) + Rotation.from_euler('XYZ', sd_ang).apply(d_offset)[:,2:0:-1]
         
