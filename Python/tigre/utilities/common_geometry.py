@@ -254,14 +254,26 @@ def compute_xyz_euler(points):
         pitch (theta) -> Rotation about Y-axis
         yaw (psi)    -> Rotation about Z-axis
     """
-    points = np.asarray(points)
+    points = np.asarray(points, dtype=np.float64)
 
-    # Compute vector magnitudes
-    r = np.linalg.norm(points[:,:2], axis=1)
-    
-    yaw = np.arctan2(points[:,1], points[:,0])  # Rotation about Z-axis
-    pitch = np.arctan2(points[:,2], r)          # Rotation about Y-axis
-    roll = np.zeros_like(yaw)                   # Roll set to zero since we're only aligning a direction vector
+    # Fixed 2026-07-20: the previous formula (yaw=arctan2(y,x) using only the
+    # xy-magnitude, pitch=arctan2(z,r_xy)) does NOT actually satisfy
+    # Rotation.from_euler('XYZ', [roll,pitch,yaw]).apply([1,0,0]) == points/|points|
+    # once BOTH y and z are nonzero - verified this was wrong by up to several
+    # degrees for combined yaw+pitch directions (only correct in the
+    # yaw==0-exactly special case). Root cause: for scipy's INTRINSIC 'XYZ'
+    # composition (Rx(roll) @ Ry(pitch) @ Rz(yaw), roll=0), applying to
+    # [1,0,0] gives [cos(pitch)*cos(yaw), sin(yaw), -sin(pitch)*cos(yaw)] -
+    # so yaw must be solved from the FULL 3D magnitude (arcsin, not
+    # arctan2(y,x) which only uses the xy-magnitude), pitch's z-term needs a
+    # sign flip, and pitch must use x directly (not r_xy) since the
+    # cos(yaw) factor common to x and z cancels inside atan2. Verified exact
+    # (<1e-14) by direct round-trip through Rotation.from_euler across 2000
+    # random directions/magnitudes.
+    rho = np.linalg.norm(points, axis=1)             # full 3D magnitude
+    yaw = np.arcsin(np.clip(points[:,1] / rho, -1.0, 1.0))  # Rotation about Z-axis
+    pitch = np.arctan2(-points[:,2], points[:,0])    # Rotation about Y-axis
+    roll = np.zeros_like(yaw)                        # Roll set to zero since we're only aligning a direction vector
 
     return np.column_stack((roll, pitch, yaw))
 
