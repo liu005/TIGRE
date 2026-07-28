@@ -11,7 +11,6 @@ from tigre.utilities.filtering import filtering, fdk_weight_filter_chunked
 from tigre.utilities.redundancy_weighting import redundancy_weighting, zeropadding, zeropad_geometry
 from scipy.spatial.transform import Rotation
 import gc
-from numba import cuda
 
 class device_manager:
     """
@@ -145,7 +144,6 @@ def FDK(proj, geo, angles, **kwargs):
     # clean up gpu memory and reset before running Atb()
     del proj
     gc.collect()
-#    cuda.close()
 
     # FDK back projection
     rec = Atb(proj_filt, geo, geo.angles, "FDK", gpuids=gpuids)

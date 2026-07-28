@@ -5,13 +5,16 @@ import os
 import math
 import numpy as np
 from tqdm import tqdm
-import h5py
 
 from configparser import ConfigParser
 from tigre.utilities.geometry import geometry
 
 def DXChangeDataLoader(filename):
 
+    # Imported lazily: h5py is only needed by this HDF5/DXchange loader, and a top-level
+    # import made the whole tigre.utilities.io package (all five loaders) unimportable
+    # when h5py is absent.
+    import h5py
 
     with h5py.File(filename, "r") as f:
         group = f['/exchange/']
