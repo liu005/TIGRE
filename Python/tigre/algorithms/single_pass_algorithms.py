@@ -46,7 +46,7 @@ def FDK(proj, geo, angles, **kwargs):
     >>> from tigre.demos.Test_data import data_loader
     >>> geo = tigre.geometry(mode='cone',default_geo=True,
     >>>                         nVoxel=np.array([64,64,64]))
-    >>> angles = np.linspace(0,2*np.pi,100)
+    >>> angles = np.linspace(0, 2 * np.pi, 100, endpoint=False)
     >>> src_img = data_loader.load_head_phantom(geo.nVoxel)
     >>> proj = tigre.Ax(src_img,geo,angles)
     >>> output = algs.FDK(proj,geo,angles)

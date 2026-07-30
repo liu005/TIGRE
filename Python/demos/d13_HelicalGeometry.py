@@ -30,7 +30,7 @@ import time
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
 
-angles = np.linspace(0, 2 * np.pi, 100)
+angles = np.linspace(0, 2 * np.pi, 100, endpoint=False)
 angles = np.hstack([angles, angles, angles])  # loop 3 times
 
 # Load thorax phantom data
