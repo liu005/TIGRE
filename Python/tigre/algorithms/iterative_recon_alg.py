@@ -101,7 +101,7 @@ class IterativeReconAlg(object):
     >>> from tigre.demos.Test_data import data_loader
     >>> geo = tigre.geometry(mode='cone',default_geo=True,
     >>>                         nVoxel=np.array([64,64,64]))
-    >>> angles = np.linspace(0,2*np.pi,100)
+    >>> angles = np.linspace(0, 2 * np.pi, 100, endpoint=False)
     >>> src_img = data_loader.load_head_phantom(geo.nVoxel)
     >>> proj = tigre.Ax(src_img,geo,angles)
     >>> output = algs.iterativereconalg(proj,geo,angles,niter=50
@@ -456,7 +456,7 @@ def decorator(IterativeReconAlg, name=None, docstring=None):  # noqa: N803
     >>> geo = tigre.geometry_default(high_resolution=False)
     >>> src = load_head_phantom(number_of_voxels=geo.nVoxel)
     >>> proj = Ax(src,geo,angles)
-    >>> angles = np.linspace(0,2*np.pi,100)
+    >>> angles = np.linspace(0, 2 * np.pi, 100, endpoint=False)
     >>> iterativereconalg = decorator(IterativeReconAlg)
     >>> output = iterativereconalg(proj,geo,angles, niter=50)
 
