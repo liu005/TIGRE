@@ -52,3 +52,36 @@ def test_rot_direction_uses_the_sign_of_the_angle_delta(monkeypatch):
 
     assert counterclockwise.rot_direction() == "CC"
     assert clockwise.rot_direction() == "CW"
+
+
+def test_load_blank_projections_selects_clockwise_bowtie_files(monkeypatch):
+    varian_io = _load_varian_io(monkeypatch)
+    scan_params = object.__new__(varian_io.ScanParams)
+    scan_params.start_angle = 10.0
+    scan_params.stop_angle = 0.0
+    scan_params.version = 2.7
+    scan_params.bowtie_filter = object()
+
+    matched_patterns = []
+
+    def find_blank_file(pattern, recursive):
+        matched_patterns.append((pattern, recursive))
+        return ["FilterBowtie_CW_000.xim"]
+
+    class FakeXIM:
+        def __init__(self, filepath):
+            self.array = [[1.0]]
+            self.properties = {"GantryRtn": 0.0, "KVNormChamber": 1.0}
+
+    monkeypatch.setattr(varian_io.glob, "glob", find_blank_file)
+    monkeypatch.setattr(varian_io, "XIM", FakeXIM)
+
+    blank_projections = varian_io.load_blank_projections("scan", scan_params)
+
+    assert matched_patterns == [
+        (
+            varian_io.os.path.join("scan", "Calibrations", "Air-*", "**", "FilterBowtie_CW*.xim"),
+            True,
+        )
+    ]
+    assert blank_projections.num_projs() == 1
