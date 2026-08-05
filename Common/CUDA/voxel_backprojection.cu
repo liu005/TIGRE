@@ -328,6 +328,17 @@ int voxel_backprojection(float  *  projections, Geometry geo, float* result,floa
     // which makes one failure look like every subsequent call failing too.
     cudaGetLastError();
 
+    // Declared BEFORE the cleanup scope on purpose. These four are filled in
+    // later (cudaMallocHost writes through them; two are allocated inside the
+    // loop), so their release actions must capture them by reference - and a
+    // reference is only good while the object is alive. Locals are destroyed in
+    // reverse order of declaration, so anything the scope refers to has to be
+    // declared before it, or the scope would outlive what it points at.
+    Point3D* projParamsArrayHost = 0;
+    float* projSinCosArrayHost = 0;
+    float** partial_projection = 0;
+    size_t* proj_split_size = 0;
+
     // Releases every resource acquired below, in reverse order, on ANY return
     // from this function - including the error returns from cudaCheckErrors().
     // Without it those returns would leak whatever had been acquired so far.
@@ -440,11 +451,9 @@ int voxel_backprojection(float  *  projections, Geometry geo, float* result,floa
 
      
     
-    // Kernel auxiliary variables
-    Point3D* projParamsArrayHost = 0;
+    // Kernel auxiliary variables (declared above the cleanup scope)
     cudaMallocHost((void**)&projParamsArrayHost,6*PROJ_PER_KERNEL*sizeof(Point3D));
     cleanup.add([&projParamsArrayHost]{ if (projParamsArrayHost) cudaFreeHost(projParamsArrayHost); });
-    float* projSinCosArrayHost = 0;
     cudaMallocHost((void**)&projSinCosArrayHost,5*PROJ_PER_KERNEL*sizeof(float));
     cleanup.add([&projSinCosArrayHost]{ if (projSinCosArrayHost) cudaFreeHost(projSinCosArrayHost); });
 
@@ -484,10 +493,8 @@ int voxel_backprojection(float  *  projections, Geometry geo, float* result,floa
     size_t num_bytes_img_curr;
     size_t img_linear_idx_start;
     // Allocated once inside the loop below (guarded by !proj && !img_slice).
-    // Initialised here and released by the scope so an early return frees them
-    // whether or not the loop got far enough to allocate.
-    float** partial_projection = 0;
-    size_t* proj_split_size = 0;
+    // Declared above the cleanup scope; released by it, so an early return
+    // frees them whether or not the loop got far enough to allocate.
     cleanup.add([&partial_projection]{ if (partial_projection) free(partial_projection); });
     cleanup.add([&proj_split_size]{ if (proj_split_size) free(proj_split_size); });
     
