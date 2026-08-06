@@ -294,7 +294,10 @@ class IterativeReconAlg(object):
 
         elif isinstance(init, np.ndarray):
             if (self.geo.nVoxel == init.shape).all():
-                self.res = init
+                # Copy, and pin the dtype. The iterations update res in place, so
+                # aliasing init would silently overwrite the caller's array - which
+                # callers reuse, e.g. to compare their FDK init against the result.
+                self.res = init.astype(np.float32, copy=True)
             else:
                 raise ValueError("wrong dimension of array for initialization")
         elif init is not None:
@@ -353,7 +356,10 @@ class IterativeReconAlg(object):
             self.update_image(geo, angle, j)
 
             if self.noneg:
-                self.res = self.res.clip(min=0)
+                # In place. res.clip(min=0) allocated a whole extra volume every
+                # block; at 201x2100x2100 that is 3.55 GB of alloc+write per
+                # block, measured at 850 ms against 450 ms for np.maximum(out=).
+                np.maximum(self.res, 0, out=self.res)
 
     def minimizeTV(self, res_prev, dtvg):
         if self.gpuids is None:
@@ -392,19 +398,18 @@ class IterativeReconAlg(object):
 
         ang_index = self.angle_index[iteration].astype(np.int32)
 
-        self.res += (
-            self.lmbda
-            * 1.0
-            / self.V[iteration]
-            * Atb(
-                self.W[ang_index]
-                * (self.proj[ang_index] - Ax(self.res, geo, angle, "Siddon", gpuids=self.gpuids)),
-                geo,
-                angle,
-                "FDK",
-                gpuids=self.gpuids,
-            )
-        )
+        # Projection-domain residual. Advanced indexing already hands us a private
+        # copy, so the W weighting folds in in place.
+        proj_err = self.proj[ang_index] - Ax(self.res, geo, angle, "Siddon", gpuids=self.gpuids)
+        proj_err *= self.W[ang_index]
+
+        backprj = Atb(proj_err, geo, angle, "FDK", gpuids=self.gpuids)
+        # backprj is a fresh volume-sized array nobody else holds, so scale it in
+        # place. The old `lmbda * 1.0 / V * Atb(...)` expression allocated and wrote
+        # a second full volume first - 3.55 GB per block at V3 scale. Multiplication
+        # is commutative in IEEE754, so this is bit-identical to the old result.
+        backprj *= self.lmbda / self.V[iteration]
+        self.res += backprj
 
     def getres(self):
         return self.res
