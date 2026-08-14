@@ -110,8 +110,11 @@ class initASD_POCS(IterativeReconAlg):
         #     kwargs.update(dict(blocksize=1))
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)       
         self.alpha = 0.002 if "alpha" not in kwargs else kwargs["alpha"]
+        self.alpha = np.asarray(self.alpha).item()
         self.alpha_red = 0.95 if "alpha_red" not in kwargs else kwargs["alpha_red"]
+        self.alpha_red = np.asarray(self.alpha_red).item()
         self.rmax = 0.95 if "rmax" not in kwargs else kwargs["rmax"]
+        self.rmax = np.asarray(self.rmax).item()
         if "maxl2err" not in kwargs:
             self.epsilon = (
                 im3DNORM(Ax(FDK(proj, geo, angles, gpuids=self.gpuids), geo, angles) - proj, 2)
@@ -119,9 +122,12 @@ class initASD_POCS(IterativeReconAlg):
             )
         else:
             self.epsilon = kwargs["maxl2err"]
+            self.epsilon = np.asarray(self.epsilon).item()
         self.numiter_tv = 20 if "tviter" not in kwargs else kwargs["tviter"]
-        self.beta = self.lmbda
-        self.beta_red = self.lmbda_red
+        self.numiter_tv = np.asarray(self.numiter_tv).item()
+        self.beta =  np.asarray(self.lmbda).item()
+        self.beta_red = np.asarray(self.lmbda_red).item()
+
         
 
     # Override
@@ -385,8 +391,7 @@ class AwASD_POCS(initASD_POCS):
             print('Warning: blocksize is set to 1, please use an OS version of the algorithm for blocksize > 1')
         kwargs.update(dict(blocksize=1))
         kwargs.update(dict(regularization="minimizeAwTV"))
-        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"] 
-        
+        self.delta = np.asarray(kwargs.pop("delta", np.float32(-0.005))).item()
         initASD_POCS.__init__(self, proj, geo, angles, niter, **kwargs)
 
 
@@ -421,8 +426,8 @@ class OS_AwASD_POCS(initASD_POCS):
 
         self.blocksize = 20 if "blocksize" not in kwargs else kwargs["blocksize"]
         kwargs.update(dict(regularization="minimizeAwTV"))
-        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]
-        
+        self.delta = np.asarray(kwargs.pop("delta", np.float32(-0.005))).item()
+
         initASD_POCS.__init__(self, proj, geo, angles, niter, **kwargs) 
 
 
@@ -600,8 +605,8 @@ class AwPCSD(initPCSD):
             print('Warning: blocksize is set to 1, please use an OS version of the algorithm for blocksize > 1')
         kwargs.update(dict(blocksize=1))
         kwargs.update(dict(regularization="minimizeAwTV"))
-        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]
-            
+        self.delta = np.asarray(kwargs.pop("delta", np.float32(-0.005))).item()
+
         initPCSD.__init__(self, proj, geo, angles, niter, **kwargs)
         
 
@@ -638,8 +643,8 @@ class OS_Aw_PCSD(initPCSD):
 
         self.blocksize = 20 if "blocksize" not in kwargs else kwargs["blocksize"]
         kwargs.update(dict(regularization="minimizeAwTV"))
-        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]
-            
+        self.delta = np.asarray(kwargs.pop("delta", np.float32(-0.005))).item()
+
         initPCSD.__init__(self, proj, geo, angles, niter, **kwargs)
         
         
