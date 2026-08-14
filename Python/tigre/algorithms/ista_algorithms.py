@@ -117,12 +117,12 @@ class FISTA(IterativeReconAlg):
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
         self.lmbda = 0.1
         self.__L__ = 2.0e8 if "hyper" not in kwargs else kwargs["hyper"]
-        self.__numiter_tv__ = 20 if "tviter" not in kwargs else kwargs["tviter"]
-        self.__lambda__ = 0.1 if "tvlambda" not in kwargs else kwargs["tvlambda"]
-        self.__t__ = 1
+        self.__t__ = 1.0
+        self.__numiter_tv__ = 20 if "tviter" not in kwargs else int(np.asarray(kwargs["tviter"]).item())
+        self.__lambda__ = 0.1 if "tvlambda" not in kwargs else np.asarray(kwargs["tvlambda"]).item()
         self.__bm__ = 1.0 / self.__L__
-        self.__p__ = 1 if "fista_p" not in kwargs else kwargs["fista_p"]
-        self.__q__ = 1 if "fista_q" not in kwargs else kwargs["fista_q"]
+        self.__p__ = 1 if "fista_p" not in kwargs else  np.asarray(kwargs["fista_p"]).item()
+        self.__q__ = 1 if "fista_q" not in kwargs else np.asarray(kwargs["fista_q"]).item()
 
     # override update_image from iterative recon alg to remove W.
     def update_image(self, geo, angle, iteration):
@@ -172,7 +172,7 @@ class FISTA(IterativeReconAlg):
             x_rec_old = copy.deepcopy(x_rec)
             x_rec = im3ddenoise(self.res, self.__numiter_tv__, 1.0 / lambdaForTv, self.gpuids)
             t_old = t
-            t = (self.__p__ + np.sqrt(self.__q__ + 4 * t ** 2)) / 2
+            t = (self.__p__ + np.sqrt(self.__q__ + 4 * t ** 2,dtype=np.float32)) / 2
             self.res = x_rec + (t_old - 1) / t * (x_rec - x_rec_old)
             
             if Quameasopts is not None:
