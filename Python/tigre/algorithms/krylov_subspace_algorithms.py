@@ -517,23 +517,22 @@ class IRN_TV_CGLS(IterativeReconAlg):
             self.res=res0
     
             prox_aux_1 =Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
-            prox_aux_2 = self.Lx(W,self.res)*np.sqrt(self.lmbda)
+            prox_aux_2 = self.Lx(W,self.res)*np.sqrt(self.lmbda, dtype=np.float32)
     
             r_aux_1 = self.proj - prox_aux_1
             r_aux_2 = -prox_aux_2
             #% Malena: changed the format, r_aux_2 is 3
             #% r = cat(3,r_aux_1, r_aux_2); % Malena: size guide, erase later, N x N x (100 + N-1)
             p_aux_1 = tigre.Atb(r_aux_1, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids)
-            p_aux_2 = np.sqrt(self.lmbda)*self.Ltx(W, r_aux_2)
+            p_aux_2 = np.sqrt(self.lmbda, dtype=np.float32)*self.Ltx(W, r_aux_2)
             p = p_aux_1 + p_aux_2
-
+            
             gamma=np.linalg.norm(p.ravel(),2)**2
 
             for i in range(self.niter):
                 res0=self.res
-
                 q_aux_1 = tigre.Ax(p, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
-                q_aux_2 = self.Lx(W,p)*np.sqrt(self.lmbda)
+                q_aux_2 = self.Lx(W,p)*np.sqrt(self.lmbda, dtype=np.float32)
 
                 #% q = cat(3, q_aux_1, q_aux_2{1},q_aux_2{2},q_aux_2{3}); % Probably never need to actually do this
                 #% alpha=gamma/norm(q(:),2)^2;
@@ -550,7 +549,7 @@ class IRN_TV_CGLS(IterativeReconAlg):
                 r_aux_2=r_aux_2-alpha*q_aux_2
 
                 s_aux_1 = tigre.Atb(r_aux_1, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids)
-                s_aux_2 =  np.sqrt(self.lmbda) * self.Ltx(W, r_aux_2)
+                s_aux_2 =  np.sqrt(self.lmbda, dtype=np.float32) * self.Ltx(W, r_aux_2)
                 s = s_aux_1 + s_aux_2
 
                 gamma1=np.linalg.norm(s.ravel(),2)**2
@@ -774,11 +773,11 @@ class hybrid_fLSQR_TV(IterativeReconAlg):
         # (1) Initialize 
         u=self.proj - Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
         
-        k_aux = Ax(np.ones(self.res.shape,dtype=np.float32)/np.sqrt(np.prod(self.geo.nVoxel)), self.geo, self.angles, "Siddon", gpuids=self.gpuids)
-        xA0 = 1/(np.sqrt(np.prod(self.geo.nVoxel))*np.linalg.norm(k_aux.ravel(),2)**2)*np.dot(k_aux.ravel(),u.ravel())
+        k_aux = Ax(np.ones(self.res.shape,dtype=np.float32)/np.sqrt(np.prod(self.geo.nVoxel), dtype=np.float32), self.geo, self.angles, "Siddon", gpuids=self.gpuids)
+        xA0 = 1/(np.sqrt(np.prod(self.geo.nVoxel), dtype=np.float32)*np.linalg.norm(k_aux.ravel(),2)**2)*np.dot(k_aux.ravel(),u.ravel())
         xA0 =np.ones(self.res.shape,dtype=np.float32)*xA0
         
-        k_aux = 1/(np.sqrt(np.prod(self.geo.nVoxel))*np.linalg.norm(k_aux.ravel(),2)**2)*Atb(k_aux, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids)
+        k_aux = 1/(np.sqrt(np.prod(self.geo.nVoxel), dtype=np.float32)*np.linalg.norm(k_aux.ravel(),2)**2)*Atb(k_aux, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids)
 
         u = u - Ax(xA0, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
 

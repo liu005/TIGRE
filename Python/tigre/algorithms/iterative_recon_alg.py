@@ -175,6 +175,25 @@ class IterativeReconAlg(object):
             "prior",
             "prior_ratio",
         ]
+        # numpy 2.4 made casting from single valued arrays to scalars deprecated. This is a list of keywords that are single valued and should be cast to scalars if they are given as single valued arrays.
+        single_valued_keywords = [
+            "alpha",
+            "alpha_red",
+            "rmax",
+            "maxl2err",
+            "delta",
+            "tviter",
+            "tvlambda",
+            "hyper",
+            "fista_p",
+            "fista_q",
+            "niter_outer",
+            "prior_ratio",
+            "lmbda",
+            "lmbda_red",
+            "blocksize",
+            "niter_outer",
+        ]
         self.__dict__.update(options)
         self.__dict__.update(**kwargs)
         for kw in kwargs.keys():
@@ -187,6 +206,10 @@ class IterativeReconAlg(object):
                             + kw
                             + " not recognized as default parameter for instance of IterativeReconAlg."  # noqa: E501
                         )
+            if kw in single_valued_keywords:
+                if isinstance(kwargs[kw], np.ndarray):
+                    if kwargs[kw].size == 1:
+                        self.__dict__[kw] = kwargs[kw].item()
         if self.angles.ndim == 1:
             a1 = self.angles
             a2 = np.zeros(self.angles.shape[0], dtype=np.float32)
