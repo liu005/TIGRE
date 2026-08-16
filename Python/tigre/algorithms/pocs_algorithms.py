@@ -108,6 +108,20 @@ class initASD_POCS(IterativeReconAlg):
         # kwargs.update(dict(regularization="minimizeTV"))
         # if "blocksize" not in kwargs:
         #     kwargs.update(dict(blocksize=1))
+        # MATLAB's ASD_POCS/OS_AwASD_POCS/PCSD default beta_red = 0.99, and `beta` there is
+        # the same quantity this port calls `lmbda`. IterativeReconAlg's shared default is
+        # lmbda_red = 1, which is right for the SART family (MATLAB SART/OS_SART/SIRT all
+        # default lambdared = 1) but wrong to inherit here. Set it before delegating so an
+        # explicit caller value still wins.
+        if "lmbda_red" not in kwargs:
+            kwargs.update(dict(lmbda_red=0.99))
+        # MATLAB's ASD_POCS/OS_AwASD_POCS/PCSD default beta_red = 0.99, and `beta` there is
+        # the same quantity this port calls `lmbda`. IterativeReconAlg's shared default is
+        # lmbda_red = 1, which is right for the SART family (MATLAB SART/OS_SART/SIRT all
+        # default lambdared = 1) but wrong to inherit here. Set it before delegating so an
+        # explicit caller value still wins.
+        if "lmbda_red" not in kwargs:
+            kwargs.update(dict(lmbda_red=0.99))
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)       
         self.alpha = 0.002 if "alpha" not in kwargs else kwargs["alpha"]
         self.alpha = np.asarray(self.alpha).item()
@@ -537,6 +551,13 @@ class initPCSD(IterativeReconAlg):
         # if "blocksize" not in kwargs:
         #     kwargs.update(dict(blocksize=1))
         #kwargs.update(dict(regularization="minimizeTV"))
+        # MATLAB's ASD_POCS/OS_AwASD_POCS/PCSD default beta_red = 0.99, and `beta` there is
+        # the same quantity this port calls `lmbda`. IterativeReconAlg's shared default is
+        # lmbda_red = 1, which is right for the SART family (MATLAB SART/OS_SART/SIRT all
+        # default lambdared = 1) but wrong to inherit here. Set it before delegating so an
+        # explicit caller value still wins.
+        if "lmbda_red" not in kwargs:
+            kwargs.update(dict(lmbda_red=0.99))
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
         if "maxl2err" not in kwargs:
             self.epsilon = (
