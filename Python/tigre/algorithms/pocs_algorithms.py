@@ -160,6 +160,14 @@ class initASD_POCS(IterativeReconAlg):
                 dtvg = dtvg * self.alpha_red
 
             self.beta *= self.beta_red
+            # The data step scales the back-projection by self.lmbda
+            # (iterative_recon_alg.update_image), not by self.beta. In the MATLAB
+            # reference these are ONE variable: the user option is called 'lambda' but
+            # is held internally as `beta`, which is applied in the data step, decayed
+            # here, and stop-tested below. Splitting it into two Python attributes left
+            # the decay on a float copy nobody reads, so lambda_red had no effect on
+            # the solver at all. Keep them in step.
+            self.lmbda = self.beta
             c = np.dot(dg_vec.reshape(-1,), dp_vec.reshape(-1,)) / max(
                 dg * dp, 1e-6
             )  # reshape ensures no copy is made.
@@ -334,6 +342,14 @@ class initPICCS(IterativeReconAlg):
                 dtvg = dtvg * self.alpha_red
 
             self.beta *= self.beta_red
+            # The data step scales the back-projection by self.lmbda
+            # (iterative_recon_alg.update_image), not by self.beta. In the MATLAB
+            # reference these are ONE variable: the user option is called 'lambda' but
+            # is held internally as `beta`, which is applied in the data step, decayed
+            # here, and stop-tested below. Splitting it into two Python attributes left
+            # the decay on a float copy nobody reads, so lambda_red had no effect on
+            # the solver at all. Keep them in step.
+            self.lmbda = self.beta
             c = np.dot(dg_vec.reshape(-1,), dp_vec.reshape(-1,)) / max(
                 dg * dp, 1e-6
             )  # reshape ensures no copy is made.
@@ -563,6 +579,14 @@ class initPCSD(IterativeReconAlg):
                 d_p_1st = im3DNORM(Ax(res_prev,self.geo,self.angles)-self.proj, 2)
 
             self.beta *= self.beta_red
+            # The data step scales the back-projection by self.lmbda
+            # (iterative_recon_alg.update_image), not by self.beta. In the MATLAB
+            # reference these are ONE variable: the user option is called 'lambda' but
+            # is held internally as `beta`, which is applied in the data step, decayed
+            # here, and stop-tested below. Splitting it into two Python attributes left
+            # the decay on a float copy nobody reads, so lambda_red had no effect on
+            # the solver at all. Keep them in step.
+            self.lmbda = self.beta
             c = np.dot(dg_vec.reshape(-1,), dp_vec.reshape(-1,)) / max(dg * dp, 1e-6) # reshape ensures no copy is made. 
             if (c < -0.99 and dd <=
                     self.epsilon) or self.beta < 0.005 or n_iter > self.niter:
