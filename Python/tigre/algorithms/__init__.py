@@ -5,6 +5,7 @@ from __future__ import print_function
 from .art_family_algorithms import sart
 from .art_family_algorithms import sirt
 from .art_family_algorithms import os_sart
+from .art_family_algorithms import fast_os_sart
 from .art_family_algorithms import sart_tv
 from .art_family_algorithms import os_sart_tv
 from .ista_algorithms import fista
@@ -34,6 +35,7 @@ __all__ = [
     "sart",
     "sirt",
     "os_sart",
+    "fast_os_sart",
     "sart_tv",
     "os_sart_tv",
     "iterativereconalg",

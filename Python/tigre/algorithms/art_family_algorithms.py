@@ -1,5 +1,7 @@
 import copy
 
+import numpy as np
+
 from tigre.algorithms.iterative_recon_alg import IterativeReconAlg
 from tigre.algorithms.iterative_recon_alg import decorator
 from tigre.utilities.im_3d_denoise import im3ddenoise
@@ -60,6 +62,45 @@ class OS_SART(IterativeReconAlg):
 
 
 os_sart = decorator(OS_SART, name="os_sart")
+
+
+class Fast_OS_SART(IterativeReconAlg):  # noqa: N801
+    __doc__ = (
+        "FAST_OS_SART is OS_SART with Nesterov/FISTA momentum: before each\n"
+        "pass over the subsets, the iterate is extrapolated along the last\n"
+        "step, y_k = x_k + (t_{k-1}-1)/t_k * (x_k - x_{k-1}), with the\n"
+        "classical t schedule t_k = (1+sqrt(1+4 t_{k-1}^2))/2.\n"
+        "After CERN/TIGRE PR #751 (open, unmerged as of 17 Aug 2026).\n"
+        "CAUTION: momentum over ordered subsets is an acceleration heuristic,\n"
+        "not a convergent algorithm -- with noisy/inconsistent data it also\n"
+        "accelerates semi-convergence, so it reaches the noise-fitting regime\n"
+        "in fewer iterations too. Compare against OS_SART on the\n"
+        "sharpness/noise FRONTIER, never at matched iteration counts.\n"
+    ) + IterativeReconAlg.__doc__
+
+    def __init__(self, proj, geo, angles, niter, **kwargs):
+        self.blocksize = 20 if 'blocksize' not in kwargs else kwargs["blocksize"]
+        IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
+
+    def run_main_iter(self):
+        t = 1.0
+        x_old = self.res.copy()
+        for i in range(self.niter):
+            res_prev = None
+            if self.Quameasopts is not None:
+                res_prev = copy.deepcopy(self.res)
+            if self.verbose:
+                self._estimate_time_until_completion(i)
+            t_old, t = t, (1.0 + np.sqrt(1.0 + 4.0 * t * t)) / 2.0
+            x_cur = self.res.copy()
+            # extrapolate, then let the data step descend IN PLACE from y
+            self.res += ((t_old - 1.0) / t) * (self.res - x_old)
+            x_old = x_cur
+            getattr(self, self.dataminimizing)()
+            self.error_measurement(res_prev, i)
+
+
+fast_os_sart = decorator(Fast_OS_SART, name="fast_os_sart")
 
 
 class SART_TV(IterativeReconAlg):  
