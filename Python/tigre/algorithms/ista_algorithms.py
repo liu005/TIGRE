@@ -116,13 +116,54 @@ class FISTA(IterativeReconAlg):
         kwargs.update(dict(blocksize=angles.shape[0]))
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
         self.lmbda = 0.1
-        self.__L__ = 2.0e8 if "hyper" not in kwargs else kwargs["hyper"]
+        # hyper = the Lipschitz constant L of the data term (largest
+        # eigenvalue of A^T A); the gradient step is 1/L. It is PROBLEM-SIZE
+        # dependent (the legacy 2.0e8 constant is calibrated to a 64^3 demo;
+        # the docstring above quotes ~2e4 at 512^3), so a hardcoded default
+        # makes FISTA's steps orders of magnitude too small on production
+        # geometry - the image just stays near its initialization. Default is
+        # now "auto": estimate L by power iteration on THIS problem's actual
+        # operators. Pass a number to reproduce the old behaviour.
+        self.__L__ = kwargs.get("hyper", "auto")
         self.__numiter_tv__ = 20 if "tviter" not in kwargs else kwargs["tviter"]
         self.__lambda__ = 0.1 if "tvlambda" not in kwargs else kwargs["tvlambda"]
         self.__t__ = 1
+        if isinstance(self.__L__, str):
+            self.__L__ = self._estimate_lipschitz()
         self.__bm__ = 1.0 / self.__L__
         self.__p__ = 1 if "fista_p" not in kwargs else kwargs["fista_p"]
         self.__q__ = 1 if "fista_q" not in kwargs else kwargs["fista_q"]
+
+    def _estimate_lipschitz(self, n_iter=8, seed=0):
+        """Estimate L = lambda_max(A^T A) by power iteration, using the SAME
+        operator pair as update_image (Ax "interpolated" / Atb "matched") so
+        the estimate matches the gradient actually taken. Cost: n_iter
+        forward+back projection pairs - comparable to n_iter FISTA iterations,
+        paid once.
+
+        Scaling: update_image applies an effective step of 1/hyper to the
+        LEAST-SQUARES gradient grad f = 2 A^T(Ax - b), whose Lipschitz
+        constant is 2*lambda_max(A^T A). Power iteration measures
+        lambda_max(A^T A), so hyper must be at least TWICE that - returning
+        the bare estimate (x1.05) was verified to diverge to NaN on a
+        synthetic phantom. The extra 1.05 biases the (from-below-converging)
+        power estimate to the safe side: overestimating hyper only shrinks
+        the step slightly, underestimating it diverges."""
+        rng = np.random.default_rng(seed)   # deterministic: repeat runs match
+        x = rng.standard_normal(tuple(self.geo.nVoxel)).astype(np.float32)
+        x /= np.linalg.norm(x.ravel())
+        L = 1.0
+        for _ in range(n_iter):
+            y = tigre.Atb(
+                tigre.Ax(x, self.geo, self.angles, "interpolated", gpuids=self.gpuids),
+                self.geo, self.angles, "matched", gpuids=self.gpuids)
+            L = float(np.linalg.norm(y.ravel()))
+            x = y / L
+        L *= 2.0 * 1.05
+        if self.verbose:
+            print(f"FISTA: estimated Lipschitz constant (hyper) = {L:.4g} "
+                  f"(2 x lambda_max(A^T A) from {n_iter} power iterations)")
+        return L
 
     # override update_image from iterative recon alg to remove W.
     def update_image(self, geo, angle, iteration):
