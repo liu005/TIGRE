@@ -517,29 +517,35 @@ class IRN_TV_CGLS(IterativeReconAlg):
 
             W=self.__build_weights__()
             self.res=res0
-    
+
+            # np.sqrt(python float) and np.linalg.norm(...) return float64
+            # SCALARS, which under NumPy 2 (NEP 50) promote every float32
+            # volume they touch to float64 - and Ax/Atb reject float64
+            # ("Input data should be float32"). Keep all scalars float32.
+            sqrt_lmbda = np.float32(np.sqrt(self.lmbda))
+
             prox_aux_1 =Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
-            prox_aux_2 = self.Lx(W,self.res)*np.sqrt(self.lmbda)
+            prox_aux_2 = self.Lx(W,self.res)*sqrt_lmbda
     
             r_aux_1 = self.proj - prox_aux_1
             r_aux_2 = -prox_aux_2
             #% Malena: changed the format, r_aux_2 is 3
             #% r = cat(3,r_aux_1, r_aux_2); % Malena: size guide, erase later, N x N x (100 + N-1)
             p_aux_1 = tigre.Atb(r_aux_1, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids)
-            p_aux_2 = np.sqrt(self.lmbda)*self.Ltx(W, r_aux_2)
+            p_aux_2 = sqrt_lmbda*self.Ltx(W, r_aux_2)
             p = p_aux_1 + p_aux_2
 
-            gamma=np.linalg.norm(p.ravel(),2)**2
+            gamma=np.float32(np.linalg.norm(p.ravel(),2)**2)
 
             for i in range(self.niter):
                 res0=self.res
 
                 q_aux_1 = tigre.Ax(p, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
-                q_aux_2 = self.Lx(W,p)*np.sqrt(self.lmbda)
+                q_aux_2 = self.Lx(W,p)*sqrt_lmbda
 
                 #% q = cat(3, q_aux_1, q_aux_2{1},q_aux_2{2},q_aux_2{3}); % Probably never need to actually do this
                 #% alpha=gamma/norm(q(:),2)^2;
-                alpha=gamma/(np.linalg.norm(q_aux_1.ravel(),2)**2 + np.linalg.norm(q_aux_2[0].ravel(),2)**2 + np.linalg.norm(q_aux_2[1].ravel(),2)**2+np.linalg.norm(q_aux_2[2].ravel(),2)**2)
+                alpha=np.float32(gamma/(np.linalg.norm(q_aux_1.ravel(),2)**2 + np.linalg.norm(q_aux_2[0].ravel(),2)**2 + np.linalg.norm(q_aux_2[1].ravel(),2)**2+np.linalg.norm(q_aux_2[2].ravel(),2)**2))
                 self.res=self.res+alpha*p
                 aux=self.proj-tigre.Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
                 #% residual norm or the original least squares (not Tikhonov).
@@ -552,11 +558,11 @@ class IRN_TV_CGLS(IterativeReconAlg):
                 r_aux_2=r_aux_2-alpha*q_aux_2
 
                 s_aux_1 = tigre.Atb(r_aux_1, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids)
-                s_aux_2 =  np.sqrt(self.lmbda) * self.Ltx(W, r_aux_2)
+                s_aux_2 =  sqrt_lmbda * self.Ltx(W, r_aux_2)
                 s = s_aux_1 + s_aux_2
 
-                gamma1=np.linalg.norm(s.ravel(),2)**2
-                beta=gamma1/gamma
+                gamma1=np.float32(np.linalg.norm(s.ravel(),2)**2)
+                beta=np.float32(gamma1/gamma)
                 gamma=gamma1
                 p=s+beta*p
 

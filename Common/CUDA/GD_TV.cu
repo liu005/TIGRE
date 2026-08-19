@@ -678,7 +678,17 @@ do { \
             cudaDeviceSynchronize();
         }
         cudaCheckErrors("Memory free");
-        cudaDeviceReset();
+        // cudaDeviceReset() destroys the PRIMARY CUDA CONTEXT of the whole
+        // process - every CuPy/PyTorch allocation, module and pool in the
+        // caller dies with it (first symptom: cudaErrorInvalidValue in
+        // cupy Memory.__dealloc__, then CUDA_ERROR_INVALID_HANDLE on the
+        // next GPU touch). TIGRE's own kernels survive only because the
+        // runtime silently re-creates the context on their next call.
+        // GD_AwTV.cu already has this commented out; minTV was the last
+        // normal-path reset left, and it made every ASD_POCS/SART_TV run
+        // poison the rest of the process (found 2026-08-19, first real
+        // POCS sweep). Do not re-enable.
+        // cudaDeviceReset();
     }
         
 void checkFreeMemory(const GpuIds& gpuids,size_t *mem_GPU_global){
