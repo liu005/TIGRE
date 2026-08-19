@@ -35,9 +35,12 @@ class FISTA(IterativeReconAlg):
 
     Keyword Arguments
     -----------------
-    :keyword hyper: (np.float64)
+    :keyword hyper: (np.float64 or "auto")
         hyper parameter proportional to the largest eigenvalue of the
-        matrix A in the equations Ax-b and ATb.
+        matrix A in the equations Ax-b and ATb. The gradient step is
+        1/hyper, so the right value is problem-size dependent.
+        Default "auto": estimated for the given proj/geo/angles by power
+        iteration (see _estimate_hyper). Pass a number to pin it.
         Empirical tests show, for the headphantom object:
 
         nVoxel = np.array([64,64,64]),      hyper (approx=) 2.e8
@@ -116,13 +119,54 @@ class FISTA(IterativeReconAlg):
         kwargs.update(dict(blocksize=angles.shape[0]))
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
         self.lmbda = 0.1
-        self.__L__ = 2.0e8 if "hyper" not in kwargs else kwargs["hyper"]
+        # hyper is the Lipschitz constant of the data term's gradient; the
+        # effective gradient step is 1/hyper, so it is PROBLEM-SIZE dependent
+        # (the docstring above quotes ~2e8 at 64^3 but ~2e4 at 512^3). With a
+        # fixed default, FISTA on a large/real geometry takes steps orders of
+        # magnitude too small and the image stays frozen near its
+        # initialization. "auto" (new default) estimates it for THIS problem
+        # by power iteration; passing a number keeps the old behaviour.
+        self.__L__ = kwargs.get("hyper", "auto")
         self.__t__ = 1.0
         self.__numiter_tv__ = 20 if "tviter" not in kwargs else int(np.asarray(kwargs["tviter"]).item())
         self.__lambda__ = 0.1 if "tvlambda" not in kwargs else np.asarray(kwargs["tvlambda"]).item()
+        if isinstance(self.__L__, str):
+            self.__L__ = self._estimate_hyper()
         self.__bm__ = 1.0 / self.__L__
         self.__p__ = 1 if "fista_p" not in kwargs else  np.asarray(kwargs["fista_p"]).item()
         self.__q__ = 1 if "fista_q" not in kwargs else np.asarray(kwargs["fista_q"]).item()
+
+    def _estimate_hyper(self, n_iter=8, seed=0):
+        """Estimate hyper = 2 * lambda_max(A^T A) by power iteration, using
+        the same operator pair as update_image (Ax "interpolated" /
+        Atb "matched") so the estimate matches the gradient actually taken.
+
+        Why the factor 2: update_image applies an effective step of 1/hyper
+        to the least-squares gradient grad f = 2 A^T(Ax - b), whose Lipschitz
+        constant is 2 * lambda_max(A^T A); returning the bare power estimate
+        was verified to diverge. The extra 1.05 biases the
+        (from-below-converging) power estimate to the safe side:
+        overestimating hyper only shrinks the step slightly, underestimating
+        it can diverge.
+
+        Cost: n_iter forward+back projection pairs, paid once - comparable
+        to n_iter extra FISTA iterations. Deterministic seed so repeat runs
+        match."""
+        rng = np.random.default_rng(seed)
+        x = rng.standard_normal(tuple(self.geo.nVoxel)).astype(np.float32)
+        x /= np.linalg.norm(x.ravel())
+        L = 1.0
+        for _ in range(n_iter):
+            y = tigre.Atb(
+                tigre.Ax(x, self.geo, self.angles, "interpolated", gpuids=self.gpuids),
+                self.geo, self.angles, "matched", gpuids=self.gpuids)
+            L = float(np.linalg.norm(y.ravel()))
+            x = y / L
+        L *= 2.0 * 1.05
+        if self.verbose:
+            print("FISTA: estimated hyper (Lipschitz constant) = %.4g "
+                  "(2 x lambda_max(A^T A), %d power iterations)" % (L, n_iter))
+        return L
 
     # override update_image from iterative recon alg to remove W.
     def update_image(self, geo, angle, iteration):
