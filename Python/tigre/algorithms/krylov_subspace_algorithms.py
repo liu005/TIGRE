@@ -526,8 +526,14 @@ class IRN_TV_CGLS(IterativeReconAlg):
             p_aux_1 = tigre.Atb(r_aux_1, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids)
             p_aux_2 = np.sqrt(self.lmbda, dtype=np.float32)*self.Ltx(W, r_aux_2)
             p = p_aux_1 + p_aux_2
-            
-            gamma=np.linalg.norm(p.ravel(),2)**2
+
+            # np.linalg.norm returns a float64 SCALAR; under NumPy 2 (NEP 50)
+            # a float64 scalar promotes any float32 array it multiplies, so
+            # the step sizes derived from these norms (alpha, beta) must be
+            # kept float32 or self.res/p become float64 and Ax/Atb reject
+            # them ("Input data should be float32"). Same issue the
+            # dtype=np.float32 sqrt calls above already fix for sqrt(lmbda).
+            gamma=np.float32(np.linalg.norm(p.ravel(),2)**2)
 
             for i in range(self.niter):
                 res0=self.res
@@ -536,7 +542,7 @@ class IRN_TV_CGLS(IterativeReconAlg):
 
                 #% q = cat(3, q_aux_1, q_aux_2{1},q_aux_2{2},q_aux_2{3}); % Probably never need to actually do this
                 #% alpha=gamma/norm(q(:),2)^2;
-                alpha=gamma/(np.linalg.norm(q_aux_1.ravel(),2)**2 + np.linalg.norm(q_aux_2[0].ravel(),2)**2 + np.linalg.norm(q_aux_2[1].ravel(),2)**2+np.linalg.norm(q_aux_2[2].ravel(),2)**2)
+                alpha=np.float32(gamma/(np.linalg.norm(q_aux_1.ravel(),2)**2 + np.linalg.norm(q_aux_2[0].ravel(),2)**2 + np.linalg.norm(q_aux_2[1].ravel(),2)**2+np.linalg.norm(q_aux_2[2].ravel(),2)**2))
                 self.res=self.res+alpha*p
                 aux=self.proj-tigre.Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
                 #% residual norm or the original least squares (not Tikhonov).
@@ -552,8 +558,8 @@ class IRN_TV_CGLS(IterativeReconAlg):
                 s_aux_2 =  np.sqrt(self.lmbda, dtype=np.float32) * self.Ltx(W, r_aux_2)
                 s = s_aux_1 + s_aux_2
 
-                gamma1=np.linalg.norm(s.ravel(),2)**2
-                beta=gamma1/gamma
+                gamma1=np.float32(np.linalg.norm(s.ravel(),2)**2)
+                beta=np.float32(gamma1/gamma)
                 gamma=gamma1
                 p=s+beta*p
 
