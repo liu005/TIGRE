@@ -172,7 +172,12 @@ class FISTA(IterativeReconAlg):
             x_rec_old = copy.deepcopy(x_rec)
             x_rec = im3ddenoise(self.res, self.__numiter_tv__, 1.0 / lambdaForTv, self.gpuids)
             t_old = t
-            t = (self.__p__ + np.sqrt(self.__q__ + 4 * t ** 2)) / 2
+            # float(): np.sqrt returns an np.float64 SCALAR, and under NumPy 2
+            # promotion (NEP 50) a np.float64 scalar UPCASTS a float32 array -
+            # the momentum line below then silently turned self.res float64 and
+            # the next iteration's Ax raised "Input data should be float32".
+            # A python float is a weak scalar and leaves the array dtype alone.
+            t = float((self.__p__ + np.sqrt(self.__q__ + 4 * t ** 2)) / 2)
             self.res = x_rec + (t_old - 1) / t * (x_rec - x_rec_old)
             
             if Quameasopts is not None:
