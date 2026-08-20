@@ -171,8 +171,8 @@ class FISTA(IterativeReconAlg):
         VERBOSE:
          for j in range(angleblocks):
              angle = np.array([alpha[j]], dtype=np.float32)
-             proj_err = proj[angle_index[j]] - Ax(res, geo, angle, 'Siddon')
-             backprj = Atb(proj_err, geo, angle, 'FDK')
+             proj_err = proj[angle_index[j]] - Ax(res, geo, angle, 'interpolated')
+             backprj = Atb(proj_err, geo, angle, 'matched')   # gradient needs A^T
              res += backprj
              res[res<0]=0
 
