@@ -146,6 +146,17 @@ class IterativeReconAlg(object):
             init=None,
             verbose=True,
             noneg=True,
+            # Hard physical constraints ('trivially-true' priors). Both are
+            # projections onto convex sets, exactly like noneg above, so they
+            # compose with the SART/SIRT/POCS family without disturbing its
+            # convergence argument - and unlike a learned prior they can only
+            # REMOVE physically impossible solutions, never invent structure.
+            #   mu_max  scalar upper bound on attenuation.
+            #   support bool/0-1 array, True where the object may be nonzero
+            #           (e.g. inside the sample holder); everything else is
+            #           known air and is zeroed every update.
+            mu_max=None,
+            support=None,
             computel2=False,
             dataminimizing="art_data_minimizing",
             name="Iterative Reconstruction",
@@ -172,7 +183,9 @@ class IterativeReconAlg(object):
             "fista_p",
             "fista_q",
             "niter_outer",
-            "dowang"
+            "dowang",
+            "mu_max",
+            "support"
         ]
         self.__dict__.update(options)
         self.__dict__.update(**kwargs)
@@ -288,9 +301,12 @@ class IterativeReconAlg(object):
                 self.res = init_multigrid(self.proj, self.geo, self.angles, alg="SART")
                 if verbose:
                     print("init multigrid complete.")
+                self.apply_constraints()
             if init == "FDK":
                 self.res = np.maximum(FDK(self.proj, self.geo, self.angles),0)
-                pass
+                # Project the warm start too: an infeasible init otherwise
+                # costs the first iterations just getting back in bounds.
+                self.apply_constraints()
 
         elif isinstance(init, np.ndarray):
             if (self.geo.nVoxel == init.shape).all():
@@ -298,6 +314,11 @@ class IterativeReconAlg(object):
                 # aliasing init would silently overwrite the caller's array - which
                 # callers reuse, e.g. to compare their FDK init against the result.
                 self.res = init.astype(np.float32, copy=True)
+                # Projected as well, so iteration 0 is consistent with every
+                # iteration after it. Only ever removes mass the constraints
+                # already declare impossible, and it is on the COPY above, so
+                # the caller's array is untouched.
+                self.apply_constraints()
             else:
                 raise ValueError("wrong dimension of array for initialization")
         elif init is not None:
@@ -355,11 +376,23 @@ class IterativeReconAlg(object):
 
             self.update_image(geo, angle, j)
 
-            if self.noneg:
-                # In place. res.clip(min=0) allocated a whole extra volume every
-                # block; at 201x2100x2100 that is 3.55 GB of alloc+write per
-                # block, measured at 850 ms against 450 ms for np.maximum(out=).
-                np.maximum(self.res, 0, out=self.res)
+            self.apply_constraints()
+
+    def apply_constraints(self):
+        """Project the iterate onto the feasible set: nonnegativity, an upper
+        attenuation bound, and a known-air support.
+
+        Every step is IN PLACE. res.clip(min=0) allocated a whole extra volume
+        every block; at 201x2100x2100 that is 3.55 GB of alloc+write per block,
+        measured at 850 ms against 450 ms for np.maximum(out=). The same
+        applies to the bound and the mask, hence np.minimum(out=) and *=.
+        """
+        if self.noneg:
+            np.maximum(self.res, 0, out=self.res)
+        if self.mu_max is not None:
+            np.minimum(self.res, self.mu_max, out=self.res)
+        if self.support is not None:
+            self.res *= self.support
 
     def minimizeTV(self, res_prev, dtvg):
         if self.gpuids is None:
