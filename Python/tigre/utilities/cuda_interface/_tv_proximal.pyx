@@ -37,6 +37,14 @@ def cuda_raise_errors(error_code):
 
 
 def tvdenoise(np.ndarray[np.float32_t, ndim=3] src, int maxiter = 100, float lamda = 15.0, gpuids = None):
+    # gpuids=None reaches convert_to_c_gpuids as count 0 / NULL, which this
+    # kernel reports as "no available device(s) that support CUDA" (the
+    # projectors instead read count 0 as auto-select-all). Resolve it here to
+    # the same GpuIds() every Python caller already substitutes for None.
+    # Lazy import: these modules load during tigre's own package init.
+    if gpuids is None:
+        from tigre.utilities.gpu import GpuIds
+        gpuids = GpuIds()
     cdef c_GpuIds* c_gpuids = convert_to_c_gpuids(gpuids)
     if not c_gpuids:
         raise MemoryError()
