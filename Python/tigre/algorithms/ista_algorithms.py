@@ -221,7 +221,14 @@ class FISTA(IterativeReconAlg):
             # A python float is a weak scalar and leaves the array dtype alone.
             t = float((self.__p__ + np.sqrt(self.__q__ + 4 * t ** 2)) / 2)
             self.res = x_rec + (t_old - 1) / t * (x_rec - x_rec_old)
-            
+            # The data step is projected (art_data_minimizing calls
+            # apply_constraints), but the momentum extrapolation happens AFTER
+            # it and can overshoot straight back out of the feasible set -
+            # measured 0.5292 against a mu_max of 0.5. Re-project: every
+            # constraint here is a projection onto a convex set, which is what
+            # projected FISTA does anyway.
+            self.apply_constraints()
+
             if Quameasopts is not None:
                 self.error_measurement(res_prev, i)
 

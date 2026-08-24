@@ -71,8 +71,20 @@ def computeCOR(data, geo, angles, slc=None, gpu=True):
 #            test = interpn((angle_grid, det_grid), test_data, (angles_aux, s2), 'linear');
             
             nonzero = (test > 0)
-            # We want the number of non-zero values for the average, not the sum of their positions
-            M[j] = sum((test[nonzero] - data[nonzero])**2)*(1/len(nonzero))
+            # `sum(...)` here was PYTHON's builtin, iterating the masked array
+            # element by element - 40x slower than a vectorised reduction on
+            # NumPy, and pathological on CuPy, where `xp` may put it on the
+            # device and every element costs a synchronisation.
+            #
+            # NOTE, deliberately left alone: `len(nonzero)` is the length of
+            # the boolean MASK's first axis (the angle count), not the number
+            # of True entries the adjacent comment asks for. It is the same
+            # constant for every j, so it cannot change which COR wins the
+            # argmin below - the normaliser is effectively absent. Replacing it
+            # with `nonzero.sum()` WOULD change the result, because that count
+            # varies with j, so it is a behavioural change that wants
+            # validation against a known-COR dataset rather than a drive-by fix.
+            M[j] = xp.sum((test[nonzero] - data[nonzero])**2)*(1/len(nonzero))
         
         indM = xp.argmin(M)   # minimum value and index
         midpoint = COR[indM]   # set midpoint for next search
