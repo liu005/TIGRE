@@ -394,6 +394,31 @@ class IterativeReconAlg(object):
         if self.support is not None:
             self.res *= self.support
 
+    # True for anything that reaches apply_constraints() during iteration (the
+    # SART/SIRT/MLEM/FISTA/POCS families). The Krylov algorithms set it False:
+    # projecting a CGLS iterate mid-run breaks the conjugacy its recursions
+    # assume, because r, p and gamma are all updated against the UNPROJECTED
+    # step. They get the bound applied once, at the end, instead.
+    _projects_during_iteration = True
+
+    def apply_terminal_constraints(self):
+        """Apply the HARD physical bounds once, after iteration has finished.
+
+        Only mu_max and the support mask, and only for algorithms that could
+        not enforce them while iterating. Deliberately NOT noneg: an algorithm
+        that legitimately returns small negatives in air would have that
+        distribution silently one-sided, which changes air-region noise
+        statistics (this project measures artifact level as air std over sample
+        mean). A caller who passed mu_max or a support asked for those bounds;
+        nobody asked for their air to be clipped as a side effect.
+        """
+        if self._projects_during_iteration:
+            return
+        if self.mu_max is not None:
+            np.minimum(self.res, self.mu_max, out=self.res)
+        if self.support is not None:
+            self.res *= self.support
+
     def minimizeTV(self, res_prev, dtvg):
         if self.gpuids is None:
             self.gpuids = GpuIds()
@@ -513,6 +538,7 @@ def decorator(IterativeReconAlg, name=None, docstring=None):  # noqa: N803
         if name is not None:
             alg.name = name
         alg.run_main_iter()
+        alg.apply_terminal_constraints()
         if alg.computel2 or alg.Quameasopts is not None:
             return alg.getres(), alg.geterrors()
         else:

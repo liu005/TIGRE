@@ -995,3 +995,14 @@ class hybrid_fLSQR_TV(IterativeReconAlg):
         return self.res
 
 hybrid_flsqr_tv = decorator(hybrid_fLSQR_TV, name="hybrid_flsqr_tv")
+
+
+# A Krylov iterate cannot be projected mid-run without breaking the conjugacy
+# the recursions assume - r, p and gamma are updated against the UNPROJECTED
+# step - so mu_max and the support are applied once, after the last iteration.
+# Before this they were applied to the warm start and nowhere else, which meant
+# passing mu_max to CGLS silently did nothing: measured 1.4943 returned against
+# a ceiling of 0.5.
+for _cls in (CGLS, LSQR, hybrid_LSQR, LSMR, IRN_TV_CGLS,
+             AB_GMRES, BA_GMRES, hybrid_fLSQR_TV):
+    _cls._projects_during_iteration = False

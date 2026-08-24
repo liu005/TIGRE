@@ -84,10 +84,26 @@ def test_mlem_keeps_nonnegativity_even_if_asked_not_to(noisy_problem):
     assert float(res.min()) >= 0.0
 
 
-def test_krylov_ceiling_is_warm_start_only(noisy_problem):
-    """Documents the limitation rather than pretending it is not there."""
+def test_krylov_ceiling_binds_at_the_end(noisy_problem):
+    """A Krylov iterate cannot be projected mid-run without breaking the
+    conjugacy its recursions assume, so the bound is applied once after the
+    last iteration. It used to hit the warm start and nothing else: CGLS
+    returned 1.4943 against a ceiling of 0.5."""
     geo, angles, ph, noisy = noisy_problem
     res = cgls(noisy.copy(), geo, angles, niter=20, mu_max=MU, init="FDK", verbose=False)
     assert np.isfinite(res).all()
-    if float(res.max()) <= MU + 1e-4:
-        pytest.skip("CGLS happened to stay under the ceiling; nothing proven either way")
+    assert float(res.max()) <= MU + 1e-4, f"CGLS returned {float(res.max()):.4f}"
+
+
+def test_terminal_projection_is_a_noop_without_constraints(noisy_problem):
+    """The terminal step must not touch a caller who asked for nothing.
+
+    In particular it does NOT apply noneg: CGLS legitimately returns small
+    negatives in air, and one-siding that distribution would change air-region
+    noise statistics, which is how this project measures artifact level.
+    """
+    geo, angles, ph, noisy = noisy_problem
+    a = cgls(noisy.copy(), geo, angles, niter=10, init="FDK", verbose=False)
+    b = cgls(noisy.copy(), geo, angles, niter=10, init="FDK", verbose=False)
+    assert np.array_equal(a, b)
+    assert float(a.min()) < 0.0, "expected CGLS to leave negatives in air"
