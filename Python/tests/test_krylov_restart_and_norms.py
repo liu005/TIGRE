@@ -153,3 +153,31 @@ def test_im3dnorm_l2_uses_the_same_accumulator():
     # Other norms are untouched.
     y = np.arange(10, dtype=np.float32)
     assert float(im3DNORM(y, 1)) == pytest.approx(float(np.linalg.norm(y, 1)))
+
+
+def test_inner_is_accurate_and_keeps_float32():
+    """Gram-Schmidt coefficients go through inner(); their error compounds
+    across a Krylov basis, so they get the float64 accumulator too."""
+    from tigre.utilities.im3Dnorm import inner
+    n = 50_000_000
+    a = np.full(n, 1e-3, dtype=np.float32)
+    b = np.full(n, 2e-3, dtype=np.float32)
+    exact = n * 2e-6
+    assert float(inner(a, b)) == pytest.approx(exact, rel=1e-5)
+    assert inner(a, b).dtype == np.float32
+    # Shapes are ravelled, so a volume and its flat view agree.
+    v = np.arange(24, dtype=np.float32).reshape(2, 3, 4)
+    assert float(inner(v, v)) == pytest.approx(float(np.dot(v.ravel(), v.ravel())), rel=1e-6)
+
+
+def test_lsqr_and_lsmr_share_the_restart_fix():
+    """They had the identical single-loop structure and the identical
+    sentinel; a fix that reached only CGLS would leave them stopping at
+    iteration 1."""
+    import inspect
+    for cls_name in ("LSQR", "LSMR", "CGLS"):
+        src = inspect.getsource(getattr(K, cls_name).run_main_iter)
+        assert src.count("while i < self.niter:") == 2, f"{cls_name}: outer loop missing"
+        # The code form, not the docstrings - CGLS's explains the old bug.
+        assert "if self.re_init_at_iteration + 1 == i" not in src, f"{cls_name}: old sentinel"
+        assert "if self.re_init_at_iteration == i" in src, f"{cls_name}: give-up test missing"

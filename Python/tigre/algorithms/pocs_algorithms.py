@@ -7,7 +7,7 @@ from tigre.algorithms.iterative_recon_alg import IterativeReconAlg
 from tigre.algorithms.iterative_recon_alg import decorator
 from tigre.algorithms.single_pass_algorithms import FDK
 from tigre.utilities.Ax import Ax
-from tigre.utilities.im3Dnorm import im3DNORM
+from tigre.utilities.im3Dnorm import im3DNORM, inner
 
 
 
@@ -169,7 +169,7 @@ class initASD_POCS(IterativeReconAlg):
             # the decay on a float copy nobody reads, so lambda_red had no effect on
             # the solver at all. Keep them in step.
             self.lmbda = self.beta
-            c = np.dot(dg_vec.reshape(-1,), dp_vec.reshape(-1,)) / max(
+            c = inner(dg_vec, dp_vec) / max(
                 dg * dp, 1e-6
             )  # reshape ensures no copy is made.
             if (c < -0.99 and dd <= self.epsilon) or self.beta < 0.005 or n_iter >= self.niter:
@@ -202,7 +202,7 @@ asd_pocs = decorator(ASD_POCS, name="asd_pocs")
 
 class AwASD_POCS(initASD_POCS):  
     __doc__ = ("    AwASD_POCS is the Adaptive Weighted TV (edge preserving) version of ASD_POCS\n\n"
-               "        :extra kwargs delta: (float)\n"
+               "        :extra kwargs delta: (float or length-3 sequence; per-axis = directional TV, equal/scalar = the old isotropic-in-orientation behaviour)\n"
                "            Control amount of smoothing at edges of the image\n"
                "            Default delta = -0.005\n") + initASD_POCS.__doc__
 
@@ -212,7 +212,7 @@ class AwASD_POCS(initASD_POCS):
             print('Warning: blocksize is set to 1, please use an OS version of the algorithm for blocksize > 1')
         kwargs.update(dict(blocksize=1))
         kwargs.update(dict(regularization="minimizeAwTV"))
-        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"] 
+        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]   # scalar or length-3 (per-axis); see GD_AwTV.cu 
         
         initASD_POCS.__init__(self, proj, geo, angles, niter, **kwargs)
 
@@ -239,7 +239,7 @@ class OS_AwASD_POCS(initASD_POCS):
     __doc__ = (
         "    Oriented Subsets and Adaptive Weighted TV version of AwASD_POCS\n\n"
         "    Default blocksize = 20\n\n"
-        "        :extra kwargs delta: (float)\n"
+        "        :extra kwargs delta: (float or length-3 sequence; per-axis = directional TV, equal/scalar = the old isotropic-in-orientation behaviour)\n"
         "            Control amount of smoothing at edges of the image\n"
         "            Default delta = -0.005\n"
         ) + initASD_POCS.__doc__
@@ -248,7 +248,7 @@ class OS_AwASD_POCS(initASD_POCS):
 
         self.blocksize = 20 if "blocksize" not in kwargs else kwargs["blocksize"]
         kwargs.update(dict(regularization="minimizeAwTV"))
-        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]
+        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]   # scalar or length-3 (per-axis); see GD_AwTV.cu
         
         initASD_POCS.__init__(self, proj, geo, angles, niter, **kwargs) 
 
@@ -400,7 +400,7 @@ class initPCSD(IterativeReconAlg):
             # the decay on a float copy nobody reads, so lambda_red had no effect on
             # the solver at all. Keep them in step.
             self.lmbda = self.beta
-            c = np.dot(dg_vec.reshape(-1,), dp_vec.reshape(-1,)) / max(dg * dp, 1e-6) # reshape ensures no copy is made. 
+            c = inner(dg_vec, dp_vec) / max(dg * dp, 1e-6) # reshape ensures no copy is made. 
             if (c < -0.99 and dd <=
                     self.epsilon) or self.beta < 0.005 or n_iter > self.niter:
                 if self.verbose:
@@ -431,7 +431,7 @@ pcsd = decorator(PCSD, name='pcsd')
 class AwPCSD(initPCSD): 
     __doc__ = (        
         "    Adaptive Weighted TV (edge preserving) version of PCSD\n\n"
-        "    :extra keyword delta: (float)\n"
+        "    :extra keyword delta: (float or length-3 sequence; per-axis = directional TV, equal/scalar = the old isotropic-in-orientation behaviour)\n"
         "        Controls amount of smoothing at edges of the image \n"
         "        Default -0.005\n"
         ) + initPCSD.__doc__
@@ -442,7 +442,7 @@ class AwPCSD(initPCSD):
             print('Warning: blocksize is set to 1, please use an OS version of the algorithm for blocksize > 1')
         kwargs.update(dict(blocksize=1))
         kwargs.update(dict(regularization="minimizeAwTV"))
-        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]
+        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]   # scalar or length-3 (per-axis); see GD_AwTV.cu
             
         initPCSD.__init__(self, proj, geo, angles, niter, **kwargs)
         
@@ -471,7 +471,7 @@ class OS_Aw_PCSD(initPCSD):
     __doc__ = (
         "    Oriented Subsets and Adaptive Weighted TV version of PCSD\n\n"
         "    Default blocksize = 20\n\n"
-        "    :extra keyword delta: (float)\n"
+        "    :extra keyword delta: (float or length-3 sequence; per-axis = directional TV, equal/scalar = the old isotropic-in-orientation behaviour)\n"
         "        Controls amount of smoothing at edges of the image \n"
         "        Default -0.005\n"
         ) + initPCSD.__doc__
@@ -480,7 +480,7 @@ class OS_Aw_PCSD(initPCSD):
 
         self.blocksize = 20 if "blocksize" not in kwargs else kwargs["blocksize"]
         kwargs.update(dict(regularization="minimizeAwTV"))
-        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]
+        self.delta = np.float32(-0.005) if "delta" not in kwargs else kwargs["delta"]   # scalar or length-3 (per-axis); see GD_AwTV.cu
             
         initPCSD.__init__(self, proj, geo, angles, niter, **kwargs)
         

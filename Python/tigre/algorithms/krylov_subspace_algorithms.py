@@ -9,7 +9,7 @@ from tigre.algorithms.iterative_recon_alg import IterativeReconAlg
 from tigre.algorithms.iterative_recon_alg import decorator
 from tigre.utilities.Atb import Atb
 from tigre.utilities.Ax import Ax
-from tigre.utilities.im3Dnorm import l2norm
+from tigre.utilities.im3Dnorm import l2norm, inner
 import tigre.algorithms as algs
 import scipy.sparse.linalg
 
@@ -168,7 +168,7 @@ class LSQR(IterativeReconAlg):
         # Don't precompute V and W.
         kwargs.update(dict(W=None, V=None))
         kwargs.update(dict(blocksize=angles.shape[0]))
-        self.re_init_at_iteration = 0
+        self.re_init_at_iteration = -1
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
 
     def initialize_algo(self):
@@ -193,54 +193,64 @@ class LSQR(IterativeReconAlg):
     def run_main_iter(self):
         self.l2l = np.zeros((1, self.niter), dtype=np.float32)
         avgtime = []
-        self.initialize_algo()
-        for i in range(self.niter):
-            if self.verbose:
-                self._estimate_time_until_completion(i)
-            if self.Quameasopts is not None:
-                res_prev = copy.deepcopy(self.res)
-            avgtic = default_timer()    
-            
-            #% (3)(a)
-            self.__u__ = tigre.Ax(self.__v__, self.geo, self.angles, "Siddon", gpuids=self.gpuids) - self.__alpha__*self.__u__
-            self.__beta__ = _norm(self.__u__.ravel(),2)
-            self.__u__ = self.__u__ / self.__beta__
-            
-            #% (3)(b)
-            self.__v__ = tigre.Atb(self.__u__, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids) - self.__beta__*self.__v__
-            self.__alpha__ = _norm(self.__v__.ravel(),2)
-            self.__v__ = self.__v__ / self.__alpha__    
-
-            #% (4)(a-g)
-            rho = np.sqrt(self.__rhobar__**2 + self.__beta__**2)
-            c = self.__rhobar__ / rho
-            s =  self.__beta__ / rho
-            theta = s * self.__alpha__    
-            self.__rhobar__ = - c * self.__alpha__    
-            phi = c * self.__phibar__
-            self.__phibar__ = s * self.__phibar__
-            
-            #% (5) Update x, w
-            self.res = self.res + (phi / rho) * self.__w__
-            self.__w__ = self.__v__ - (theta / rho) * self.__w__
-
-            avgtoc = default_timer()
-            avgtime.append(abs(avgtic - avgtoc))
-
-            if self.Quameasopts is not None:
-                self.error_measurement(res_prev, i)
-
-            self.l2l[0, i] = _norm(self.proj - tigre.Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids))
-            if i > 0 and self.l2l[0, i] > self.l2l[0, i - 1]:
-                self.res -= (phi / rho) * (self.__v__-self.__w__)/((theta / rho))
+        """Two nested loops, as in the MATLAB reference: the OUTER one rebuilds
+        the Krylov state on a restart, the INNER one iterates. This port had
+        only the inner loop, so the `break` meant to fall back and restart
+        left run_main_iter entirely, and the give-up sentinel fired at i == 1.
+        See CGLS.run_main_iter for the full note."""
+        i = 0
+        while i < self.niter:
+            self.initialize_algo()
+            restarted = False
+            while i < self.niter:
                 if self.verbose:
-                    print("re-initilization of LSQR called at iteration:" + str(i))
-                if self.re_init_at_iteration + 1 == i or not self.restart:
-                    print("LSQR exited due to divergence.")
-                    return self.res
-                self.re_init_at_iteration=i
-                i=i-1
-                self.initialize_algo()
+                    self._estimate_time_until_completion(i)
+                if self.Quameasopts is not None:
+                    res_prev = copy.deepcopy(self.res)
+                avgtic = default_timer()    
+            
+                #% (3)(a)
+                self.__u__ = tigre.Ax(self.__v__, self.geo, self.angles, "Siddon", gpuids=self.gpuids) - self.__alpha__*self.__u__
+                self.__beta__ = _norm(self.__u__.ravel(),2)
+                self.__u__ = self.__u__ / self.__beta__
+            
+                #% (3)(b)
+                self.__v__ = tigre.Atb(self.__u__, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids) - self.__beta__*self.__v__
+                self.__alpha__ = _norm(self.__v__.ravel(),2)
+                self.__v__ = self.__v__ / self.__alpha__    
+
+                #% (4)(a-g)
+                rho = np.sqrt(self.__rhobar__**2 + self.__beta__**2)
+                c = self.__rhobar__ / rho
+                s =  self.__beta__ / rho
+                theta = s * self.__alpha__    
+                self.__rhobar__ = - c * self.__alpha__    
+                phi = c * self.__phibar__
+                self.__phibar__ = s * self.__phibar__
+            
+                #% (5) Update x, w
+                self.res = self.res + (phi / rho) * self.__w__
+                self.__w__ = self.__v__ - (theta / rho) * self.__w__
+
+                avgtoc = default_timer()
+                avgtime.append(abs(avgtic - avgtoc))
+
+                if self.Quameasopts is not None:
+                    self.error_measurement(res_prev, i)
+
+                self.l2l[0, i] = _norm(self.proj - tigre.Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids))
+                if i > 0 and self.l2l[0, i] > self.l2l[0, i - 1]:
+                    self.res -= (phi / rho) * (self.__v__-self.__w__)/((theta / rho))
+                    if self.verbose:
+                        print("re-initilization of LSQR called at iteration:" + str(i))
+                    if self.re_init_at_iteration == i or not self.restart:
+                        print("LSQR exited due to divergence.")
+                        return self.res
+                    self.re_init_at_iteration = i
+                    restarted = True
+                    break                 # -> outer loop, retrying this i
+                i += 1
+            if not restarted:
                 break
 
 lsqr = decorator(LSQR, name="lsqr")
@@ -342,9 +352,13 @@ class hybrid_LSQR(IterativeReconAlg):
 
             self.l2l[0, i] = _norm(self.proj - tigre.Ax(self.res + np.reshape(np.matmul(np.transpose(self.__V__[0:i+1]),y),self.res.shape), self.geo, self.angles, "Siddon", gpuids=self.gpuids))
             if i > 0 and self.l2l[0, i] > self.l2l[0, i - 1]:
-                if self.re_init_at_iteration + 1 == i or not self.restart:
-                    print("hybrid LSQR exited due to divergence at iteration "+str(i))
-                    return  self.res + np.reshape(np.matmul(np.transpose(self.__V__[0:i+1]),y),self.res.shape)
+                # No restart path here, so a genuine rise ends the run. The
+                # old `re_init_at_iteration + 1 == i` test, against a sentinel
+                # this class never reassigns, could only fire at i == 1 and
+                # ignored a rise at every other iteration.
+                print("hybrid LSQR exited due to divergence at iteration "+str(i))
+                self.res = self.res + np.reshape(np.matmul(np.transpose(self.__V__[0:i+1]),y),self.res.shape)
+                return self.res
                 
             #% Test for convergence. 
             #% msl: I still need to implement this. 
@@ -366,7 +380,7 @@ class LSMR(IterativeReconAlg):
         # Don't precompute V and W.
         kwargs.update(dict(W=None, V=None))
         kwargs.update(dict(blocksize=angles.shape[0]))
-        self.re_init_at_iteration = 0
+        self.re_init_at_iteration = -1
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
 
     def initialize_algo(self):
@@ -403,98 +417,106 @@ class LSMR(IterativeReconAlg):
     def run_main_iter(self):
         self.l2l = np.zeros((1, self.niter), dtype=np.float32)
         avgtime = []
-        self.initialize_algo()
-        for i in range(self.niter):
-            if self.verbose:
-                self._estimate_time_until_completion(i)
-            if self.Quameasopts is not None:
-                res_prev = copy.deepcopy(self.res)
-            avgtic = default_timer()  
-                    
-            #% (3) Continue the bidiagonalization
-            self.__u__ = tigre.Ax(self.__v__, self.geo, self.angles, "Siddon", gpuids=self.gpuids) - self.__alpha__*self.__u__
-            self.__beta__ = _norm(self.__u__.ravel(),2)
-            self.__u__ = self.__u__ / self.__beta__
-            
-            self.__v__ = tigre.Atb(self.__u__, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids) - self.__beta__*self.__v__
-            self.__alpha__ = _norm(self.__v__.ravel(),2)
-            self.__v__ = self.__v__ / self.__alpha__  
-
-            #% (4) Construct and apply rotation \hat{P}_k
-            alphahat = np.sqrt(self.__alphabar__**2 + self.lmbda**2)
-            chat = self.__alphabar__/alphahat
-            shat = self.lmbda/alphahat
-
-            #% (5) Construct and apply rotation P_k
-            rhopre = self.__rho__; 
-            self.__rho__ = np.sqrt(alphahat**2 + self.__beta__**2)
-            c = alphahat / self.__rho__
-            s =  self.__beta__ / self.__rho__
-            theta = s * self.__alpha__
-            self.__alphabar__ = c * self.__alpha__
-
-            #% (6) Construct and apply rotation \bar{P}_k
-            thetabar = self.__sbar__  * self.__rho__
-            rhobarpre = self.__rhobar__
-            self.__rhobar__ = np.sqrt((self.__cbar__ *self.__rho__)**2 + theta**2)
-            self.__cbar__ = self.__cbar__ * self.__rho__ / self.__rhobar__
-            self.__sbar__ = theta / self.__rhobar__
-            zetapre = self.__zeta__
-            self.__zeta__ = self.__cbar__ * self.__zetabar__
-            self.__zetabar__ = -self.__sbar__ * self.__zetabar__
-
-            #% (7) Update \bar{h}, x, h
-            self.__hbar__  = self.__h__ - (thetabar*self.__rho__/(rhopre*rhobarpre))*self.__hbar__ 
-            self.res = self.res + (self.__zeta__ / (self.__rho__*self.__rhobar__)) * self.__hbar__ 
-            self.__h__ = self.__v__ - (theta / self.__rho__) * self.__h__
-
-            #% (8) Apply rotation \hat{P}_k, P_k
-            betaacute = chat* self.__betadd__
-            betacheck = - shat* self.__betadd__
-
-            #% Computing ||r_k||
-
-            betahat = c * betaacute
-            betadd = -s * betaacute
-
-            #% Update estimated quantities of interest.
-            #%  (9) If k >= 2, construct and apply \tilde{P} to compute ||r_k||
-            rhotilda = np.sqrt(self.__rhod__**2 + thetabar**2)
-            ctilda = self.__rhod__ / rhotilda
-            stilda = thetabar / rhotilda
-            thetatildapre = self.__thetatilda__
-            self.__thetatilda__ = stilda * self.__rhobar__
-            self.__rhod__ = ctilda * self.__rhobar__
-            #% betatilda = ctilda * betad + stilda * betahat; % msl: in the orinal paper, but not used
-            self.__betad__ = -stilda * self.__betad__ + ctilda * betahat
-
-            #% (10) Update \tilde{t}_k by forward substitution
-            self.__tautilda__ = (zetapre - thetatildapre* self.__tautilda__) / rhotilda
-            taud = (self.__zeta__ - self.__thetatilda__*self.__tautilda__) / self.__rhod__
-            
-            #% (11) Compute ||r_k||
-            self.__d__ = self.__d__ + betacheck**2
-            gamma_var = self.__d__ + (self.__betad__ - taud)**2 + betadd**2
-
-            avgtoc = default_timer()
-            avgtime.append(abs(avgtic - avgtoc))
-
-            if self.Quameasopts is not None:
-                self.error_measurement(res_prev, i)
-
-            self.l2l[0, i] = _norm(self.proj - tigre.Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids))
-            if i > 0 and self.l2l[0, i] > self.l2l[0, i - 1]:
-                self.res -= (self.__zeta__ / (self.__rho__*self.__rhobar__)) * self.__hbar__ 
+        """Two nested loops, as in the MATLAB reference: the OUTER one rebuilds
+        the Krylov state on a restart, the INNER one iterates. This port had
+        only the inner loop, so the `break` meant to fall back and restart
+        left run_main_iter entirely, and the give-up sentinel fired at i == 1.
+        See CGLS.run_main_iter for the full note."""
+        i = 0
+        while i < self.niter:
+            self.initialize_algo()
+            restarted = False
+            while i < self.niter:
                 if self.verbose:
-                    print("re-initilization of LSMR called at iteration:" + str(i))
-                if self.re_init_at_iteration + 1 == i or not self.restart:
-                    print("LSMR exited due to divergence.")
-                    return self.res
-                self.re_init_at_iteration = i
-                i = i - 1
-#                self.re_init_at_iteration=iter
-#                iter=iter-1
-                self.initialize_algo()
+                    self._estimate_time_until_completion(i)
+                if self.Quameasopts is not None:
+                    res_prev = copy.deepcopy(self.res)
+                avgtic = default_timer()  
+                    
+                #% (3) Continue the bidiagonalization
+                self.__u__ = tigre.Ax(self.__v__, self.geo, self.angles, "Siddon", gpuids=self.gpuids) - self.__alpha__*self.__u__
+                self.__beta__ = _norm(self.__u__.ravel(),2)
+                self.__u__ = self.__u__ / self.__beta__
+            
+                self.__v__ = tigre.Atb(self.__u__, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids) - self.__beta__*self.__v__
+                self.__alpha__ = _norm(self.__v__.ravel(),2)
+                self.__v__ = self.__v__ / self.__alpha__  
+
+                #% (4) Construct and apply rotation \hat{P}_k
+                alphahat = np.sqrt(self.__alphabar__**2 + self.lmbda**2)
+                chat = self.__alphabar__/alphahat
+                shat = self.lmbda/alphahat
+
+                #% (5) Construct and apply rotation P_k
+                rhopre = self.__rho__; 
+                self.__rho__ = np.sqrt(alphahat**2 + self.__beta__**2)
+                c = alphahat / self.__rho__
+                s =  self.__beta__ / self.__rho__
+                theta = s * self.__alpha__
+                self.__alphabar__ = c * self.__alpha__
+
+                #% (6) Construct and apply rotation \bar{P}_k
+                thetabar = self.__sbar__  * self.__rho__
+                rhobarpre = self.__rhobar__
+                self.__rhobar__ = np.sqrt((self.__cbar__ *self.__rho__)**2 + theta**2)
+                self.__cbar__ = self.__cbar__ * self.__rho__ / self.__rhobar__
+                self.__sbar__ = theta / self.__rhobar__
+                zetapre = self.__zeta__
+                self.__zeta__ = self.__cbar__ * self.__zetabar__
+                self.__zetabar__ = -self.__sbar__ * self.__zetabar__
+
+                #% (7) Update \bar{h}, x, h
+                self.__hbar__  = self.__h__ - (thetabar*self.__rho__/(rhopre*rhobarpre))*self.__hbar__ 
+                self.res = self.res + (self.__zeta__ / (self.__rho__*self.__rhobar__)) * self.__hbar__ 
+                self.__h__ = self.__v__ - (theta / self.__rho__) * self.__h__
+
+                #% (8) Apply rotation \hat{P}_k, P_k
+                betaacute = chat* self.__betadd__
+                betacheck = - shat* self.__betadd__
+
+                #% Computing ||r_k||
+
+                betahat = c * betaacute
+                betadd = -s * betaacute
+
+                #% Update estimated quantities of interest.
+                #%  (9) If k >= 2, construct and apply \tilde{P} to compute ||r_k||
+                rhotilda = np.sqrt(self.__rhod__**2 + thetabar**2)
+                ctilda = self.__rhod__ / rhotilda
+                stilda = thetabar / rhotilda
+                thetatildapre = self.__thetatilda__
+                self.__thetatilda__ = stilda * self.__rhobar__
+                self.__rhod__ = ctilda * self.__rhobar__
+                #% betatilda = ctilda * betad + stilda * betahat; % msl: in the orinal paper, but not used
+                self.__betad__ = -stilda * self.__betad__ + ctilda * betahat
+
+                #% (10) Update \tilde{t}_k by forward substitution
+                self.__tautilda__ = (zetapre - thetatildapre* self.__tautilda__) / rhotilda
+                taud = (self.__zeta__ - self.__thetatilda__*self.__tautilda__) / self.__rhod__
+            
+                #% (11) Compute ||r_k||
+                self.__d__ = self.__d__ + betacheck**2
+                gamma_var = self.__d__ + (self.__betad__ - taud)**2 + betadd**2
+
+                avgtoc = default_timer()
+                avgtime.append(abs(avgtic - avgtoc))
+
+                if self.Quameasopts is not None:
+                    self.error_measurement(res_prev, i)
+
+                self.l2l[0, i] = _norm(self.proj - tigre.Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids))
+                if i > 0 and self.l2l[0, i] > self.l2l[0, i - 1]:
+                    self.res -= (self.__zeta__ / (self.__rho__*self.__rhobar__)) * self.__hbar__ 
+                    if self.verbose:
+                        print("re-initilization of LSMR called at iteration:" + str(i))
+                    if self.re_init_at_iteration == i or not self.restart:
+                        print("LSMR exited due to divergence.")
+                        return self.res
+                    self.re_init_at_iteration = i
+                    restarted = True
+                    break                 # -> outer loop, retrying this i
+                i += 1
+            if not restarted:
                 break
 lsmr = decorator(LSMR, name="lsmr")
 
@@ -677,19 +699,25 @@ class AB_GMRES(IterativeReconAlg):
             qk=Ax(self.backproject(np.reshape(w[k],self.proj.shape),self.geo,self.angles,gpuids=self.gpuids),self.geo, self.angles, "Siddon", gpuids=self.gpuids)
             e1=np.zeros(k+2)
             e1[0]=1
+            qk = qk.ravel()
             for i in range(k+1):
-                h[k,i]=sum(qk.ravel()*w[i])
-                qk=qk.ravel()-h[k,i]*w[i]
-            
-            h[k,k+1]=_norm(qk.ravel(),2)
-            w[k+1]=qk.ravel()/h[k,k+1]
+                h[k,i]=inner(qk,w[i])
+                qk -= h[k,i]*w[i]
+
+            h[k,k+1]=_norm(qk,2)
+            w[k+1]=qk/h[k,k+1]
             y=np.linalg.lstsq(np.transpose(h[0:k+1,0:k+2]),e1*_norm(r.ravel(),2),rcond=None)
             y=y[0]
-            self.l2l[0, i] = _norm((self.proj - tigre.Ax(self.__compute_res__(self.res,w[0:k+1],y),self.geo,self.angles, "Siddon",gpuids=self.gpuids)).ravel(),2)
-            if i > 0 and self.l2l[0, i] > self.l2l[0, i - 1]:
-                if self.re_init_at_iteration + 1 == i or not self.restart:
-                    print("AB-GMRES exited due to divergence at iteration "+str(i))
-                    return  self.__compute_res__(self.res,w[0:k+1],y)
+            self.l2l[0, k] = _norm((self.proj - tigre.Ax(self.__compute_res__(self.res,w[0:k+1],y),self.geo,self.angles, "Siddon",gpuids=self.gpuids)).ravel(),2)
+            if k > 0 and self.l2l[0, k] > self.l2l[0, k - 1]:
+                # No restart path exists in GMRES here, so a genuine rise ends
+                # the run. It used to be tested as `re_init_at_iteration + 1 ==
+                # i` against a sentinel that is never reassigned, which fired
+                # only when the leaked inner-loop index happened to equal 1 and
+                # did nothing at all for any later iteration.
+                print("AB-GMRES exited due to divergence at iteration "+str(k))
+                self.res = self.__compute_res__(self.res,w[0:k+1],y)
+                return self.res
              
         self.res=self.__compute_res__(self.res,w[0:-1],y)
         return self.res
@@ -741,20 +769,23 @@ class BA_GMRES(IterativeReconAlg):
             qk=self.backproject(Ax(np.reshape(w[k],self.res.shape),self.geo,self.angles, "Siddon",gpuids=self.gpuids),self.geo, self.angles, gpuids=self.gpuids)
             e1=np.zeros(k+2)
             e1[0]=1
+            qk = qk.ravel()
             for i in range(k+1):
-                h[k,i]=sum(qk.ravel()*w[i])
-                qk=qk.ravel()-h[k,i]*w[i]
-            
-            h[k,k+1]=_norm(qk.ravel(),2)
-            w[k+1]=qk.ravel()/h[k,k+1]
+                h[k,i]=inner(qk,w[i])
+                qk -= h[k,i]*w[i]
+
+            h[k,k+1]=_norm(qk,2)
+            w[k+1]=qk/h[k,k+1]
             y=np.linalg.lstsq(np.transpose(h[0:k+1,0:k+2]),e1*_norm(r.ravel(),2),rcond=None)
             y=y[0]
 
-            self.l2l[0, i] = _norm((self.proj - tigre.Ax(self.__compute_res__(self.res,w[0:k+1],y), self.geo, self.angles, "Siddon", gpuids=self.gpuids)).ravel(),2)
-            if i > 0 and self.l2l[0, i] > self.l2l[0, i - 1]:
-                if self.re_init_at_iteration + 1 == i or not self.restart:
-                    print("BA-GMRES exited due to divergence at iteration "+str(i))
-                    return  self.__compute_res__(self.res,w[0:k+1],y)
+            self.l2l[0, k] = _norm((self.proj - tigre.Ax(self.__compute_res__(self.res,w[0:k+1],y), self.geo, self.angles, "Siddon", gpuids=self.gpuids)).ravel(),2)
+            if k > 0 and self.l2l[0, k] > self.l2l[0, k - 1]:
+                # See the AB-GMRES note: no restart path, and the old sentinel
+                # test could only ever fire at one particular iteration.
+                print("BA-GMRES exited due to divergence at iteration "+str(k))
+                self.res = self.__compute_res__(self.res,w[0:k+1],y)
+                return self.res
              
         self.res=self.__compute_res__(self.res,w[0:-1],y)
         return self.res
@@ -832,7 +863,7 @@ class hybrid_fLSQR_TV(IterativeReconAlg):
     def mvT(self,k_aux,x ):
             return x.ravel() - k_aux.ravel()*np.sum(x.ravel())
     def mv(self,k_aux,x ):
-            return x.ravel() - np.dot(k_aux.ravel(),x.ravel())
+            return x.ravel() - inner(k_aux,x)
         
     def run_main_iter(self):
         # % Initialise matrices
@@ -841,7 +872,7 @@ class hybrid_fLSQR_TV(IterativeReconAlg):
         u=self.proj - Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
         
         k_aux = Ax(np.ones(self.res.shape,dtype=np.float32)/np.sqrt(np.prod(self.geo.nVoxel)), self.geo, self.angles, "Siddon", gpuids=self.gpuids)
-        xA0 = 1/(np.sqrt(np.prod(self.geo.nVoxel))*_norm(k_aux.ravel(),2)**2)*np.dot(k_aux.ravel(),u.ravel())
+        xA0 = 1/(np.sqrt(np.prod(self.geo.nVoxel))*_norm(k_aux.ravel(),2)**2)*inner(k_aux,u)
         xA0 =np.ones(self.res.shape,dtype=np.float32)*xA0
         
         k_aux = 1/(np.sqrt(np.prod(self.geo.nVoxel))*_norm(k_aux.ravel(),2)**2)*Atb(k_aux, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids)
@@ -866,7 +897,7 @@ class hybrid_fLSQR_TV(IterativeReconAlg):
                 self._estimate_time_until_completion(i)
             v=Atb(u,self.geo,self.angles,backprojection_type="matched", gpuids=self.gpuids)
             for j in range(i+1):
-                self.__T__[i,j] = np.dot(self.__V__[j],v.ravel())
+                self.__T__[i,j] = inner(self.__V__[j],v)
                 v = v.ravel() - self.__T__[i,j]*self.__V__[j]
             v=np.reshape(v,self.res.shape)
             self.__T__[i,i] = _norm(v.ravel(),2)
@@ -888,7 +919,7 @@ class hybrid_fLSQR_TV(IterativeReconAlg):
             # Update U and projected matrix M
             u = Ax(np.reshape(z,self.res.shape), self.geo, self.angles, "Siddon", gpuids=self.gpuids)
             for j in range(i+1):
-                self.__M__[i,j] = np.dot(self.__U__[j],u.ravel())
+                self.__M__[i,j] = inner(self.__U__[j],u)
                 u = u.ravel() - np.dot(self.__M__[i,j],self.__U__[j])
             self.__M__[i,i+1]=_norm(u.ravel(),2)
             u=u/self.__M__[i,i+1]
@@ -911,16 +942,18 @@ class hybrid_fLSQR_TV(IterativeReconAlg):
             MZk=np.concatenate((np.transpose(Mk),self.lmbda*ZRksq))
             rhsZk=np.concatenate((rhsk,np.zeros((i+1,1),dtype=np.float32)))
             y = np.linalg.lstsq(MZk, rhsZk,rcond=None)
-            print(y[0])
             d=np.matmul(np.transpose(self.__Z__[0:i+1]),y[0])
             
             x = self.res + np.reshape(d,self.res.shape) + xA0
             self.l2l[0, i] = _norm((self.proj - tigre.Ax(x, self.geo, self.angles, "Siddon", gpuids=self.gpuids)).ravel(),2)
             if i > 0 and self.l2l[0, i] > self.l2l[0, i - 1]:
-                if self.re_init_at_iteration + 1 == i or not self.restart:
-                    print("BA-GMRES exited due to divergence at iteration "+str(i))
-                    return  x
-             
-        return x
+                # Same as hybrid_LSQR: no restart path, so stop. (The message
+                # said BA-GMRES; this is hybrid_fLSQR_TV.)
+                print("hybrid fLSQR-TV exited due to divergence at iteration "+str(i))
+                self.res = x
+                return self.res
+
+        self.res = x
+        return self.res
 
 hybrid_flsqr_tv = decorator(hybrid_fLSQR_TV, name="hybrid_flsqr_tv")

@@ -7,6 +7,7 @@ import tigre
 from tigre.algorithms.iterative_recon_alg import IterativeReconAlg
 from tigre.algorithms.iterative_recon_alg import decorator
 from tigre.utilities.im_3d_denoise import im3ddenoise
+from tigre.utilities.im3Dnorm import l2norm
 
 
 
@@ -151,13 +152,13 @@ class FISTA(IterativeReconAlg):
         the step slightly, underestimating it diverges."""
         rng = np.random.default_rng(seed)   # deterministic: repeat runs match
         x = rng.standard_normal(tuple(self.geo.nVoxel)).astype(np.float32)
-        x /= np.linalg.norm(x.ravel())
+        x /= l2norm(x)
         L = 1.0
         for _ in range(n_iter):
             y = tigre.Atb(
                 tigre.Ax(x, self.geo, self.angles, "interpolated", gpuids=self.gpuids),
                 self.geo, self.angles, "matched", gpuids=self.gpuids)
-            L = float(np.linalg.norm(y.ravel()))
+            L = float(l2norm(y))
             x = y / L
         L *= 2.0 * 1.05
         if self.verbose:
