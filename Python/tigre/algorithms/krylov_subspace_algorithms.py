@@ -9,6 +9,7 @@ from tigre.algorithms.iterative_recon_alg import IterativeReconAlg
 from tigre.algorithms.iterative_recon_alg import decorator
 from tigre.utilities.Atb import Atb
 from tigre.utilities.Ax import Ax
+from tigre.utilities.im3Dnorm import l2norm
 import tigre.algorithms as algs
 import scipy.sparse.linalg
 
@@ -21,6 +22,10 @@ else:
 
 def _norm(x, ord=2):
     """Euclidean norm of a large float32 array, accumulated in float64.
+
+    Thin wrapper over ``tigre.utilities.im3Dnorm.l2norm`` so that the Krylov
+    algorithms and the ASD-POCS family - which reaches the same accumulator
+    through ``im3DNORM(..., 2)`` - cannot drift apart.
 
     ``np.linalg.norm`` sums squares in the array's OWN dtype. On a
     projection-sized float32 array the running sum saturates against the tiny
@@ -43,17 +48,9 @@ def _norm(x, ord=2):
     The result is handed back as float32 so that no caller's dtype changes:
     these scalars multiply float32 volumes, and Ax/Atb reject float64.
     """
-    flat = np.ravel(x)
-    if flat.dtype != np.float32:
-        return np.linalg.norm(flat, ord)
     if ord not in (2, None):
-        return np.linalg.norm(flat, ord)
-    total = 0.0
-    step = 1 << 24
-    for k in range(0, flat.size, step):
-        chunk = flat[k:k + step].astype(np.float64)
-        total += float(np.dot(chunk, chunk))
-    return np.float32(np.sqrt(total))
+        return np.linalg.norm(np.ravel(x), ord)
+    return l2norm(x)
 
 
 

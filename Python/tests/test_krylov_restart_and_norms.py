@@ -135,3 +135,21 @@ def test_restart_false_preserves_the_early_return(monkeypatch):
     alg.run_main_iter()
     assert seen["restarts"] == 1
     assert np.count_nonzero(alg.l2l[0]) == 2
+
+
+def test_im3dnorm_l2_uses_the_same_accumulator():
+    """ASD-POCS reaches the accumulator through im3DNORM, not through _norm.
+
+    Its data-fit test and TV step control are ratios of these norms
+    (`dd` is projection-sized, `dp`/`dg` volume-sized), so the two entry points
+    must not drift apart.
+    """
+    from tigre.utilities.im3Dnorm import im3DNORM, l2norm
+    n = 50_000_000
+    x = np.full(n, 1e-3, dtype=np.float32)
+    exact = np.sqrt(n) * 1e-3
+    assert float(im3DNORM(x, 2)) == pytest.approx(exact, rel=1e-5)
+    assert float(K._norm(x)) == pytest.approx(float(l2norm(x)), rel=0)
+    # Other norms are untouched.
+    y = np.arange(10, dtype=np.float32)
+    assert float(im3DNORM(y, 1)) == pytest.approx(float(np.linalg.norm(y, 1)))
