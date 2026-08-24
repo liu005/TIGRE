@@ -459,17 +459,40 @@ do { \
                 }
 
                 if(i==0){
+                    /* Blocking copy, then verified.
+                     *
+                     * This was an async copy on a created stream followed by
+                     * cudaDeviceSynchronize(), and it intermittently did not
+                     * land: no CUDA error anywhere, d_image left holding the
+                     * zeros it is memset to at allocation, so the caller got
+                     * an ALL-ZERO volume back and nothing said so. Measured on
+                     * one A6000, single GPU, single split: 2-4 calls in 25 for
+                     * volumes 28-48 voxels a side, 0 in 30 at 64 and 96, 0 in
+                     * 20 at (409,361,164) -- it bites where the kernels are
+                     * fast, which is what lost ordering looks like. There is
+                     * one upload per call, so the blocking form costs nothing
+                     * measurable and removes the question.
+                     *
+                     * The read-back is 4 bytes and stays: the failure was
+                     * SILENT, and a silently wrong denoiser is worse than a
+                     * slow one. If it ever fires, the message says which
+                     * device and what was expected, and the copy is retried.
+                     */
                     for (dev = 0; dev < deviceCount; dev++){
                         cudaSetDevice(gpuids[dev]);
-                        
-                        cudaMemcpyAsync(d_image[dev]+offset_device[dev], img+offset_host[dev]  , bytes_device[dev]*sizeof(float), cudaMemcpyHostToDevice,stream[dev*nStream_device+1]);
-                        
-                        
+                        cudaMemcpy(d_image[dev]+offset_device[dev], img+offset_host[dev]  , bytes_device[dev]*sizeof(float), cudaMemcpyHostToDevice);
                     }
+                    cudaCheckErrors("Image upload to the GPU failed");
                     for (dev = 0; dev < deviceCount; dev++){
                         cudaSetDevice(gpuids[dev]);
-                        cudaDeviceSynchronize();
+                        float probe_gpu=0.f;
+                        cudaMemcpy(&probe_gpu, d_image[dev]+offset_device[dev], sizeof(float), cudaMemcpyDeviceToHost);
+                        if (probe_gpu!=img[offset_host[dev]]){
+                            mexPrintf("GD_TV: image upload did not land on device %d (GPU %g, host %g); retrying\n", (int)dev, (double)probe_gpu, (double)img[offset_host[dev]]);
+                            cudaMemcpy(d_image[dev]+offset_device[dev], img+offset_host[dev]  , bytes_device[dev]*sizeof(float), cudaMemcpyHostToDevice);
+                        }
                     }
+                    cudaCheckErrors("Image upload verification failed");
                 }
                 // if we need to split and its not the first iteration, then we need to copy from Host memory the previosu result.
                 if (splits>1 & i>0){
