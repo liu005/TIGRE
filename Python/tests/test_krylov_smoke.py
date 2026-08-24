@@ -16,7 +16,10 @@ unit tests and all produced plausible-looking output:
     `self.res`, so any early exit silently returned the INITIAL volume
     (zeros, or with the default FDK warm start an unimproved FDK image);
   * hybrid_fLSQR_TV never assigned self.res on ANY path, so its output was
-    discarded outright.
+    discarded outright;
+  * IRN_TV_CGLS's difference operator and its "transpose" were not an adjoint
+    pair (6.4e-2 asymmetry) and its inner CGLS had no divergence guard, so it
+    ran to 7e5 on this very phantom.
 
 Needs a GPU. Small on purpose: 64^3 at 50 views, a few seconds per algorithm.
 """
@@ -25,7 +28,7 @@ import pytest
 
 import tigre
 from tigre.algorithms import (cgls, lsqr, lsmr, ab_gmres, ba_gmres,
-                              hybrid_lsqr, fdk)
+                              hybrid_lsqr, irn_tv_cgls, fdk)
 from tigre.algorithms.krylov_subspace_algorithms import CGLS
 
 NITER = 5
@@ -46,7 +49,8 @@ def problem():
     return geo, angles, phantom, proj, ref
 
 
-@pytest.mark.parametrize("alg", [cgls, lsqr, lsmr, ab_gmres, ba_gmres, hybrid_lsqr])
+@pytest.mark.parametrize("alg", [cgls, lsqr, lsmr, ab_gmres, ba_gmres, hybrid_lsqr,
+                                 irn_tv_cgls])
 def test_algorithm_runs_and_reconstructs(problem, alg):
     geo, angles, phantom, proj, ref = problem
     res = alg(proj.copy(), geo, angles, niter=NITER, verbose=False)

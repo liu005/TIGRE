@@ -536,54 +536,61 @@ class IRN_TV_CGLS(IterativeReconAlg):
         IterativeReconAlg.__init__(self, proj, geo, angles, niter, **kwargs)
 
     
-    def __build_weights__(self):
-        Dxx=np.copy(self.res)
-        Dyx=np.copy(self.res)
-        Dzx=np.copy(self.res)
+    # The forward difference D and its EXACT adjoint. CGLS is applied to the
+    # stacked operator [A; sqrt(lmbda) W D], and CGLS assumes the transpose it
+    # is handed really is the adjoint - so these two must agree to machine
+    # precision, not approximately.
+    #
+    #   D u[i] = u[i] - u[i+1]  for i <= n-2,   0 at i = n-1
+    #   <Du, y> = sum_{i<=n-2} u[i]y[i] - sum_{j>=1} u[j]y[j-1]
+    #   => (D^T y)[0] = y[0]; [j] = y[j]-y[j-1] for 1<=j<=n-2; [n-1] = -y[n-2]
+    #
+    # The previous pair was wrong on both counts: `Dxx = np.copy(img)` followed
+    # by writing only `[0:-2]` left the LAST TWO slices holding raw image
+    # VALUES rather than differences (so D did not annihilate a constant - it
+    # penalised intensity there), and D^T was off by one at index n-2. Measured
+    # adjoint asymmetry 6.4e-2, which is what made the inner CGLS diverge.
+    def __D__(self, u, axis):
+        out = np.zeros_like(u)
+        a = np.swapaxes(out, 0, axis)
+        b = np.swapaxes(u, 0, axis)
+        a[:-1] = b[:-1] - b[1:]
+        return out
 
-        Dxx[0:-2,:,:]=self.res[0:-2,:,:]-self.res[1:-1,:,:]
-        Dyx[:,0:-2,:]=self.res[:,0:-2,:]-self.res[:,1:-1,:]
-        Dzx[:,:,0:-2]=self.res[:,:,0:-2]-self.res[:,:,1:-1]
- 
-        return (Dxx**2+Dyx**2+Dzx**2+1e-6)**(-1/4)
+    def __Dt__(self, y, axis):
+        out = np.zeros_like(y)
+        a = np.swapaxes(out, 0, axis)
+        b = np.swapaxes(y, 0, axis)
+        a[0] = b[0]
+        a[1:-1] = b[1:-1] - b[0:-2]
+        a[-1] = -b[-2]
+        return out
+
+    def __build_weights__(self):
+        Dxx = self.__D__(self.res, 0)
+        Dyx = self.__D__(self.res, 1)
+        Dzx = self.__D__(self.res, 2)
+        # W^2 = 1/sqrt(|grad u|^2 + eps) is the half-quadratic weight that makes
+        # ||W grad u||^2 a surrogate for the TV seminorm.
+        return (Dxx**2+Dyx**2+Dzx**2+1e-6)**np.float32(-1/4)
 
     def Lx(self,W,img):
-        Dxx=np.copy(img)
-        Dyx=np.copy(img)
-        Dzx=np.copy(img)
+        return np.stack((W*self.__D__(img, 0),
+                         W*self.__D__(img, 1),
+                         W*self.__D__(img, 2)), axis=0)
 
-        Dxx[0:-2,:,:]=img[0:-2,:,:]-img[1:-1,:,:]
-        Dyx[:,0:-2,:]=img[:,0:-2,:]-img[:,1:-1,:]
-        Dzx[:,:,0:-2]=img[:,:,0:-2]-img[:,:,1:-1]
-
-        return np.stack((W*Dxx,W*Dyx,W*Dzx),axis=0)
-        
     def Ltx(self,W,img3):
-        Wx_1 = W * img3[0,:,:,:]
-        Wx_2 = W * img3[1,:,:,:]
-        Wx_3 = W * img3[2,:,:,:]
-
-        DxtWx_1=Wx_1
-        DytWx_2=Wx_2
-        DztWx_3=Wx_3
-        
-        DxtWx_1[1:-2,:,:]=Wx_1[1:-2,:,:]-Wx_1[0:-3,:,:]
-        DxtWx_1[-1,:,:]=-Wx_1[-2,:,:]
-        
-        DytWx_2[:,1:-2,:]=Wx_2[:,1:-2,:]-Wx_2[:,0:-3,:]
-        DytWx_2[:,-1,:]=-Wx_2[:,-2,:]
-        
-        DztWx_3[:,:,1:-2]=Wx_3[:,:,1:-2]-Wx_3[:,:,0:-3]
-        DztWx_3[:,:,-1]=-Wx_3[:,:,-2]
-
-        return DxtWx_1 + DytWx_2 + DztWx_3
+        return (self.__Dt__(W * img3[0], 0)
+                + self.__Dt__(W * img3[1], 1)
+                + self.__Dt__(W * img3[2], 2))
 
     def run_main_iter(self):
         self.l2l = np.zeros((1, self.niter*self.niter_outer), dtype=np.float32)
         avgtime = []
 
         res0=self.res
-   
+        best_res = np.float32(np.inf)
+
         for outer in range(self.niter_outer):
             if self.verbose:
                 niter=self.niter
@@ -596,7 +603,8 @@ class IRN_TV_CGLS(IterativeReconAlg):
 
 
             W=self.__build_weights__()
-            self.res=res0
+            res_prev_inner = np.float32(np.inf)
+            res_now = np.float32(np.inf)
 
             # np.sqrt(python float) and _norm(...) return float64
             # SCALARS, which under NumPy 2 (NEP 50) promote every float32
@@ -630,9 +638,30 @@ class IRN_TV_CGLS(IterativeReconAlg):
                 aux=self.proj-tigre.Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids)
                 #% residual norm or the original least squares (not Tikhonov).
                 #% Think if that is what we want of the NE residual
-                self.l2l[0, outer*self.niter+i] = _norm(aux.ravel(),2)
+                step = outer*self.niter+i
+                self.l2l[0, step] = res_now = _norm(aux.ravel(),2)
 
-              
+                # The guard plain CGLS has always had and this loop never did.
+                # In exact arithmetic a CGLS residual cannot rise; when it
+                # does, orthogonality is lost and every later step compounds
+                # it. Left unchecked, niter_outer * niter such steps reach
+                # absurd values - measured mean 8469 / max 5e7 at 512^3, and
+                # 7e5 on a 64^3 phantom where the rise begins at step 2.
+                #
+                # Compare only WITHIN one outer iteration. Across a
+                # reweighting the two residuals belong to different weighted
+                # problems, so a first step that looks worse than the previous
+                # outer's last is not evidence of anything.
+                if i > 0 and res_now > res_prev_inner:
+                    self.res = res0
+                    self.l2l[0, step] = res_prev_inner
+                    res_now = res_prev_inner
+                    if self.verbose:
+                        print("IRN_TV_CGLS: residual rose at outer " + str(outer)
+                              + ", inner " + str(i) + " - reweighting")
+                    break
+                res_prev_inner = res_now
+
                 #% If step is adecuate, then continue withg CGLS
                 r_aux_1 = r_aux_1-alpha*q_aux_1
                 r_aux_2=r_aux_2-alpha*q_aux_2
@@ -651,6 +680,15 @@ class IRN_TV_CGLS(IterativeReconAlg):
 
             if self.Quameasopts is not None:
                 self.error_measurement(res_prev, outer)
+
+            # A whole reweighting that improved nothing means the outer
+            # iteration has stalled; more of them will not help.
+            if res_now >= best_res:
+                if self.verbose:
+                    print("IRN_TV_CGLS: reweighting " + str(outer)
+                          + " did not improve the residual - stopping")
+                break
+            best_res = res_now
 
 irn_tv_cgls = decorator(IRN_TV_CGLS, name="irn_tv_cgls")
 

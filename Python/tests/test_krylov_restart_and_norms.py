@@ -181,3 +181,31 @@ def test_lsqr_and_lsmr_share_the_restart_fix():
         # The code form, not the docstrings - CGLS's explains the old bug.
         assert "if self.re_init_at_iteration + 1 == i" not in src, f"{cls_name}: old sentinel"
         assert "if self.re_init_at_iteration == i" in src, f"{cls_name}: give-up test missing"
+
+
+def test_irn_tv_difference_operator_is_a_true_adjoint_pair():
+    """IRN_TV_CGLS runs CGLS on the stacked operator [A; sqrt(lmbda) W D],
+    which is only meaningful if the transpose it is handed IS the adjoint.
+
+    The original pair was wrong twice over: `Dxx = np.copy(img)` followed by
+    writing only `[0:-2]` left the last two slices holding raw image VALUES
+    instead of differences - so D did not annihilate a constant - and D^T was
+    off by one at index n-2. Measured asymmetry 6.4e-2, and the inner CGLS
+    diverged to 7e5 on a 64^3 phantom.
+    """
+    from tigre.algorithms.krylov_subspace_algorithms import IRN_TV_CGLS
+
+    alg = object.__new__(IRN_TV_CGLS)
+    rng = np.random.default_rng(0)
+    n = 12
+    W = (rng.random((n, n, n)).astype(np.float32) + 0.5)
+    u = rng.standard_normal((n, n, n), dtype=np.float32)
+    v = rng.standard_normal((3, n, n, n), dtype=np.float32)
+
+    lhs = float(np.sum(IRN_TV_CGLS.Lx(alg, W, u) * v))
+    rhs = float(np.sum(u * IRN_TV_CGLS.Ltx(alg, W, v)))
+    assert lhs == pytest.approx(rhs, rel=1e-5), f"<Lu,v>={lhs} vs <u,Ltv>={rhs}"
+
+    # A gradient operator annihilates a constant image, at the boundary too.
+    ones = np.ones((n, n, n), dtype=np.float32)
+    assert np.abs(IRN_TV_CGLS.Lx(alg, ones, ones)).max() == 0.0
