@@ -131,7 +131,7 @@ void mexFunction(int  nlhs , mxArray *plhs[],
   
     const long imageSize[3]={size_img[0], size_img[1], third_dim };
     
-    aw_pocs_tv(img,imgout, alpha, imageSize, maxIter, delta, gpuids); 
+    aw_pocs_tv(img,imgout, alpha, imageSize, maxIter, delta, delta, delta, gpuids);  // per-axis capable; MATLAB passes the scalar to all three 
     
     //prepareotputs
 }

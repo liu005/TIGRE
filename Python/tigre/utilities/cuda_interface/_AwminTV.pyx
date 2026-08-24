@@ -26,12 +26,12 @@ cdef extern from "numpy/arrayobject.h":
     void PyArray_CLEARFLAGS(np.ndarray arr, int flags)
 
 cdef extern from "GD_AwTV.hpp":
-    cdef void aw_pocs_tv(float* img, float* dst, float alpha, long* image_size, int maxiter, float delta, c_GpuIds gpuids)
+    cdef void aw_pocs_tv(float* img, float* dst, float alpha, long* image_size, int maxiter, float dtc, float dtv, float dtt, c_GpuIds gpuids)
 def cuda_raise_errors(error_code):
     if error_code:
         raise ValueError('TIGRE:Call to aw_pocs_tv failed')
 
-def AwminTV(np.ndarray[np.float32_t, ndim=3] src,float alpha = 15.0,int maxiter = 100, float delta=-0.005, gpuids=None):
+def AwminTV(np.ndarray[np.float32_t, ndim=3] src,float alpha = 15.0,int maxiter = 100, delta=-0.005, gpuids=None):
     cdef c_GpuIds* c_gpuids = convert_to_c_gpuids(gpuids)
     if not c_gpuids:
         raise MemoryError()
@@ -52,7 +52,21 @@ def AwminTV(np.ndarray[np.float32_t, ndim=3] src,float alpha = 15.0,int maxiter 
 
     cdef float* c_src = <float*> src.data
     cdef np.npy_intp c_maxiter = <np.npy_intp> maxiter
-    aw_pocs_tv(c_src, c_imgout, alpha, imgsize, c_maxiter, delta, c_gpuids[0])
+    # delta: scalar broadcasts to all three axes, so equal components -- and
+    # therefore a plain scalar -- reproduce the old isotropic-in-orientation
+    # behaviour exactly. A length-3 sequence gives per-axis thresholds in the
+    # caller's numpy axis order (REPORT sec 31).
+    cdef float c_delta[3]
+    _d = np.asarray(delta, dtype=np.float32).ravel()
+    if _d.size == 1:
+        c_delta[0] = c_delta[1] = c_delta[2] = <float> _d[0]
+    elif _d.size == 3:
+        c_delta[0] = <float> _d[0]
+        c_delta[1] = <float> _d[1]
+        c_delta[2] = <float> _d[2]
+    else:
+        raise ValueError("delta must be a scalar or a length-3 sequence")
+    aw_pocs_tv(c_src, c_imgout, alpha, imgsize, c_maxiter, c_delta[0], c_delta[1], c_delta[2], c_gpuids[0])
     imgout = np.PyArray_SimpleNewFromData(3, size_img, np.NPY_FLOAT32, c_imgout)
     PyArray_ENABLEFLAGS(imgout, np.NPY_ARRAY_OWNDATA)
 

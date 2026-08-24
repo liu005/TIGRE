@@ -115,7 +115,7 @@ do { \
     }
     
     __global__ void gradientTV(const float* f, float* dftv,
-            long depth, long rows, long cols,const float delta){
+            long depth, long rows, long cols,const float dtc, const float dtv, const float dtt){
         unsigned long x = threadIdx.x + blockIdx.x * blockDim.x;
         unsigned long y = threadIdx.y + blockIdx.y * blockDim.y;
         unsigned long z = threadIdx.z + blockIdx.z * blockDim.z;
@@ -134,21 +134,21 @@ do { \
         gradient(f,dfk ,z+1,y  ,x  , depth,rows,cols);
         float eps=0.00000001; //% avoid division by zero
         
-        float wx=__expf(-(df[0]/delta)*(df[0]/delta));
-        float wy=__expf(-(df[1]/delta)*(df[1]/delta));
-        float wz=__expf(-(df[2]/delta)*(df[2]/delta));
+        float wx=__expf(-(df[0]/dtc)*(df[0]/dtc));
+        float wy=__expf(-(df[1]/dtv)*(df[1]/dtv));
+        float wz=__expf(-(df[2]/dtt)*(df[2]/dtt));
         
-        float wxi=__expf(-(dfi[0]/delta)*(dfi[0]/delta));
-        float wyi=__expf(-(dfi[1]/delta)*(dfi[1]/delta));
-        float wzi=__expf(-(dfi[2]/delta)*(dfi[2]/delta));
+        float wxi=__expf(-(dfi[0]/dtc)*(dfi[0]/dtc));
+        float wyi=__expf(-(dfi[1]/dtv)*(dfi[1]/dtv));
+        float wzi=__expf(-(dfi[2]/dtt)*(dfi[2]/dtt));
         
-        float wxj=__expf(-(dfj[0]/delta)*(dfj[0]/delta));
-        float wyj=__expf(-(dfj[1]/delta)*(dfj[1]/delta));
-        float wzj=__expf(-(dfj[2]/delta)*(dfj[2]/delta));
+        float wxj=__expf(-(dfj[0]/dtc)*(dfj[0]/dtc));
+        float wyj=__expf(-(dfj[1]/dtv)*(dfj[1]/dtv));
+        float wzj=__expf(-(dfj[2]/dtt)*(dfj[2]/dtt));
         
-        float wxk=__expf(-(dfk[0]/delta)*(dfk[0]/delta));
-        float wyk=__expf(-(dfk[1]/delta)*(dfk[1]/delta));
-        float wzk=__expf(-(dfk[2]/delta)*(dfk[2]/delta));
+        float wxk=__expf(-(dfk[0]/dtc)*(dfk[0]/dtc));
+        float wyk=__expf(-(dfk[1]/dtv)*(dfk[1]/dtv));
+        float wzk=__expf(-(dfk[2]/dtt)*(dfk[2]/dtt));
 
         
         // this hsould do the trick I think
@@ -273,7 +273,7 @@ do { \
     
     
 // main function
-void aw_pocs_tv(float* img,float* dst,float alpha,const long* image_size, int maxIter,const float delta, const GpuIds& gpuids){
+void aw_pocs_tv(float* img,float* dst,float alpha,const long* image_size, int maxIter,const float dtc, const float dtv, const float dtt, const GpuIds& gpuids){
         // Prepare for MultiGPU
         int deviceCount = gpuids.GetLength();
         cudaCheckErrors("Device query fail");
@@ -475,17 +475,26 @@ void aw_pocs_tv(float* img,float* dst,float alpha,const long* image_size, int ma
                 }
 
                 if(i==0){
+                    /* Blocking copy, then verified -- same fix and same
+                     * reason as GD_TV.cu (this file is that one plus the
+                     * edge weights, and it had the same silent zero-return:
+                     * 3-5 calls in 25 at 32 voxels a side, 0 in 30 at 96).
+                     * See the comment there for the measurements. */
                     for (dev = 0; dev < deviceCount; dev++){
                         cudaSetDevice(gpuids[dev]);
-                        
-                        cudaMemcpyAsync(d_image[dev]+offset_device[dev], img+offset_host[dev]  , bytes_device[dev]*sizeof(float), cudaMemcpyHostToDevice,stream[dev*nStream_device+1]);
-                        
-                        
+                        cudaMemcpy(d_image[dev]+offset_device[dev], img+offset_host[dev]  , bytes_device[dev]*sizeof(float), cudaMemcpyHostToDevice);
                     }
+                    cudaCheckErrors("Image upload to the GPU failed");
                     for (dev = 0; dev < deviceCount; dev++){
                         cudaSetDevice(gpuids[dev]);
-                        cudaDeviceSynchronize();
+                        float probe_gpu=0.f;
+                        cudaMemcpy(&probe_gpu, d_image[dev]+offset_device[dev], sizeof(float), cudaMemcpyDeviceToHost);
+                        if (probe_gpu!=img[offset_host[dev]]){
+                            mexPrintf("GD_AwTV: image upload did not land on device %d (GPU %g, host %g); retrying\n", (int)dev, (double)probe_gpu, (double)img[offset_host[dev]]);
+                            cudaMemcpy(d_image[dev]+offset_device[dev], img+offset_host[dev]  , bytes_device[dev]*sizeof(float), cudaMemcpyHostToDevice);
+                        }
                     }
+                    cudaCheckErrors("Image upload verification failed");
                 }
                 // if we need to split and its not the first iteration, then we need to copy from Host memory the previosu result.
                 if (splits>1 & i>0){
@@ -515,7 +524,7 @@ void aw_pocs_tv(float* img,float* dst,float alpha,const long* image_size, int ma
                         
                         // I don't understand why I need to store 2 layers to compute correctly with 1 buffer. The bounding checks should
                         // be enough but they are not.
-                        gradientTV<<<gridGrad, blockGrad,0,stream[dev*nStream_device]>>>(d_image[dev],d_dimgTV[dev],(long)(curr_slices+buffer_length*2-1), image_size[1],image_size[0],delta);
+                        gradientTV<<<gridGrad, blockGrad,0,stream[dev*nStream_device]>>>(d_image[dev],d_dimgTV[dev],(long)(curr_slices+buffer_length*2-1), image_size[1],image_size[0],dtc,dtv,dtt);
                         
                     }
                     

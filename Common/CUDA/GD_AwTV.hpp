@@ -55,7 +55,7 @@ Codes  : https://github.com/CERN/TIGRE
 #include "TIGRE_common.hpp"
 #include "GpuIds.hpp"
 
-void aw_pocs_tv(float* img,float* dst,float alpha,const long* image_size, int maxIter,const float delta, const GpuIds& gpuids);
+void aw_pocs_tv(float* img,float* dst,float alpha,const long* image_size, int maxIter,const float dtc, const float dtv, const float dtt, const GpuIds& gpuids);
 void checkFreeMemory(const GpuIds& gpuids, size_t *mem_GPU_global);
 
 
