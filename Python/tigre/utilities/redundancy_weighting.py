@@ -99,10 +99,15 @@ def redundancy_weighting(geo, angles=None):
     w = np.ones((geo.nDetector[0], geo.nDetector[1]), dtype=np.float32)
 
     if apply_redudancy_weights(geo, angles=angles):
-        offset = np.atleast_2d(geo.offDetector)[0, 1]
-        DSD = np.atleast_2d(geo.DSD)[0]
-        DSO = np.atleast_2d(geo.DSO)[0]
-        offset += (DSD / DSO) * np.atleast_1d(geo.COR)[0]   # added correction
+        offset = float(np.atleast_2d(geo.offDetector)[0, 1])
+        # Per-view DSD/DSO arrays (arbitrary trajectories, tilted-axis
+        # geometry) are (n,); np.atleast_2d(...)[0] on those returns the WHOLE
+        # array, which then broadcasts against the detector axis below and
+        # fails. The Wang weight is a single detector map, so the first view's
+        # value is what it has always meant here.
+        DSD = float(np.ravel(geo.DSD)[0])
+        DSO = float(np.ravel(geo.DSO)[0])
+        offset += (DSD / DSO) * float(np.ravel(geo.COR)[0])   # added correction
         us = np.linspace(-geo.nDetector[1]/2+0.5, geo.nDetector[1]/2-0.5, geo.nDetector[1]) * geo.dDetector[1] + abs(offset)
         
         us *= DSO / DSD
