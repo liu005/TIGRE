@@ -7,7 +7,7 @@ validation falsified it: the source traces a TILTED CIRCLE in the object
 frame, which changes its radius, azimuth AND the detector's orientation, and
 translations capture one term of three. The correct expression needs PER-VIEW
 geometry, which TIGRE's kernels already consume (dRoll/dPitch/dYaw, DSO, DSD,
-offDetector and offOrigin are all per-projection arrays).
+COR, offDetector and offOrigin are all per-projection arrays).
 
 THE MODEL. The stage rotates the OBJECT by angle theta about a unit axis
 a = T @ z_hat, where T = Rx(tilt_x) @ Ry(tilt_y) is the tilt away from the
@@ -26,40 +26,45 @@ gave the wrong sign twice before measuring settled it.)
 
 Because Rz(theta) and the de-rotation Rz(-(theta + phase)) compose to the
 CONSTANT Rz(-phase), every per-view quantity is in fact the same for all
-views: a tilted axis is a constant re-expression of the rig (DSO, DSD,
+views: a tilted axis is a constant re-expression of the rig (DSO, DSD, COR,
 offOrigin z, offDetector, rotDetector) plus a constant phase on the angles.
 The arrays are still emitted per view because that is TIGRE's interface.
 
-MAPPING TO TIGRE, per view i (exact, no small-angle steps):
+MAPPING TO TIGRE (exact, no small-angle steps). De-rotate by the azimuth of the
+UNDISPLACED source direction T.T @ x_hat, so that TIGRE's own semantics can be
+read off directly - TIGRE puts the source at (DSO, COR, 0) and the detector
+centre at (-(DSD-DSO), COR + offDetector_u, offDetector_v):
 
-  angles_i      = theta_i + azimuth(S)     (constant phase)
-  DSO_i         = |S_xy|                   (source's horizontal radius)
-  DSD_i         = S_x - C_x                (de-rotated; puts the nominal
-                                            detector centre where TIGRE
-                                            expects it, at -(DSD_i - DSO_i))
-  offOrigin_z   = -S_z                     (TIGRE has no source height; shift
-                                            the frame so the source is at z=0)
-  offDetector_i = the de-rotated centre's residual (y, z) displacement
+  angles_i      = theta_i + phase
+  DSO_i         = S_x            COR_i = S_y
+  DSD_i         = S_x - C_x      offDetector_u = C_y - COR_i
+  offOrigin_z   = -S_z           offDetector_v = C_z - S_z
   rotDetector_i = Euler angles of the de-rotated detector orientation in the
                   kernel convention R = Rz(rot[2]) Ry(rot[1]) Rx(rot[0]),
                   solved from the OBSERVABLE axes (R@y_hat = u, R@z_hat = v)
 
-DISPLACED AXIS (COR) AND DETECTOR OFFSET - composed since 2026-08-27. TIGRE's
-COR is a rigid lateral shift of the source AND detector relative to the
-rotation axis (the CUDA adds COR to both S and the detector point along the
-in-plane direction perpendicular to the beam, Siddon_projection.cu and
-voxel_backprojection.cu alike); offDetector shifts the detector alone. Both
-are lab-fixed, so they enter here as the lab positions
+At ZERO TILT this returns the input geometry EXACTLY - COR, offDetector and
+rotDetector included - which matters beyond tidiness: TIGRE's Wang
+(offset-detector) weighting is gated on offDetector_u == 0, so a builder that
+folded COR into offDetector_u switched Wang ON for a nominally centred
+detector and halved the reconstructed intensity (each opposing-ray pair
+counted once against the FDK normalisation's twice). Measured 2026-08-27 on
+scan 18 (mean 0.0126 -> 0.0063) before this was changed.
+
+DISPLACED AXIS (COR), DETECTOR OFFSET AND DETECTOR ROTATION - composed. COR is
+a rigid lateral shift of source AND detector (Siddon_projection.cu and
+voxel_backprojection.cu add it to both), offDetector shifts the detector alone,
+rotDetector rotates the detector axes about the detector centre with
+R = Rz(rot[2]) Ry(rot[1]) Rx(rot[0]) on (beam, u, v) (bindings: dYaw <- rot[0]
+is the in-plane roll about the beam). All three are lab-fixed, so they enter as
+the lab entities before the tilt mapping:
 
     S_lab = (DSO, COR, 0)
     C_lab = (-(DSD - DSO), COR + offDetector_u, offDetector_v)
+    u_lab = R @ y_hat,  v_lab = R @ z_hat
 
-before the tilt mapping, and the output geometry carries COR = 0 with the
-displacement folded into offDetector. At zero tilt this reduces EXACTLY to
-TIGRE's documented equivalence offDetector_u + (DSD/DSO) * COR (to first
-order in COR/DSO; the exact form is what the rotation produces), which is
-what tests/test_tilted_axis_cor.py pins against tigre.Ax with a plain COR
-geometry before any tilt enters. Cone mode only.
+tests/test_tilted_axis_cor.py pins each against tigre.Ax at zero tilt before
+any tilt test runs. Cone mode only.
 
 Validation: tests/test_tilted_axis_geometry.py compares tigre.Ax ball
 centroids under the built geometry against an analytic pinhole projection of
@@ -76,30 +81,48 @@ def _tilt_matrix(tilt_x, tilt_y):
             ).as_matrix()
 
 
+def _scalar0(v, default=0.0):
+    a = np.ravel(np.asarray(v if v is not None else default, dtype=np.float64))
+    return float(a[0]) if a.size else float(default)
+
+
 def _lab_entities(geo):
-    """Lab-frame source, detector centre and detector axes, incl. COR and
-    offDetector (TIGRE conventions: COR shifts source+detector along +y,
-    offDetector = (v, u) shifts the detector alone)."""
-    DSD = float(np.ravel(geo.DSD)[0])
-    DSO = float(np.ravel(geo.DSO)[0])
-    cor = float(np.ravel(getattr(geo, "COR", 0.0))[0]) if np.size(
-        getattr(geo, "COR", 0.0)) else 0.0
+    """Lab-frame source, detector centre and detector axes, incl. COR,
+    offDetector and rotDetector (TIGRE conventions, see module docstring)."""
+    DSD = _scalar0(geo.DSD)
+    DSO = _scalar0(geo.DSO)
+    cor = _scalar0(getattr(geo, "COR", 0.0))
     off = np.atleast_2d(np.asarray(getattr(geo, "offDetector", np.zeros(2)),
                                    dtype=np.float64))[0]
     off_v, off_u = float(off[0]), float(off[1])
+    rot = np.atleast_2d(np.asarray(getattr(geo, "rotDetector", np.zeros(3)),
+                                   dtype=np.float64))[0]
+    R = Rotation.from_euler("ZYX", rot[[2, 1, 0]]).as_matrix()
     S_lab = np.array([DSO, cor, 0.0])
     C_lab = np.array([-(DSD - DSO), cor + off_u, off_v])
-    u_lab = np.array([0.0, 1.0, 0.0])
-    v_lab = np.array([0.0, 0.0, 1.0])
+    u_lab = R @ np.array([0.0, 1.0, 0.0])
+    v_lab = R @ np.array([0.0, 0.0, 1.0])
     return S_lab, C_lab, u_lab, v_lab
+
+
+def _reject_varying(name, arr, row_ndim):
+    """Refuse per-view arrays whose rows differ: the tilt composes ONE rig.
+    `row_ndim` is the dimensionality of a single view's value (0 for
+    COR/DSD/DSO, 1 for the (v, u) offDetector row and the rotDetector triple)
+    so a plain one-row value is never mistaken for varying views."""
+    a = np.asarray(arr, dtype=np.float64)
+    if a.ndim > row_ndim and a.shape[0] > 1 and np.ptp(a, axis=0).any():
+        raise NotImplementedError(
+            "tilted_axis_geo: per-view %s arrays that vary across views are "
+            "not supported (the tilt is composed with ONE rig)" % name)
 
 
 def tilted_axis_geo(geo, angles, tilt_x, tilt_y):
     """Fill `geo` with per-view arrays for a tilted rotation axis.
 
-    `geo` may carry a scalar COR and a (v, u) offDetector; both are folded
-    into the per-view geometry (COR is returned as zeros - do not add it
-    again). Returns (geo, angles_out): reconstruct with BOTH, e.g.
+    `geo` may carry COR, offDetector and rotDetector (scalars / one row or
+    constant per-view arrays); all are composed. Returns (geo, angles_out):
+    reconstruct with BOTH, e.g.
         geo, ang = tilted_axis_geo(geo, angles, tx, ty)
         rec = tigre.algorithms.fdk(proj, geo, ang)
     """
@@ -107,30 +130,30 @@ def tilted_axis_geo(geo, angles, tilt_x, tilt_y):
     n = angles.size
     if getattr(geo, "mode", "cone") != "cone":
         raise ValueError("tilted_axis_geo: cone mode only")
-    if np.size(getattr(geo, "COR", 0.0)) > 1 and np.ptp(np.ravel(geo.COR)) != 0:
-        raise NotImplementedError("tilted_axis_geo: per-view COR arrays are not supported")
-    off = np.asarray(getattr(geo, "offDetector", np.zeros(2)), dtype=np.float64)
-    if off.ndim > 1 and np.ptp(off, axis=0).any():
-        raise NotImplementedError("tilted_axis_geo: per-view offDetector arrays are not supported")
+    for name, row_ndim in (("COR", 0), ("DSD", 0), ("DSO", 0),
+                           ("offDetector", 1), ("rotDetector", 1)):
+        if hasattr(geo, name):
+            _reject_varying(name, getattr(geo, name), row_ndim)
 
     S_lab, C_lab, u_lab, v_lab = _lab_entities(geo)
-    T = _tilt_matrix(tilt_x, tilt_y)
-    Tt = T.T
+    Tt = _tilt_matrix(tilt_x, tilt_y).T
 
-    S0 = Tt @ S_lab
-    phase = float(np.arctan2(S0[1], S0[0]))
-    Rd = Rotation.from_euler("z", -phase).as_matrix()   # de-rotation, constant
-    S = Rd @ S0                                          # (|S_xy|, 0, S_z)
+    # De-rotate by the azimuth of the UNDISPLACED source direction, so the
+    # residual lateral displacement reads off as TIGRE's COR (see docstring).
+    q = Tt @ np.array([1.0, 0.0, 0.0])
+    phase = float(np.arctan2(q[1], q[0]))
+    Rd = Rotation.from_euler("z", -phase).as_matrix()   # constant de-rotation
+    S = Rd @ (Tt @ S_lab)
     C = Rd @ (Tt @ C_lab)
     u = Rd @ (Tt @ u_lab)
     v = Rd @ (Tt @ v_lab)
 
-    dso_i = float(S[0])
+    dso_i, cor_i, z_src = float(S[0]), float(S[1]), float(S[2])
     dsd_i = float(S[0] - C[0])
-    z_src = float(S[2])
 
     geo.DSO = np.full(n, dso_i, dtype=np.float64)
     geo.DSD = np.full(n, dsd_i, dtype=np.float64)
+    geo.COR = np.full(n, cor_i, dtype=np.float64)
 
     # offOrigin component order is (z, y, x) - pinned empirically: putting
     # +10 in index 0 moves a central ball's image to exactly the v predicted
@@ -140,22 +163,20 @@ def tilted_axis_geo(geo, angles, tilt_x, tilt_y):
     off_origin[:, 0] = -z_src               # volume centre in the source-z=0 frame
 
     # Orientation: solve R with R@y=u, R@z=v (observable axes), column
-    # form R = [u x v | u | v].
+    # form R = [u x v | u | v]; TIGRE order [rot0, rot1, rot2] = reversed ZYX.
     M = np.column_stack([np.cross(u, v), u, v])
     e = Rotation.from_matrix(M).as_euler("ZYX")
-    rot_det = np.tile(e[::-1], (n, 1))      # -> [rot0, rot1, rot2]
+    rot_det = np.tile(e[::-1], (n, 1))
 
-    # Centre residual after TIGRE places the nominal centre at
-    # (-(DSD_i - DSO_i), 0, 0) in the source-z=0 frame. C[0] matches by the
-    # DSD_i choice; the (y, z) remainder is the detector offset.
+    # Detector centre residuals against TIGRE's placement at
+    # (-(DSD_i - DSO_i), COR_i + offU, offV) in the source-z=0 frame.
     off_det = np.zeros((n, 2), dtype=np.float64)
-    off_det[:, 1] = C[1]                    # U on y
+    off_det[:, 1] = C[1] - cor_i            # U on y
     off_det[:, 0] = C[2] - z_src            # V on z, frame shifted by z_src
 
     geo.offOrigin = off_origin
     geo.offDetector = off_det
     geo.rotDetector = rot_det
-    geo.COR = np.zeros(n, dtype=np.float64)   # folded into offDetector above
     return geo, (angles + phase).astype(np.float32)
 
 
@@ -164,10 +185,11 @@ def project_points_tilted(points, geo_nominal, angles, tilt_x, tilt_y):
 
     Ground truth for the validation test - no TIGRE involved. `points` are in
     the axis-aligned frame; returns (n_views, n_points, 2) pixel (u, v)
-    indices. Honours geo_nominal's scalar COR and offDetector the same way
-    tilted_axis_geo does (lab-frame shifts of source/detector). Conventions
-    pinned empirically against tigre.Ax at tilt zero: world rotation
-    Rz(+theta), +y -> +u, +z -> +v, pixel k centred at (k + 0.5 - N/2) * d.
+    indices. Honours geo_nominal's COR, offDetector and rotDetector the same
+    way tilted_axis_geo does (lab-frame shifts/rotation of source/detector).
+    Conventions pinned empirically against tigre.Ax at tilt zero: world
+    rotation Rz(+theta), +y -> +u, +z -> +v, pixel k centred at
+    (k + 0.5 - N/2) * d.
     """
     du = float(geo_nominal.dDetector[1])
     dv = float(geo_nominal.dDetector[0])
