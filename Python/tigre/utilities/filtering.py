@@ -242,7 +242,23 @@ def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
     R_d = None
     if np.any(np.asarray(zgeo.rotDetector)):
         from scipy.spatial.transform import Rotation
-        R_d = xp.array(Rotation.from_euler("XYZ", zgeo.rotDetector).as_matrix())
+        # Match the CUDA, which is what actually places the rays.
+        #
+        # The kernels apply R = Rz(dRoll)*Ry(dPitch)*Rx(dYaw) to points ordered
+        # (x, y, z) = (beam, u, v), and the bindings map dYaw <- rotDetector[0],
+        # dPitch <- rotDetector[1], dRoll <- rotDetector[2] (_types.pyx, and
+        # Atb_mex.cpp identically). So rotDetector[0] rotates about the BEAM -
+        # the in-plane roll - and rotDetector[2] about v, despite the CUDA's
+        # internal field names running the other way round.
+        #
+        # This weight used to be built as from_euler("XYZ", rotDetector) acting
+        # on (v, u, DSD), which silently swaps elements 0 and 2: the roll was
+        # applied about v and the yaw about the beam. A beam rotation leaves
+        # both the numerator and |xyz| unchanged, so the real roll contributed
+        # nothing here while the yaw contributed a spurious gradient.
+        rot = np.asarray(zgeo.rotDetector, dtype=float)
+        R_d = xp.array(
+            Rotation.from_euler("ZYX", rot[..., [2, 1, 0]]).as_matrix())
     DSD = xp.asarray(np.atleast_1d(np.asarray(zgeo.DSD, dtype=float)))
     offDet = np.atleast_2d(zgeo.offDetector)
 
@@ -292,10 +308,14 @@ def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
                   * zgeo.dDetector[1] + offDet[i, 1])
             (yy, xx) = xp.meshgrid(xv, yv + offDet[i, 0])
             zz = yy * 0 + DSD[i if DSD.size > 1 else 0]
-            xyz = xp.vstack((xx.ravel(), yy.ravel(), zz.ravel()))
+            # Stacked as (beam, u, v) - the CUDA's own axis order - so R_d
+            # above applies verbatim and the cosine numerator is component 0.
+            # xx holds v, yy holds u (np.meshgrid(xv, yv) varies its first
+            # output along xv, which is the u axis).
+            xyz = xp.vstack((zz.ravel(), yy.ravel(), xx.ravel()))
             if R_d is not None:
                 xyz = xp.matmul(R_d[i], xyz)
-            c[k] *= (xyz[2, :] / xp.linalg.norm(xyz, axis=0)).reshape(xx.shape)
+            c[k] *= (xyz[0, :] / xp.linalg.norm(xyz, axis=0)).reshape(xx.shape)
 
         # --- ramp filter, 2 views per complex FFT, per-view scale ----------
         for k in range(0, m - 1, 2):
