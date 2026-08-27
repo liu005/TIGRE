@@ -104,6 +104,15 @@ def ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos=None, d_rot=None) -> Geometry:
     #   -------
     #   geometry with arbitrarily specified movements of source and detector
     #
+    #   LIMIT (measured 2026-08-27): this path cannot express a TILTED
+    #   ROTATION AXIS. compute_xyz_euler pins roll=0 (a 2-angle chart), which
+    #   drops the detector's in-plane precession component - first-order in
+    #   every pixel - so feeding it the exact per-view source/detector
+    #   positions of a 0.6 deg tilted-axis orbit reproduces ball projections
+    #   to only 4.8 px mean / 14.1 px max, against 0.011/0.052 px for the
+    #   dedicated exact path. Use tilted_axis_geometry.tilted_axis_geo for
+    #   tilted-axis work; repairing THIS utility means replacing the roll=0
+    #   chart with a full 3-angle frame solve (the technique that module uses).
     """
     ngeo = copy.deepcopy(geo)
     
