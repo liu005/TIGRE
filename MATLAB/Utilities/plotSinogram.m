@@ -65,7 +65,7 @@ for ii=1:length(opts)
     default=defaults(ii);
     % if one option isnot default, then extranc value from input
     if default==0
-        ind=double.empty(0,1);jj=1;
+        ind=[];jj=1;
         while isempty(ind)
             ind=find(isequal(opt,lower(varargin{jj})));
             jj=jj+1;
