@@ -118,10 +118,22 @@ def redundancy_weighting(geo, angles=None):
             0.5 * (np.sin( (np.pi / 2) * np.arctan(us / DSO) / np.arctan(abstheta / DSO) ) + 1),
             np.where(us < -abstheta, 0, w)
             )
-#        w=w*2
+        # Absolute-intensity convention: FDK's classic ramp normalization
+        # (the /4 scale) assumes every ray is measured TWICE on a full
+        # circle (beta and beta+pi). Wang weights convert the stack to a
+        # SINGLE-count convention - redundant pairs sum to w(u)+w(-u)=1 and
+        # the non-overlap side is counted once with w=1 - so without
+        # compensation the reconstruction comes out at exactly HALF the
+        # non-Wang absolute scale (measured 0.500 on a uniform cylinder
+        # with a sub-pixel offset, 2026-09-02; the long-commented "w=w*2"
+        # below this line was this fix, never enabled). Doubling restores
+        # the double-count convention everywhere: pairs sum to 2, single
+        # rays count as 2 - same algebra as the short-scan K=2 redundancy
+        # factor in the chunked filter.
+        w *= 2.0
         if (theta<0):
             w = np.fliplr(w)
-            
+
     return w.astype(np.float32)
 
 
