@@ -62,7 +62,11 @@ def animate_geometry(ogeo,angles=None,pos=None,rotation="SD",animate=True,fname=
 
     # check geo, which makes DSD, DSO etc all matrices
     if angles is None:
-        angles = ogeo.angles if hasattr(ogeo,"angles") else np.linspace(0,2*np.pi,100)
+        # a default tigre.geometry() carries angles=None, so hasattr alone
+        # is not enough - fall back whenever no usable angles are stored
+        angles = getattr(ogeo, "angles", None)
+        if angles is None:
+            angles = np.linspace(0, 2 * np.pi, 100)
         
     geo = copy.deepcopy(ogeo)
     try:

@@ -1,193 +1,113 @@
+"""Headless tests for tigre.utilities.visualization.animate_geometry.
 
-## test    
+No GPU and no display needed (Agg backend). The animation test renders
+every frame through the update function by saving to a temporary file with
+whichever matplotlib writer is available (pillow ships with matplotlib's
+hard dependency set on most installs; the test skips if none is usable).
 
+Replaces the original commented-out visual inspection script (kept in git
+history) with assertions CI can run.
+"""
 import numpy as np
+import pytest
+
+import matplotlib
+matplotlib.use("Agg")
+from matplotlib import animation
 from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
 import tigre
-
-# # plot 1, check zero angle position, scan rotation direction, detector offset
-
-# geo = tigre.geometry(nVoxel=np.array([256,128,256]),default=True)
-# geo.sVoxel = geo.nVoxel * np.array([1,1,1]) # (z,y,x)
-# geo.nDetector = np.array([256,128])
-# geo.dDetector = np.array([0.8, 0.8])*2               
-# geo.sDetector = geo.dDetector * geo.nDetector 
-# geo.offDetector=np.array([100,-100]) # viewing from S, D move (up, right) => (v, u)
-# geo.rotDetector=np.array([30,0,0])/180*np.pi # [roll, pitch, yaw] viewing from S to D
-# geo.offOrigin = np.array([0,0,0]) # (z,y,x)
-# geo.COR=0
-# angles=np.linspace(0,np.pi,100)
-# ani1=tigre.animate_geometry(geo,angles,0,animate=True)  # angle=0, S is at (x=DSO, y=0, z=0)
-# ani1
-# # confirm the plot with projection
-# from scipy.io import loadmat
-# head=loadmat('../tigre/data/head.mat')['img'].transpose(2,1,0).copy()
-# head=head[:,:128,:].copy()
-# proj = tigre.Ax(head,geo,angles)
-# plt.figure()
-# plt.subplot(1,2,1)
-# plt.imshow(head[:,:,128],origin='lower')
-# plt.title('dim2=128')
-# plt.ylabel('dim0 ->')
-# plt.xlabel('dim1 ->')
-# plt.subplot(1,2,2)
-# plt.imshow(proj[0,:,:],origin='lower')
-# plt.ylabel('v ->')
-# plt.xlabel('u ->')
+from tigre.utilities.visualization.animate_geometry import animate_geometry, calCube
 
 
-# # plot 2, check staticDetectorGeo() for tomosymthesis setup
-
-# geo = tigre.geometry_default()
-# geo.DSO = 400
-# geo.DSD = 800
-# geo.offDetector=np.array([20, 50])
-# geo.rotDetector=np.radians( np.array([20, 0, 0]) ) # (roll, pitch, yaw)
-# angles=np.radians( np.linspace(-60.0, 60.0, 31) )
-# #geo.offOrigin = np.array([50, 30, 0]) # (z,y,x)
-
-# #geo = tigre.staticDetectorGeo(geo, angles, 90)
-
-# s_pos = np.column_stack( (geo.DSO * np.cos(angles), geo.DSO * np.sin(angles), 0*angles) )
-# DS = geo.DSO - geo.DSD
-# #d_pos = np.column_stack( (DS * np.cos(angles), DS * np.sin(angles), 0*angles) )
-# d_pos = np.column_stack( (DS + 0*angles, 0 * angles, 0*angles) )
-# geo = tigre.ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos)
-
-# ani2=tigre.animate_geometry(geo, angles, 15, animate=True)
-# ani2
-
- 
-
-# # plot 2a, tomosymthesis setup, with larger radian, source rotation centre offset
-# geo = tigre.geometry_default()
-# geo.DSO = 500
-# geo.DSD = 800
-
-# angles=np.linspace(-47.5,47.5,31)/180*np.pi
-# r=1500 # larger radian
-# soff=[-500,-100] # soruce rotation centre offset
-# #soff=[-400,100] # soruce rotation centre offset
-# s_pos = np.column_stack((r*np.cos(angles)+soff[0], r*np.sin(angles)+soff[1], 0*angles))
-# DS = geo.DSO - geo.DSD
-# d_pos = np.column_stack( (DS + 0*angles, 0 * angles, 0*angles) )
-# geo21 = tigre.ArbitrarySourceDetMoveGeo(geo,s_pos, d_pos)
-# ani21=tigre.animate_geometry(geo21, geo21.angles, 0, animate=True, fname='Tomosynthesis2')
-# ani21
-
- 
-# plot 3, fixed target object and detector positions and orientations, source moving linearly
-
-geo = tigre.geometry_default()
-geo.DSO = 183
-geo.DSD = 442.5
-geo.nDetector=np.array([32, 512])
-geo.dDetector=np.array([1, 1])*0.80078125
-geo.sDetector=geo.nDetector*geo.dDetector
-
-#df = np.linspace(-510,510,64)  # source position on 
-df = np.linspace(-254, 254, 128)
-
-#source on x-axis (when df=0)
-pos = np.concatenate([-df, -df, -df])
-rot = np.concatenate([df*0, df*0-90, df*0-180])
-s_rot = 0
-
-# pos = df
-# s_rot = 0
-# rot = 0
-
-geo.offDetector = np.array([50,30])
-geo.rotDetector = np.radians( np.array([0,0,10]) )
-
-geo3 = tigre.staticDetLinearSourceGeo(geo,pos,s_rot=s_rot,rot=rot)
-
-#ani3=tigre.animate_geometry(geo3, geo3.angles, rotation='obj', animate=True)
-ani3=tigre.animate_geometry(geo3, geo3.angles, rotation='SD', animate=True)
-ani3
+def make_geo():
+    """Small cone geometry exercising the offset/rotation code paths."""
+    geo = tigre.geometry(mode="cone", default=True)
+    geo.nVoxel = np.array([32, 48, 64])
+    geo.sVoxel = geo.nVoxel.astype(np.float64)
+    geo.dVoxel = geo.sVoxel / geo.nVoxel
+    geo.nDetector = np.array([60, 80])
+    geo.sDetector = geo.nDetector * geo.dDetector
+    geo.offDetector = np.array([10.0, -15.0])          # (v, u)
+    geo.rotDetector = np.radians([5.0, -2.0, 1.0])     # (roll, pitch, yaw)
+    geo.offOrigin = np.array([0.0, 5.0, -8.0])         # (z, y, x)
+    geo.COR = 1.5
+    return geo
 
 
-# ## plot 4, helical CT
-# geo = tigre.geometry_default(high_resolution=False)
-
-# angles = np.linspace(0, 2 * np.pi, 100)
-# angles = np.hstack([angles, angles, angles])  # loop 3 times
-
-# # This makes it helical, axis order (z,y,x) for python
-# geo.offOrigin = np.zeros((angles.shape[0], 3))
-# geo.offOrigin[:, 0] = np.linspace(
-#     -1024 / 2 + 128, 1024 / 2 - 128, angles.shape[0])
-
-# ani4 = tigre.animate_geometry(geo, angles, 0, animate=True, fname='Helical_CT')
-# ani4
+ANGLES = np.linspace(0, 2 * np.pi, 6, endpoint=False)
 
 
-# ## plot 5, fixed source and detector positions and orientations, object moving linearly, mimicing a cargo scanner
-
-# geo = tigre.geometry_default()
-# geo.DSO = 4700
-# geo.DSD = 6500
-
-# geo.nDetector = np.array([1024, 10])
-# geo.dDetector = np.array([5, 5])
-# geo.sDetector = geo.nDetector * geo.dDetector
-
-# # 20 foot sea container
-# geo.nVoxel = np.array( [518, 1212, 488] )
-# geo.dVoxel = np.array([5, 5, 5])
-# geo.sVoxel = geo.nVoxel * geo.dVoxel
-
-# # source position
-# s_pos = np.zeros((100,3))
-# alpha = np.radians(13)
-# s_pos[:, 0] = geo.DSO * np.cos(alpha)
-# s_pos[:, 2] = geo.DSO * np.sin(alpha)
-
-# # container movement
-# geo.offOrigin = np.zeros((100,3))
-# geo.offOrigin[:,1] = np.linspace(-3100, 3100, 100)
-# geo.offOrigin[:,0] = 100
-
-# #geo.rotDetector = np.radians( np.array([0, -39, 0]) )
-# d_pos = None
-# d_rot = np.zeros((100,3))
-# d_rot[:,1] = -39/180*np.pi
-
-# geo5 = tigre.ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos, d_rot)
-
-# ani5=tigre.animate_geometry(geo5, geo5.angles, 0, animate=True, fname='Container Scanner')
-# ani5
+@pytest.fixture(autouse=True)
+def _close_figs():
+    yield
+    plt.close("all")
 
 
-# ## plot 6, fixed target object and source and detector are at 170 degree, source moving in an spiral
+class TestStatic:
+    def test_returns_axes_with_scene(self):
+        ax = animate_geometry(make_geo(), ANGLES, pos=2, animate=False)
+        assert isinstance(ax, Axes3D)
+        # the scene carries the detector + object cuboids and a title
+        assert len(ax.collections) >= 2
+        assert "CBCT geometry" in ax.get_title()
 
-# geo = tigre.geometry_default()
-# geo.DSO = 750
-# geo.DSD = 1200
+    def test_default_angles(self):
+        ax = animate_geometry(make_geo(), None, animate=False)
+        assert isinstance(ax, Axes3D)
 
-# n = 200
-# t = np.linspace(0,np.pi*6,n)
-# R = geo.DSD-geo.DSO
-# s_pos = np.zeros((n,3))
-# d_pos = np.zeros((n,3))
-# d_rot = np.zeros((n,3))
+    def test_pos_out_of_range_falls_back(self):
+        ax = animate_geometry(make_geo(), ANGLES, pos=999, animate=False)
+        assert isinstance(ax, Axes3D)
 
-# # source positions
-# s_pos[:,0] = geo.DSO*np.cos(t)
-# s_pos[:,1] = geo.DSO*np.sin(t)
-# s_pos[:,2] = (geo.DSO/50 + t*10)
 
-# # detector centre positions
-# d_pos[:,0] = -R*np.cos(t+np.pi*17/18)
-# d_pos[:,1] = -R*np.sin(t+np.pi*17/18)
-# d_pos[:,2] = (R/50 + t*10)
+class TestAnimation:
+    @pytest.mark.parametrize("rotation", ["SD", "obj"])
+    def test_returns_animation_and_renders_frames(self, rotation, tmp_path,
+                                                  monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        ani = animate_geometry(make_geo(), ANGLES, rotation=rotation,
+                               animate=True)
+        assert isinstance(ani, animation.FuncAnimation)
+        # render every frame through the update function - this is what
+        # actually exercises the per-frame artist updates
+        writers = [w for w in ("pillow", "ffmpeg")
+                   if animation.writers.is_available(w)]
+        if not writers:
+            pytest.skip("no matplotlib animation writer available")
+        out = tmp_path / f"anim_{rotation}.gif"
+        ani.save(str(out), writer=writers[0], fps=10)
+        assert out.exists() and out.stat().st_size > 0
 
-# # detector rotation (roll,pitch,yaw) away from its normal direction towards (0, 0, 0)
-# # d_rot[:,0] = np.cos(t)
-# # d_rot[:,1] = np.sin(t)
-# #d_rot[:,0] = t/np.pi*30
+    def test_fname_save_fallback_chain(self, tmp_path, monkeypatch):
+        """fname triggers the internal ffmpeg->pillow->imagemagick fallback;
+        whichever writer exists, the call must return the animation."""
+        monkeypatch.chdir(tmp_path)
+        ani = animate_geometry(make_geo(), ANGLES, animate=True, fname="t")
+        assert isinstance(ani, animation.FuncAnimation)
+        saved = list(tmp_path.glob("t_geometry.*"))
+        if animation.writers.is_available("ffmpeg") or \
+                animation.writers.is_available("pillow"):
+            assert saved, "a writer was available but nothing was saved"
 
-# geo6 = tigre.ArbitrarySourceDetMoveGeo(geo,s_pos,d_pos,d_rot)
 
-# ani6=tigre.animate_geometry(geo6, geo6.angles, 0, animate=True, fname='Spiral Source')
-# ani6
+class TestCalCube:
+    def test_single_cuboid_faces(self):
+        verts = calCube(np.zeros(3), np.array([2.0, 4.0, 6.0]))
+        assert len(verts) == 6                     # six faces
+        v = np.asarray(verts, dtype=float)
+        assert v.shape == (6, 4, 3)                # quads in 3D
+        # extents match the requested size
+        flat = v.reshape(-1, 3)
+        assert np.allclose(flat.max(0) - flat.min(0), [2.0, 4.0, 6.0])
+
+    def test_batched_with_rotations(self):
+        n = 5
+        centres = np.arange(n * 3, dtype=float).reshape(n, 3)
+        R = np.stack([np.eye(3)] * n)
+        verts = calCube(centres, np.array([2.0, 2.0, 2.0]), R)
+        assert len(verts) == n
+        for i, f in enumerate(verts):
+            assert np.asarray(f).shape == (6, 4, 3)
+            assert np.allclose(np.asarray(f).reshape(-1, 3).mean(0), centres[i])
