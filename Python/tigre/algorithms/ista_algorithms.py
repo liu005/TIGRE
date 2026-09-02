@@ -7,6 +7,7 @@ import tigre
 from tigre.algorithms.iterative_recon_alg import IterativeReconAlg
 from tigre.algorithms.iterative_recon_alg import decorator
 from tigre.utilities.im_3d_denoise import im3ddenoise
+from tigre.utilities.power_method import svd_power_method
 
 
 
@@ -136,36 +137,26 @@ class FISTA(IterativeReconAlg):
         self.__p__ = 1 if "fista_p" not in kwargs else  np.asarray(kwargs["fista_p"]).item()
         self.__q__ = 1 if "fista_q" not in kwargs else np.asarray(kwargs["fista_q"]).item()
 
-    def _estimate_hyper(self, n_iter=8, seed=0):
-        """Estimate hyper = 2 * lambda_max(A^T A) by power iteration, using
-        the same operator pair as update_image (Ax "interpolated" /
-        Atb "matched") so the estimate matches the gradient actually taken.
+    def _estimate_hyper(self, seed=0):
+        """Estimate hyper = 2 * lambda_max(A^T A) = 2 * sigma_max(A)^2 with
+        the existing svd_power_method utility.
 
         Why the factor 2: update_image applies an effective step of 1/hyper
         to the least-squares gradient grad f = 2 A^T(Ax - b), whose Lipschitz
-        constant is 2 * lambda_max(A^T A); returning the bare power estimate
-        was verified to diverge. The extra 1.05 biases the
-        (from-below-converging) power estimate to the safe side:
-        overestimating hyper only shrinks the step slightly, underestimating
-        it can diverge.
+        constant is 2 * lambda_max(A^T A); using the bare sigma^2 was
+        verified to diverge. The extra 1.05 biases the (from-below-
+        converging) power estimate to the safe side: overestimating hyper
+        only shrinks the step slightly, underestimating it can diverge.
 
-        Cost: n_iter forward+back projection pairs, paid once - comparable
-        to n_iter extra FISTA iterations. Deterministic seed so repeat runs
-        match."""
+        Cost: a handful of forward+back projection pairs, paid once at
+        construction. Deterministic seed so repeat runs match."""
         rng = np.random.default_rng(seed)
         x = rng.standard_normal(tuple(self.geo.nVoxel)).astype(np.float32)
-        x /= np.linalg.norm(x.ravel())
-        L = 1.0
-        for _ in range(n_iter):
-            y = tigre.Atb(
-                tigre.Ax(x, self.geo, self.angles, "interpolated", gpuids=self.gpuids),
-                self.geo, self.angles, "matched", gpuids=self.gpuids)
-            L = float(np.linalg.norm(y.ravel()))
-            x = y / L
-        L *= 2.0 * 1.05
+        sigma = svd_power_method(x, self.geo, self.angles, verbose=self.verbose)
+        L = 2.0 * 1.05 * float(sigma) ** 2
         if self.verbose:
             print("FISTA: estimated hyper (Lipschitz constant) = %.4g "
-                  "(2 x lambda_max(A^T A), %d power iterations)" % (L, n_iter))
+                  "(2 x sigma_max(A)^2 via svd_power_method)" % L)
         return L
 
     # override update_image from iterative recon alg to remove W.
