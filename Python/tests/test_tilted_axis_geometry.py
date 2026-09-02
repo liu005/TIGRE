@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 
 import tigre
-from tigre.utilities.tilted_axis_geometry import (
+from tigre.utilities.common_geometry import (
     tilted_axis_geo, project_points_tilted)
 
 NVOX = 256
