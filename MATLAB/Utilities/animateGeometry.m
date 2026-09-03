@@ -94,7 +94,7 @@ for i = 1:n
                     tiltedAxisRotation('y', r(2)) * tiltedAxisRotation('z', r(3));
 end
 dsz = [ddp; geo.sDetector(1); geo.sDetector(2)];     % [beam; u; v]
-dverts = cubeVertices(dtj, dsz, Rdet, [-ddp/2; 0; 0]);
+[dverts, FACES] = animateGeometryCube(dtj, dsz, Rdet, [-ddp/2; 0; 0]);
 
 %% Object cube (offOrigin is [x;y;z] in MATLAB)
 otj = geo.offOrigin;
@@ -104,8 +104,7 @@ if strcmp(rotation, 'obj')
 else
     Robj = repmat(eye(3), [1, 1, n]);
 end
-overts = cubeVertices(otj, geo.sVoxel, Robj, [0; 0; 0]);
-FACES = [2 3 7 6; 1 2 3 4; 5 6 7 8; 1 2 6 5; 3 4 8 7; 1 4 8 5];
+overts = animateGeometryCube(otj, geo.sVoxel, Robj, [0; 0; 0]);
 
 %% Figure
 h = figure('Name', 'Cone Beam Computed Tomography geometry', 'Color', 'w', ...
@@ -203,19 +202,5 @@ function s = frameTitle(k)
                 who, ang(1), ang(2), ang(3), char(176), ...
                 rd(1), rd(2), rd(3), char(176), ...
                 geo.offDetector(1, k), geo.offDetector(2, k));
-end
-end
-
-%% ------------------------------------------------------------------------
-function V = cubeVertices(centre, sz, R, offcent)
-%CUBEVERTICES 8x3xN corner coordinates of cuboids centred at CENTRE (3xN),
-%   of size SZ (3x1), rotated by R (3x3xN), shifted by OFFCENT (3x1) before
-%   rotation. Corner order matches the FACES table in the caller.
-CORNERS = [-1 -1 -1; 1 -1 -1; 1 1 -1; -1 1 -1; -1 -1 1; 1 -1 1; 1 1 1; -1 1 1];
-n = size(centre, 2);
-V = zeros(8, 3, n);
-base = CORNERS .* (sz(:)' / 2) + offcent(:)';
-for i = 1:n
-    V(:, :, i) = base * R(:, :, i)' + centre(:, i)';
 end
 end
