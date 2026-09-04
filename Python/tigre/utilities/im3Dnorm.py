@@ -22,14 +22,7 @@ def l2norm(x, chunk=1 << 24):
 def inner(a, b, chunk=1 << 24):
     """Inner product of two float32 arrays, accumulated in float64.
 
-    Same reasoning as l2norm, one step weaker: a dot of two DIFFERENT vectors
-    has cancelling signs, so its accumulator does not grow monotonically and
-    BLAS holds up better - measured 7.8e-5 relative error at 1024^3 against
-    l2norm's 1.4e-2 for the sum of squares. Still four orders worse than a
-    float64 accumulation, and these products are Gram-Schmidt coefficients
-    whose error compounds across a Krylov basis, so they use it too.
-
-    Returns float32, like l2norm, so no caller's dtype changes.
+       Returns float32, like l2norm, so no caller's dtype changes.
     """
     fa, fb = np.ravel(a), np.ravel(b)
     if fa.dtype != np.float32 or fb.dtype != np.float32:
