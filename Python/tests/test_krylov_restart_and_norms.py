@@ -35,23 +35,23 @@ def test_norm_is_accurate_where_float32_accumulation_saturates():
     x = np.full(n, 1e-3, dtype=np.float32)
     exact = np.sqrt(n) * 1e-3
 
-    accurate = float(K._norm(x))
+    accurate = float(K.l2norm(x))
     naive = float(np.linalg.norm(x))
     print(f"exact {exact:.6f}  helper {accurate:.6f}  np.linalg.norm {naive:.6f}")
 
     assert accurate == pytest.approx(exact, rel=1e-5)
     # The helper must return float32 so callers' dtypes are unchanged:
     # these scalars multiply float32 volumes and Ax/Atb reject float64.
-    assert K._norm(x).dtype == np.float32
+    assert K.l2norm(x).dtype == np.float32
 
 
 def test_norm_matches_numpy_when_accumulation_is_safe():
     rng = np.random.default_rng(0)
     x = rng.standard_normal(10_000, dtype=np.float32)
-    assert float(K._norm(x)) == pytest.approx(float(np.linalg.norm(x)), rel=1e-6)
+    assert float(K.l2norm(x)) == pytest.approx(float(np.linalg.norm(x)), rel=1e-6)
     # Non-float32 input is passed straight through.
     y = rng.standard_normal(1000)
-    assert float(K._norm(y)) == pytest.approx(float(np.linalg.norm(y)), rel=1e-12)
+    assert float(K.l2norm(y)) == pytest.approx(float(np.linalg.norm(y)), rel=1e-12)
 
 
 def _stub_cgls(monkeypatch, residuals, niter, restart=True):
@@ -96,7 +96,7 @@ def _stub_cgls(monkeypatch, residuals, niter, restart=True):
     def fake_Atb(x, geo, angles, backprojection_type=None, gpuids=None):
         return np.zeros(vol_shape, dtype=np.float32)
 
-    monkeypatch.setattr(K, "_norm", fake_norm)
+    monkeypatch.setattr(K, "l2norm", fake_norm)
     monkeypatch.setattr(K, "Ax", fake_Ax)
     monkeypatch.setattr(K, "Atb", fake_Atb)
     monkeypatch.setattr(K.tigre, "Ax", fake_Ax)
@@ -138,7 +138,7 @@ def test_restart_false_preserves_the_early_return(monkeypatch):
 
 
 def test_im3dnorm_l2_uses_the_same_accumulator():
-    """ASD-POCS reaches the accumulator through im3DNORM, not through _norm.
+    """ASD-POCS reaches the accumulator through im3DNORM, not via the Krylov module.
 
     Its data-fit test and TV step control are ratios of these norms
     (`dd` is projection-sized, `dp`/`dg` volume-sized), so the two entry points
@@ -149,7 +149,7 @@ def test_im3dnorm_l2_uses_the_same_accumulator():
     x = np.full(n, 1e-3, dtype=np.float32)
     exact = np.sqrt(n) * 1e-3
     assert float(im3DNORM(x, 2)) == pytest.approx(exact, rel=1e-5)
-    assert float(K._norm(x)) == pytest.approx(float(l2norm(x)), rel=0)
+    assert K.l2norm is l2norm
     # Other norms are untouched.
     y = np.arange(10, dtype=np.float32)
     assert float(im3DNORM(y, 1)) == pytest.approx(float(np.linalg.norm(y, 1)))

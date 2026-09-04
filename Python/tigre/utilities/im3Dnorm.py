@@ -4,7 +4,8 @@ import numpy as np
 def l2norm(x, chunk=1 << 24):
     """Euclidean norm of a float32 array, accumulated in float64.
 
-    ``np.linalg.norm`` sums the squares in the array's OWN dtype. 
+    ``np.linalg.norm`` sums the squares in the array's own dtype, so on large
+    float32 arrays the result comes back low.
 
     One pass, no full-size copy. Returns float32 so no caller's dtype changes:
     these scalars multiply float32 volumes, and Ax/Atb reject float64.
@@ -22,7 +23,7 @@ def l2norm(x, chunk=1 << 24):
 def inner(a, b, chunk=1 << 24):
     """Inner product of two float32 arrays, accumulated in float64.
 
-       Returns float32, like l2norm, so no caller's dtype changes.
+    Returns float32, like l2norm, so no caller's dtype changes.
     """
     fa, fb = np.ravel(a), np.ravel(b)
     if fa.dtype != np.float32 or fb.dtype != np.float32:
