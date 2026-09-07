@@ -180,9 +180,14 @@ __global__ void kernelPixelDetector_parallel( Geometry geo,
     float aM=(fminf(axM,ayM));
     
     // line intersects voxel space ->   am<aM
-    if (am>=aM)
+    // See Siddon_projection.cu: without the return, a missed ray falls
+    // through to an Np computed from inverted bounds, which wraps unsigned
+    // and spins forever.
+    if (am>=aM){
         detector[idx]=0.0f;
-    
+        return;
+    }
+
     // Compute max/min image INDEX for intersection eq(11-19)
     // Discussion about ternary operator in CUDA: https://stackoverflow.com/questions/7104384/in-cuda-why-is-a-b010-more-efficient-than-an-if-else-version
     float imin,imax,jmin,jmax;
