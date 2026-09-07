@@ -373,7 +373,15 @@ void mexFunction(int  nlhs , mxArray *plhs[],
         tigre_status = voxel_backprojection_parallel(projections,geo,result,angles,nangles, gpuids);
     }
     if (tigre_status != CUDA_SUCCESS){
-        mexErrMsgIdAndTxt("CBCT:CUDA:Atb", tigreGetLastError());
+        // Under MATLAB the CUDA-side macros still call the real
+        // mexErrMsgIdAndTxt(), so the last-error buffer is normally empty here
+        // and this path is reached only for the non-CUDA codes (e.g. no
+        // capable device): give a message rather than an empty string.
+        const char* detail = tigreGetLastError();
+        if (detail == NULL || detail[0] == 0){
+            detail = "backprojection failed (non-zero status from the CUDA code)";
+        }
+        mexErrMsgIdAndTxt("CBCT:CUDA:Atb", detail);
     }
 
 
