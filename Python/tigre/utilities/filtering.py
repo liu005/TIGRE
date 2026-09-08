@@ -165,6 +165,30 @@ def filtering(proj, geo, angles, parker, verbose=False, dbeta=None, legacy_scale
         return proj.get() if xp.__name__ == "cupy" else proj
 
 
+def cosine_weight(u, v, DSD, R=None, xp=np):
+    """FDK cosine pre-weight cos(theta) for pixels at in-plane positions
+    ``u``, ``v`` (same-shaped arrays, mm, offsets already applied) on a
+    detector rotated by ``R`` about its OWN centre - which is what the CUDA
+    kernels do (computeDeltas: ``P.x = 0``, ``rollPitchYaw``, translate back).
+
+    In the kernel frame (x = beam, y = u, z = v with the first row at +z) a
+    pixel sits at ``(DSD, 0, 0) + R (0, u, -v)`` relative to the source, and
+    the weight is the beam component of that vector over its length. With
+    ``R=None`` it is the classic ``DSD / sqrt(DSD^2 + u^2 + v^2)``, bit for bit.
+
+    Why the pivot matters: rotating the whole ``(DSD, u, v)`` vector (about
+    the SOURCE) tilts the beam itself and gives the weight a spurious
+    first-order gradient (~0.1 % across a 3072 px detector at 1 degree); the
+    detector-centre pivot changes cos(theta) only at second order (~1e-4).
+    """
+    if R is None:
+        return DSD / xp.sqrt(DSD * DSD + u * u + v * v)
+    lat = xp.vstack((xp.zeros(u.size, dtype=u.dtype), u.ravel(), -v.ravel()))
+    r = xp.matmul(R, lat)
+    bx = DSD - r[0]
+    return (bx / xp.sqrt(bx * bx + r[1] * r[1] + r[2] * r[2])).reshape(u.shape)
+
+
 def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
                               wang=None, dbeta=None, legacy_scale=False,
                               redundancy_factor=None,
@@ -251,11 +275,13 @@ def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
         # the in-plane roll - and rotDetector[2] about v, despite the CUDA's
         # internal field names running the other way round.
         #
-        # This weight used to be built as from_euler("XYZ", rotDetector) acting
-        # on (v, u, DSD), which silently swaps elements 0 and 2: the roll was
-        # applied about v and the yaw about the beam. A beam rotation leaves
-        # both the numerator and |xyz| unchanged, so the real roll contributed
-        # nothing here while the yaw contributed a spurious gradient.
+        # PIVOT (fixed 2026-09-08): the kernels rotate the detector about its
+        # OWN CENTRE (computeDeltas: P.x = 0, rollPitchYaw, translate back), so
+        # a pixel sits at (DSD, 0, 0) + R (0, u, v) relative to the source -
+        # see cosine_weight(). An earlier version rotated the whole (DSD, u, v)
+        # vector, i.e. about the SOURCE, which tilts the beam itself and put a
+        # spurious ~0.1 % gradient across the weight on a 1-degree pitch; the
+        # true tilt effect on cos(theta) is second order (~1e-4 here).
         rot = np.asarray(zgeo.rotDetector, dtype=float)
         R_d = xp.array(
             Rotation.from_euler("ZYX", rot[..., [2, 1, 0]]).as_matrix())
@@ -307,15 +333,10 @@ def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
             xv = (xp.linspace(-Uo / 2 + 0.5, Uo / 2 - 0.5, int(Uo))
                   * zgeo.dDetector[1] + offDet[i, 1])
             (yy, xx) = xp.meshgrid(xv, yv + offDet[i, 0])
-            zz = yy * 0 + DSD[i if DSD.size > 1 else 0]
-            # Stacked as (beam, u, v) - the CUDA's own axis order - so R_d
-            # above applies verbatim and the cosine numerator is component 0.
-            # xx holds v, yy holds u (np.meshgrid(xv, yv) varies its first
+            # yy holds u, xx holds v (np.meshgrid(xv, yv) varies its first
             # output along xv, which is the u axis).
-            xyz = xp.vstack((zz.ravel(), yy.ravel(), xx.ravel()))
-            if R_d is not None:
-                xyz = xp.matmul(R_d[i], xyz)
-            c[k] *= (xyz[0, :] / xp.linalg.norm(xyz, axis=0)).reshape(xx.shape)
+            c[k] *= cosine_weight(yy, xx, DSD[i if DSD.size > 1 else 0],
+                                  None if R_d is None else R_d[i], xp=xp)
 
         # --- ramp filter, 2 views per complex FFT, per-view scale ----------
         for k in range(0, m - 1, 2):
