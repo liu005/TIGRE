@@ -17,29 +17,64 @@ execution continues to
     unsigned long Np=(imax-imin+1)+(jmax-jmin+1)+(kmax-kmin+1);
     for (unsigned long ii=0; ii<Np; ii++){ ... }
 
-where imin/imax are floats that can be inverted for a missed ray. The sum
-is then negative, and casting it to `unsigned long` wraps it to ~1.8e19, so
-the loop runs effectively forever. There is no error, no warning and no
-result: the kernel simply never comes back. On the GPU it shows as 100% SM
-occupancy with an IDLE memory controller and no PCIe traffic, because every
-iteration re-fetches the same clamped texture address.
+where imin..kmax are only meaningful for a ray that does enter. Measured on
+the ray that hangs (proj 53, row 619, col 313 of the geometry below) by
+instrumenting the kernel to dump its intermediates:
+
+  1. the eps guard snaps ray.x = 0.00025 and ray.z = -4e-6 to exactly 0;
+     the ray lies along -Y to ~1e-6 rad;
+  2. source.x = 280.4 is OUTSIDE nVoxelX = 64, so -source.x/0 and
+     (nVoxelX-source.x)/0 are BOTH -inf; fminf and fmaxf collapse onto one
+     value and axm == axM == -inf;
+  3. aM = fminf(axM, ayM, azM) = -inf while am = 0.51 -- the miss IS
+     detected correctly;
+  4. without the return the Z block runs anyway:
+     kmin = ceilf(source.z + aM*ray.z), and (-inf)*0 = NaN;
+  5. Np = NaN, and on CUDA (unsigned long)NaN = 9223372036854775808 = 2**63.
+     That thread iterates ~9e18 times; the kernel never returns.
+
+There is no error, no warning and no result. On the GPU it shows as 100% SM
+occupancy with an IDLE memory controller and no PCIe traffic, because one or
+two threads are re-fetching the same clamped texture address while every
+other thread finished long ago. It is 2 rays in 261,479,799 here.
+
+A NEGATIVE Np does NOT do this. Measured: CUDA saturates negatives and -inf
+to 0, a zero-trip loop. An earlier version of this text said the sum wrapped
+to ~1.8e19; that was wrong. It is specifically NaN.
+
+Figure: Frontispiece/siddon_missed_ray_hang.png (generator alongside) draws
+this ray in the kernel's voxel coordinates with the real captured numbers.
 
 WHEN IT TRIPS
 
-Two conditions together, both of which ordinary CT avoids by accident:
+One ray needs all of these at once:
 
-  * both `nDetector` entries odd. The detector origin is built as
-        P.y = dU*(-(nDetecU/2.0)+0.5);   P.z = dV*((nDetecV/2.0)-0.5);
-    so an odd count shifts that axis by half a pixel; odd on BOTH shifts
-    both, nudging grazing rays onto the degenerate side.
-  * an object displaced far enough to be GRAZED rather than cleanly hit or
-    cleanly missed. Here that is a 100x125x40 mm volume offset by tens to
-    hundreds of mm with DSO ~400-500 mm. Centred (offset 0) it does not
-    hang; displaced far enough that every ray misses cleanly (>=300 mm) it
-    does not hang either. It hangs in the BAND between.
+  * TWO direction components under eps -- the ray lies along a voxel axis.
+    One supplies the +-inf, the other multiplies it: inf*0 = NaN.
+  * the source OUTSIDE the volume's extent along a zeroed axis. Inside, the
+    two quotients are -inf and +inf, stay apart, and are harmless.
+  * the ray MISSES the volume, so the fall-through path is taken at all.
 
-That band is why the defect has survived: it needs an off-axis geometry,
-which is common in tomosynthesis and laminography but rare in circular CT.
+Why both `nDetector` entries odd: an odd count puts a pixel EXACTLY on the
+detector's centre line, and when that aligns with the source's z the whole
+centre row has ray.z == 0 -- 1179 columns x 179 views = 211,000 rays here.
+Both hanging rays sat on row 619 = (1239-1)/2. An even count straddles the
+centre by half a pixel (0.27 voxels, 270x eps) and never snaps. The second
+zero is then an angular coincidence somewhere along that row; adding one
+pixel to either dimension removes it, removing one re-creates it.
+
+Why the object offset matters: the geometry below is a 100x125x40 mm volume
+with DSO ~400-500 mm. Centred (offset 0) it does not hang; offset
++-50/100/200 mm it hangs; +-300/433 mm it does not hang again. It is a BAND
+-- where the coincidence happens to land for this sampling -- not a
+threshold.
+
+Circular CT is not immune in principle: an axis-parallel ray from a source
+at radius DSO also misses. But off-axis slab geometry with a large detector
+sweeps ray directions widely enough that the ~1e-6 rad coincidence actually
+lands, which is why it surfaces in tomosynthesis and laminography, and why a
+stock centred cone-beam geometry with an odd x odd detector did NOT
+reproduce it here.
 
 THE FIX
 

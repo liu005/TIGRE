@@ -176,10 +176,20 @@ __global__ void kernelPixelDetector( Geometry geo,
     float aM=fminf(fminf(axM,ayM),azM);
     
     // line intersects voxel space ->   am<aM
-    // The ray misses the volume. RETURN: falling through leaves imin/imax
-    // inverted, so Np below is computed from a negative float and wraps to
-    // ~1.8e19 as unsigned long, and the intersection loop never terminates
-    // (100% SM, idle memory controller, no error, no result).
+    // The ray never enters the volume. RETURN HERE. Without it, execution
+    // falls into the index block below, whose imin..kmax are only meaningful
+    // for a ray that does enter. For a ray the eps guard has snapped to run
+    // exactly along one voxel axis, with the source OUTSIDE the volume on
+    // one of its zero axes, the two quotients for that axis share a sign, so
+    // fminf and fmaxf collapse (axm == axM == -inf) and aM inherits -inf.
+    // The other zero component then gives aM*ray = (-inf)*0 = NaN, Np is
+    // NaN, and (unsigned long)NaN is 2^63 on CUDA: that thread iterates
+    // ~9e18 times and the kernel never returns -- 100% SM, idle memory
+    // controller, no error, no result. Measured: 2 rays in 261 million on an
+    // odd x odd detector with an off-axis object; see
+    // Python/tests/test_siddon_missing_ray.py and
+    // Frontispiece/siddon_missed_ray_hang.png. A NEGATIVE Np does not do
+    // this -- CUDA saturates negatives and -inf to 0, a zero-trip loop.
     if (am>=aM){
         detector[idx]=0;
         return;
