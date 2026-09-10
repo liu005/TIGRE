@@ -16,9 +16,17 @@ from tigre.utilities.Ax import Ax
 # ratio of 1e38, an inf after the backprojection sum, and NaN at the next
 # multiply (see mlem_ratio).
 MLEM_DEN_FLOOR = 1e-6
+# Ceiling on the per-iteration multiplicative factor. On log-attenuation data a
+# ray through empty space has den -> 0 and proj = +-noise; the positive half of
+# those rays gives ratios of 1e4..1e8 and the voxels along them grow by that
+# factor every iteration (a real 360-view run: finite volume with max 1.3e15
+# after 10 iterations). A true update is within a few percent of 1 (warm start)
+# and never above a few units; x10 per iteration leaves every genuine update
+# untouched and bounds the pathological ones.
+MLEM_RATIO_MAX = 10.0
 
 
-def mlem_ratio(proj, den, eps=MLEM_DEN_FLOOR):
+def mlem_ratio(proj, den, eps=MLEM_DEN_FLOOR, ratio_max=MLEM_RATIO_MAX):
     """proj / den for the MLEM update, IN PLACE into den, made safe.
 
     The textbook guard `den[den == 0] = inf` catches only an exact zero. Under
@@ -35,13 +43,16 @@ def mlem_ratio(proj, den, eps=MLEM_DEN_FLOOR):
     Rays with den <= eps get ratio 0 (no information, like an empty ray), and
     negative data - log projections after scatter / seam corrections can be
     slightly negative in air - are clipped at 0, because a negative factor has
-    no meaning in a multiplicative update. Elsewhere the ratio is unchanged.
+    no meaning in a multiplicative update. The ratio is capped at ratio_max
+    (MLEM_RATIO_MAX): with the floor alone a near-empty ray still gives ratios
+    of 1e4 and the voxels along it grow without bound (finite but 1e15 after
+    ten iterations on real data). Elsewhere the ratio is unchanged.
     Returns den (now holding the ratio); no extra full-size buffer is made.
     """
     ok = den > eps
     np.divide(proj, den, out=den, where=ok)
     den[~ok] = 0.0
-    np.maximum(den, 0.0, out=den)
+    np.clip(den, 0.0, ratio_max, out=den)
     return den
 
 

@@ -11,7 +11,7 @@ import pytest
 
 import tigre
 import tigre.algorithms as algs
-from tigre.algorithms.statistical_algorithms import mlem_ratio, MLEM_DEN_FLOOR
+from tigre.algorithms.statistical_algorithms import mlem_ratio, MLEM_DEN_FLOOR, MLEM_RATIO_MAX
 
 
 def test_ratio_is_finite_for_denormal_den():
@@ -28,7 +28,7 @@ def test_ratio_unchanged_where_den_is_real_and_negative_data_clipped():
     proj = rng.uniform(-0.05, 3.0, (3, 16, 16)).astype(np.float32)
     den = rng.uniform(0.5, 3.0, (3, 16, 16)).astype(np.float32)
     out = mlem_ratio(proj, den.copy())
-    exp = np.maximum(proj / den, 0.0)
+    exp = np.clip(proj / den, 0.0, MLEM_RATIO_MAX)
     np.testing.assert_allclose(out, exp, rtol=1e-6)
     assert out.min() == 0.0 and (proj < 0).any()
 
@@ -63,3 +63,26 @@ def test_mlem_finite_on_noisy_negative_data_with_support_and_collapsed_warm_star
     assert np.isfinite(vol).all()
     assert vol[~support].max() == 0.0
     assert np.sqrt(np.mean((vol - head) ** 2)) < 0.01
+
+
+def test_ratio_is_capped_for_near_empty_rays():
+    proj = np.full((2, 4, 4), 0.05, dtype=np.float32)          # positive noise on an empty ray
+    den = np.full((2, 4, 4), 1e-5, dtype=np.float32)           # above the floor, but nearly empty
+    out = mlem_ratio(proj, den.copy())
+    assert out.max() == MLEM_RATIO_MAX and 1.0 < MLEM_RATIO_MAX <= 100.0
+
+
+@pytest.mark.gpu
+def test_mlem_does_not_explode_on_empty_rays_with_positive_noise():
+    """Air inside the support + noisy log data: without the cap the air voxels
+    grow by the ratio every iteration (real run: max 1.3e15)."""
+    geo = tigre.geometry_default(high_resolution=False)
+    angles = np.linspace(0, 2 * np.pi, 60, dtype=np.float32)
+    from tigre.utilities import sample_loader
+    head = (sample_loader.load_head_phantom(geo.nVoxel) * 0.2).astype(np.float32)
+    rng = np.random.default_rng(2)
+    proj = tigre.Ax(head, geo, angles)
+    proj = (proj + np.abs(rng.normal(0, 0.05, proj.shape))).astype(np.float32)   # one-sided noise: worst case
+    vol = algs.mlem(proj, geo, angles, 30, init=np.maximum(head, 1e-6))
+    assert np.isfinite(vol).all()
+    assert vol.max() < 5 * head.max()

@@ -72,7 +72,9 @@ for ii=1:niter
     % multiplicative update either; clip the ratio at 0.
     den(den<=1e-6)=inf;
     
-    imgupdate = Atb(max(proj./den,0), geo,angles,'matched','gpuids',gpuids)./V;
+    % ... and cap the factor at x10 per iteration: a near-empty ray still gives
+    % ratios of 1e4 and the voxels along it grow without bound otherwise.
+    imgupdate = Atb(min(max(proj./den,0),10), geo,angles,'matched','gpuids',gpuids)./V;
     res = max(res.*imgupdate,0.);
     
     if measurequality
