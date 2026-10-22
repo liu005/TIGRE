@@ -237,8 +237,11 @@ def animate_geometry(ogeo,angles=None,pos=None,rotation="SD",animate=True,fname=
 
 
 def _detector_runs(surface):
-    """Contiguous runs of valid columns (modules / panels) as (col_start, col_stop)."""
+    """Modules (or, without module info, contiguous valid column runs) as (start, stop)."""
     cols = surface.valid_mask.any(axis=(0, 1))
+    slices = getattr(surface, "_module_slices", None)
+    if slices:
+        return [(c.start, c.stop) for _, c in slices if cols[c.start:c.stop].any()]
     runs, start = [], None
     for c, ok in enumerate(np.append(cols, False)):
         if ok and start is None:

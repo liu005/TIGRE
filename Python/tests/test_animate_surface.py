@@ -28,6 +28,18 @@ def test_surface_mode_rejects_object_rotation():
         animate_geometry(volume_geo(), surface=SURFACES["arc"](), rotation="obj")
 
 
+def test_module_slices_define_runs():
+    surf = SURFACES["arc"]()
+    n = surf.valid_mask.shape[2] // 2
+    split = type(surf)(surf.source_positions_mm, surf.pixel_centers_mm, surf.valid_mask,
+                       module_slices=[(slice(0, 1), slice(0, n)), (slice(0, 1), slice(n, 2 * n))])
+    assert _detector_runs(split) == [(0, n), (n, 2 * n)]
+    assert split.subset([0, 1])._module_slices == split._module_slices
+    with pytest.raises(ValueError, match="inside"):
+        type(surf)(surf.source_positions_mm, surf.pixel_centers_mm,
+                   module_slices=[(slice(0, 1), slice(0, 10 * n))])
+
+
 def test_surface_mode_rejects_per_view_masks():
     surf = SURFACES["arc"]()
     mask = surf.valid_mask.copy()

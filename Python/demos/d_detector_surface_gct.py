@@ -19,6 +19,7 @@ import tigre
 from tigre.algorithms import fast_os_sart_surface, fdk_surface
 from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
 
+# PITCH is the 2.5 mm crystal plus its wrapping, as used in the recon2D scripts.
 DSD, DSO, PITCH, N_PIX, N_MODULES = 10600.0, 6100.0, 2.6172, 64, 53
 OFF_U = -1.0779
 N_VIEWS, SCAN_DEG, START_DEG = 5701, 228.0, 156.0
@@ -51,7 +52,9 @@ def gct_surface(step=1):
     pixels[:, 0, :, 1] = s * lx + c * ly
     source = np.zeros((len(angles), 3), np.float32)
     source[:, 0], source[:, 1] = DSO * c[:, 0], DSO * s[:, 0]
-    return DetectorSurfaceGeometry(source, pixels)
+    return DetectorSurfaceGeometry(
+        source, pixels,
+        module_slices=[(slice(0, 1), slice(m * N_PIX, (m + 1) * N_PIX)) for m in range(N_MODULES)])
 
 
 def main():

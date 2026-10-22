@@ -118,12 +118,24 @@ class DetectorSurfaceGeometry:
     to place module measurements into the corresponding masked dense layout.
     """
 
-    def __init__(self, source_positions_mm, pixel_centers_mm, valid_mask=None):
+    def __init__(self, source_positions_mm, pixel_centers_mm, valid_mask=None,
+                 module_slices=None):
         self.source_positions_mm = _source_positions(source_positions_mm)
         self.pixel_centers_mm = _pixel_centers(
             pixel_centers_mm, len(self.source_positions_mm))
         self.valid_mask = _pixel_mask(valid_mask, self.pixel_centers_mm.shape[:3])
         self._module_slices = None
+        if module_slices is not None:
+            n_rows, n_columns = self.valid_mask.shape[1:]
+            checked = []
+            for rows, columns in module_slices:
+                rows, columns = slice(*rows) if not isinstance(rows, slice) else rows, \
+                    slice(*columns) if not isinstance(columns, slice) else columns
+                if not (0 <= rows.start < rows.stop <= n_rows
+                        and 0 <= columns.start < columns.stop <= n_columns):
+                    raise ValueError("module_slices must lie inside the detector array")
+                checked.append((rows, columns))
+            self._module_slices = tuple(checked)
 
     def subset(self, view_indices):
         """Return a surface restricted to the given views (data is copied)."""
