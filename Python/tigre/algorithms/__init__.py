@@ -29,6 +29,8 @@ from .pocs_algorithms import os_pcsd
 from .pocs_algorithms import os_aw_pcsd
 from .single_pass_algorithms import fdk
 from .single_pass_algorithms import fbp
+from .surface_algorithms import cgls_surface, sirt_surface, os_sart_surface, fast_os_sart_surface
+from .fdk_surface import fdk_surface
 from .statistical_algorithms import mlem
 
 __all__ = [
