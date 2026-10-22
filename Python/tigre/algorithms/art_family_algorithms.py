@@ -64,6 +64,19 @@ class OS_SART(IterativeReconAlg):
 os_sart = decorator(OS_SART, name="os_sart")
 
 
+def _extrapolate_inplace(current, previous, momentum):
+    """Extrapolate current and retain its old value using one slice of scratch."""
+    momentum = current.dtype.type(momentum)
+    # Reuse the previous-iterate buffer for the difference. A full-volume
+    # expression can promote float32 to float64 and exhaust host memory.
+    for k in range(current.shape[0]):
+        saved = current[k].copy()
+        np.subtract(current[k], previous[k], out=previous[k])
+        np.multiply(previous[k], momentum, out=previous[k])
+        np.add(current[k], previous[k], out=current[k])
+        np.copyto(previous[k], saved)
+
+
 class Fast_OS_SART(IterativeReconAlg):  # noqa: N801
     __doc__ = (
         "FAST_OS_SART is OS_SART with Nesterov/FISTA momentum: before each\n"
@@ -92,10 +105,7 @@ class Fast_OS_SART(IterativeReconAlg):  # noqa: N801
             if self.verbose:
                 self._estimate_time_until_completion(i)
             t_old, t = t, (1.0 + np.sqrt(1.0 + 4.0 * t * t)) / 2.0
-            x_cur = self.res.copy()
-            # extrapolate, then let the data step descend IN PLACE from y
-            self.res += ((t_old - 1.0) / t) * (self.res - x_old)
-            x_old = x_cur
+            _extrapolate_inplace(self.res, x_old, (t_old - 1.0) / t)
             getattr(self, self.dataminimizing)()
             self.error_measurement(res_prev, i)
 
