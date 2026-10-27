@@ -1,74 +1,30 @@
-function proj_out = proj_interp(proj_in, angles_in, target_angle, model, tolerance)
-%PROJ_INTERP Performs sinogram interpolation of the input projections
-% according to the specified interpolation model
-%   proj_out is the interpolated projection at target_angle
-%
-%   proj_in is the list of projections to be interpolated, given
-%   at angles listed in angles_in 
-%
-%   model specifies the interpolation model to be used.
-%       'linear' uses a linear interpolation model
-%       'nearest' uses a nearest-neighbor interpolation model
-%       'skip' is the same as 'nearest' but will skip projections without
-%       sufficiently close matches. Requires setting 'tolerance.'
-%   
-%   Coded by: Andrew Keeler
-%   Contact: akeeler@luc.edu
-%   Date: February 28, 2024
-
-[delta, idx, idx_next] = angle_align(target_angle, angles_in);
-
+function proj_out=proj_interp(proj_in,angles_in,target_angle,model,tolerance)
+%PROJ_INTERP Match low-energy views on a continuous angle axis (radians).
+% nearest selects the first closest input; skip returns scalar NaN if its
+% absolute angular distance exceeds tolerance. linear sorts unique angles
+% and clamps targets outside their endpoints. No implicit wrapping is used.
+% Original dual-energy workflow: Andrew Keeler, February 28, 2024.
+angles_in=angles_in(:);
+validateattributes(angles_in,{'numeric'},{'real','finite','nonempty'});
+validateattributes(target_angle,{'numeric'},{'scalar','real','finite'});
+validateattributes(tolerance,{'numeric'},{'scalar','real','finite','nonnegative'});
+assert(size(proj_in,3)==numel(angles_in),'TIGRE:DE:angles','Angles must match projection views.');
+[distance,index]=min(abs(angles_in-target_angle));
 switch model
-    case 'linear'
-        dy = proj_in(:,:,idx) - proj_in(:,:,idx_next);
-        proj_out = proj_in(:,:,idx) + dy*delta;
     case 'nearest'
-        proj_out = squeeze(proj_in(:,:,idx));
+        proj_out=proj_in(:,:,index);
     case 'skip'
-        if delta > tolerance
-            proj_out = NaN;
-            return;
-        end
-        proj_out = squeeze(proj_in(:,:,idx));
-end
-
-end
-
-function [weight, idx, idx_next] = angle_align(target, angle_array)
-
-angle_diff = angle_array - target;
-last = length(angle_diff);
-[~, idx] = min(abs(angle_diff));
-
-if (angle_diff(idx) == 0)
-    idx_next = idx;
-    weight = 1;
-    return
-end
-
-if (idx == 1 && sign(angle_diff(1)) == sign(angle_diff(2)))
-    idx_next = idx;
-    weight = 1;
-    return
-elseif (idx == 1 && sign(angle_diff(1)) ~= sign(angle_diff(2)))
-    idx_next = 2;
-    weight = angle_diff(idx)/(abs(angle_array(idx) - angle_array(idx_next)));
-    return
-end
-
-
-
-if (idx == last && sign(angle_diff(last)) == sign(angle_diff(last-1)))
-    idx_next = idx;
-    weight = 1;
-    return
-end
-
-if (sign(angle_diff(idx)) ~= sign(angle_diff(idx-1)))
-    idx_next = idx - 1;
-    weight = angle_diff(idx)/(abs(angle_array(idx) - angle_array(idx_next)));
-else
-    idx_next = idx + 1;
-    weight = angle_diff(idx)/(abs(angle_array(idx) - angle_array(idx_next)));
+        if distance>tolerance, proj_out=NaN; else, proj_out=proj_in(:,:,index); end
+    case 'linear'
+        [values,order]=sort(angles_in);
+        assert(numel(values)>=2 && all(diff(values)>0),'TIGRE:DE:angles', ...
+            'Linear interpolation requires at least two distinct, unique angles.');
+        upper=find(values>=target_angle,1);
+        if isempty(upper), upper=numel(values); end
+        upper=max(2,upper); lower=upper-1;
+        weight=min(1,max(0,(target_angle-values(lower))/(values(upper)-values(lower))));
+        proj_out=(1-weight)*proj_in(:,:,order(lower))+weight*proj_in(:,:,order(upper));
+    otherwise
+        error('TIGRE:DE:interpolation','Use nearest, linear or skip.');
 end
 end

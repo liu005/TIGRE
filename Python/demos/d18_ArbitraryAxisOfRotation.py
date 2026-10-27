@@ -1,4 +1,4 @@
-## DEMO 18: Arbitrary axis of rotation
+# %% Demo 18: Arbitrary axis of rotation
 #
 #
 #
@@ -32,9 +32,18 @@ import numpy as np
 from tigre.utilities import sample_loader
 from tigre.utilities import CTnoise
 import tigre.algorithms as algs
+from matplotlib import pyplot as plt
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0]) / 1.5
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([512, 512])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 0.5
 
 #%% Load data and generate projections
 # define angles
@@ -57,6 +66,13 @@ head = sample_loader.load_head_phantom(geo.nVoxel)
 projections = tigre.Ax(head, geo, angles)
 
 tigre.plotproj(projections, anglesY)  # angle information not right in the title
+
+#%% Animate acquisition geometry
+# The explicit surface follows the projector's per-view rotation convention.
+geometry_animation = tigre.animate_geometry(
+    geo, surface=tigre.surface_from_geometry(geo, angles))
+plt.show()  # Close the preview windows to continue to reconstruction.
+
 ## Reconstruct:
 
 # Note, FDK will not work.

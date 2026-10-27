@@ -1,14 +1,11 @@
-%% DEMO 8:  Algorithms 03. Krylov subspace
+%% Demo 08: Krylov subspace algorithms
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
-% In this demo the usage of the the Krylov subspace family is explained.
-% This family of algorithms iterates through the eigenvectors of the
-% residual (Ax-b) of the problem in descending order, achieving increased
-% convergence rates comparing to SART family. 
-% 
-% In cases where the data is good quality, SART type families tend to reach
-% to a better image, but when the data gets very big, or has bad quality,
-% CGLS is a good and fast algorithm
+% Compare Krylov subspace solvers for the least-squares problem Ax = b.
+% CGLS and related methods build successive search spaces using forward
+% and matched backprojection. Convergence and image quality depend on the
+% data, geometry, stopping rule and regularization.
 %--------------------------------------------------------------------------
 %--------------------------------------------------------------------------
 % This file is part of the TIGRE Toolbox

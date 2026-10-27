@@ -1,4 +1,4 @@
-## DEMO 20:  Algorithms 05. FISTA with TV proximal
+# %% Demo 20: FISTA with a TV proximal operator
 #
 #
 #  This demo presents the FISTA algorithm in TIGRE. using a total variation proximal.
@@ -34,11 +34,19 @@ from matplotlib import pyplot as plt
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 #%% Load data and generate projections
 # define angles
-angles = np.linspace(0, 2 * np.pi, 100)
-# Load thorax phantom data
+angles = np.linspace(0, 2 * np.pi, 30, endpoint=False)
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 # generate projections
 projections = tigre.Ax(head, geo, angles)
@@ -48,13 +56,9 @@ noise_projections = CTnoise.add(projections, Poisson=1e5, Gaussian=np.array([0, 
 
 ## FISTA is a quadratically converging algorithm.
 
-# 'hyper': This parameter should approximate the largest
-#          eigenvalue in the A matrix in the equation Ax-b and Atb.
-#          Empirical tests show that for, the headphantom object:
-#
-#               geo.nVoxel = [64,64,64]'    ,      hyper (approx=) 2.e8
-#               geo.nVoxel = [512,512,512]' ,      hyper (approx=) 2.e4
-#          Default: 2.e8
+# 'hyper': Gradient step denominator, estimated with the native operator
+#          when omitted. Explicit values below are illustrative and depend
+#          on the geometry. Python uses tvlambda where MATLAB uses lambda.
 # 'tviter':  Number of iterations of Im3ddenoise to use. Default: 20
 # 'lambda':  Multiplier for the tvlambda used, which is proportional to
 #            L (hyper). Default: 0.1
@@ -70,10 +74,15 @@ imgFISTA_hightv = algs.fista(
     noise_projections, geo, angles, 100, hyper=2.0e6, tviter=100, tvlambda=20
 )
 
+imgFISTA_mod = algs.fista(
+    noise_projections, geo, angles, 100, hyper=1.0e5,
+    tviter=100, tvlambda=20, fista_q=1/50, fista_p=1/20,
+)
+
 
 ## Plot results
 tigre.plotimg(
-    np.concatenate([imgFISTA_default, imgFISTA_hyper, imgFISTA_hightv], axis=1),
+    np.concatenate([imgFISTA_default, imgFISTA_hyper, imgFISTA_hightv, imgFISTA_mod], axis=2),
     dim="z",
     clims=[0, 1],
 )

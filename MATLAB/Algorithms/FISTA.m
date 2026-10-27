@@ -6,16 +6,13 @@ function [res,resL2,qualMeasOut] = FISTA(proj,geo,angles,maxiter,varargin)
 % Processing Conference, 2018, pp.732-736. Lazy-start FISTA_mod
 %
 
-% 'hyper': This parameter should approximate the largest
-%          eigenvalue in the A matrix in the equation Ax-b and Atb.
-%          Empirical tests show that for, the headphantom object:
-%
-%               geo.nVoxel = [64,64,64]'    ,      hyper (approx=) 2.e8
-%               geo.nVoxel = [512,512,512]' ,      hyper (approx=) 2.e4
-%          Default: 2.e8
+% 'hyper': Gradient step denominator for ||Ax-b||^2. By default this is
+%          estimated as 2.02*sigma_max(A)^2 using power_method and the selected
+%          GPU devices (2 from the gradient and a 1 percent safety margin).
+%          Supply a positive finite value to reuse it for the same geometry.
 % 'init':    Describes different initialization techniques.
-%             •  'none'     : Initializes the image to zeros (default)
-%             •  'FDK'      : initializes image to FDK reconstruction
+%             -  'none'     : Initializes the image to zeros (default)
+%             -  'FDK'      : initializes image by FDK reconstruction
 % 'tviter':  Number of iterations of Im3ddenoise to use. Default: 20
 % 'lambda':  Multiplier for the tvlambda used, which is proportional to
 %            L (hyper). Default: 0.1
@@ -57,7 +54,7 @@ if ~any(isnan(gt(:)))
     res_prev=gt;
     clear gt
 end
-if nargout<2 && measurequality
+if nargout<3 && measurequality
     warning("Image metrics requested but none catched as output. Call the algorithm with 3 outputs to store them")
     measurequality=false;
 end
@@ -80,30 +77,32 @@ r = 1/4;
 
 
 for ii = 1:maxiter
-    if measurequality & ~strcmp(QualMeasOpts,'error_norm')
+    if measurequality && ~any(strcmp(QualMeasOpts,'error_norm'))
         res_prev = res; % only store if necessary
     end
     if (ii==1);tic;end
     % gradient descent step
     res = res + bm * 2 * Atb(proj - Ax(res,geo,angles, 'Siddon', 'gpuids', gpuids), geo, angles, 'matched', 'gpuids', gpuids);
-    
+
     lambdaforTV = 2* bm* lambda;
     x_recold = x_rec;
     x_rec = im3DDenoise(res,'TV',tviter,1/lambdaforTV, 'gpuids', gpuids);
     told = t;
     t = ( p+sqrt(q+r*t*t) ) / 2;
     res= x_rec + (told-1)/t * (x_rec - x_recold);
-    
+
     if measurequality
         qualMeasOut(:,ii)=Measure_Quality(res_prev,res,QualMeasOpts);
     end
-    if computeL2 
+    if computeL2
         resL2(ii)=im3Dnorm(proj-Ax(res,geo,angles,'gpuids',gpuids),'L2','gpuids',gpuids); % Compute error norm2 of b-Ax
         % If the error is not minimized.
         if  ii~=1 && resL2(ii)>resL2(ii-1)
             if verbose
                 disp(['Convergence criteria met, exiting on iteration number:', num2str(ii)]);
             end
+            resL2=resL2(1:ii);
+            qualMeasOut=qualMeasOut(:,1:ii);
             return
         end
     end
@@ -115,7 +114,7 @@ for ii = 1:maxiter
         disp(['Expected finish time:    ',datestr(datetime('now')+seconds(expected_time))]);
         disp('');
     end
-    
+
 end
 
 end
@@ -155,7 +154,7 @@ for ii=1:length(opts)
         end
         val=argin{jj};
     end
-    
+
     switch opt
         % % % % % % % Verbose
         case 'verbose'
@@ -193,10 +192,7 @@ for ii=1:length(opts)
             % ==========================================================
         case 'hyper'
             if default
-                disp("Computing operator norm. This may take a while....")
-                lambda=power_methods(geo,angles);
-                disp("Parameter hyper computed, consider inputing it for subsequent calls to the same geometry to save time")
-                disp(['hyper= ',str(lambda)])
+                hyper=[]; % Estimate after gpuids and verbose have been parsed.
             elseif length(val)>1 || ~isnumeric( val)
                 error('TIGRE:FISTA:InvalidInput','Invalid lambda')
             else
@@ -265,4 +261,15 @@ for ii=1:length(opts)
             error('TIGRE:FISTA:InvalidInput',['Invalid input name:', num2str(opt),'\n No such option in FISTA()']);
     end
 end
+if isempty(hyper)
+    if verbose, disp('Computing operator norm. This may take a while....'); end
+    sigma=power_method(geo,angles,gpuids);
+    % Gradient of ||Ax-b||^2 is 2*A'*(Ax-b); use a small estimation margin.
+    hyper=2.02*double(sigma)^2;
+    if verbose
+        fprintf('Computed hyper = %.12g; pass this value to reuse it for the same geometry.\n',hyper);
+    end
+end
+validateattributes(hyper,{'numeric'},{'scalar','real','finite','positive'},'FISTA','hyper');
+
 end

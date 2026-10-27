@@ -1,4 +1,5 @@
-%% DEMO 18: Arbitrary axis of rotation
+%% Demo 18: Arbitrary axis of rotation
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 %
@@ -75,6 +76,13 @@ head=headPhantom(geo.nVoxel);
 projections=Ax(head,geo,angles);
 
 plotProj(projections,(1:100)*pi/180); % angle information not right in the title
+
+%% Animate acquisition geometry
+% Explicit coordinates show the same per-view pose as the projectors.
+geometrySurface=surfaceFromGeometry(geo,angles);
+geometryFigure=animateGeometry(geo,[],1,'SD',true,'',geometrySurface);
+clear geometrySurface; % the figure retains the renderer while open
+
 %% Reconstruct:
 
 % Note, FDK will not work.

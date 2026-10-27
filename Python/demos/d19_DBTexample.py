@@ -1,6 +1,6 @@
-#%% Demo 19: Reconstruction for DBT
+# %% Demo 19: Digital breast tomosynthesis
 #
-# This script demonstrates simple DBT reconstruction using OS-SART and FDK
+# This script demonstrates simple DBT reconstruction using SART and FDK
 # Adapted from MATLAB/Demos/d19_DBTexample.m
 #
 #
@@ -23,6 +23,7 @@
 #%%Initialize
 import tigre
 import tigre.algorithms as algs
+from matplotlib import pyplot as plt
 from tigre.utilities import sample_loader
 from tigre.utilities.common_geometry import staticDetectorGeo
 from tigre.utilities.geometry import Geometry
@@ -39,8 +40,9 @@ def get_angles(tube_angle: int = 25, num_projections: int = 9) -> ndarray:
 
 def get_geometry() -> ConeGeometryDefault:
     geo = tigre.geometry_default(high_resolution=False)
-    pixel_mm, slice_mm = 0.1, 0.5
-    row_pixels, col_pixels = 3064, 2396
+    pixel_mm = 0.1
+    # MATLAB detector [u,v] becomes Python [v,u].
+    row_pixels, col_pixels = 2396, 3064
     source_to_detector_mm = 660
     source_to_origin_mm = 620
 
@@ -51,15 +53,17 @@ def get_geometry() -> ConeGeometryDefault:
     geo.dDetector = np.array([pixel_mm, pixel_mm])
     geo.sDetector = geo.nDetector * geo.dDetector
 
-    num_voxels_z, num_voxels_y, num_voxels_x = 128, 2054, 784
+    # MATLAB volume xyz is [128,2054,784]/2; Python stores zyx.
+    num_voxels_z, num_voxels_y, num_voxels_x = 784, 2054, 128
     geo.nVoxel = np.array([num_voxels_z, num_voxels_y, num_voxels_x]) // 2
-    geo.sVoxel = np.array([num_voxels_z * slice_mm, num_voxels_y * pixel_mm, num_voxels_x * pixel_mm]) // 2
+    geo.sVoxel = np.array([78.4, 205.3, 63.3]) / 2
     geo.dVoxel = geo.sVoxel / geo.nVoxel
 
     airgap_mm = 22
     # These two can be also defined per angle auxiliary
-    geo.offOrigin = np.array([geo.sVoxel[0] / 2 - (geo.DSD - geo.DSO) + airgap_mm, 0, geo.sVoxel[2]/2])
-    geo.offDetector = np.array([0, geo.sDetector[1] / 2])
+    geo.offOrigin = np.array([geo.sVoxel[0]/2, 0,
+                             geo.sVoxel[2]/2 - (geo.DSD-geo.DSO) + airgap_mm])
+    geo.offDetector = np.array([geo.sDetector[0] / 2, 0])
 
     # Variable to define accuracy of 'interpolated' projection.
     # It defines the amount of samples per voxel.
@@ -92,13 +96,20 @@ def compare_reconstruction_methods(projections: ndarray, geo: Geometry, angles: 
     imgFDK = algs.fdk(projections, geo, angles)
 
     num_iterations = 2
-    imgOSSART = algs.ossart(projections, geo, angles, num_iterations)
+    imgSART = algs.sart(projections, geo, angles, num_iterations, OrderStrategy="ordered")
 
-    tigre.plotimg(np.concatenate([imgFDK, imgOSSART], axis=1), dim="z")
+    tigre.plotimg(np.concatenate([imgFDK, imgSART], axis=2), dim="x")
 
 
 angles = get_angles()
 geo = get_geometry()
 geo = staticDetectorGeo(geo, angles)  # Adapt CT geo to DBT
 projections = get_projections(geo, angles)
+
+# Plot projections, then animate the fixed detector and moving source.
+tigre.plotproj(projections, angles)
+geometry_animation = tigre.animate_geometry(
+    geo, surface=tigre.surface_from_geometry(geo, angles))
+plt.show()  # Close the preview windows to continue to reconstruction.
+
 compare_reconstruction_methods(projections, geo, angles)

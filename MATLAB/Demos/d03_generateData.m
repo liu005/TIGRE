@@ -1,4 +1,5 @@
-%% DEMO 03: Generate sample data and add realistic CT noise to it.
+%% Demo 03: Generate projections and CT noise
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 % This demo will show how to generate sample data for image reconstruction
 %
@@ -28,7 +29,7 @@ geo=defaultGeometry();
 
 % define projection angles (in radians)
 angles=linspace(0,2*pi,100);
-% load phatnom image
+% load phantom image
 head=headPhantom(geo.nVoxel);
 
 % Simulate forward projection.

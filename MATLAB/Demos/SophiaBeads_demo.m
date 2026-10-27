@@ -1,4 +1,5 @@
-% This demo Will show how to reconstruct real data. 
+%% Dataset example: Reconstruct external SophiaBeads data
+% Requires: external SophiaBeads data/code, imported workspace and native CUDA.
 %
 % We will reconstruct the so-called SophiaBeads dataset, where a bunch of
 % "balls" are put in a Nikon ?-CT machine.

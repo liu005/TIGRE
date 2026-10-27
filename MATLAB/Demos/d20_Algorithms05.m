@@ -1,4 +1,5 @@
-%% DEMO 20:  Algorithms 05. FISTA with TV proximal
+%% Demo 20: FISTA with a TV proximal operator
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 %  This demo presents the FISTA algorithm in TIGRE. using a total variation proximal.
@@ -40,13 +41,11 @@ noise_projections=addCTnoise(projections);
 
 %% FISTA is a quadratically converging algorithm.
 
-% 'hyper': This parameter should approximate the largest 
-%          eigenvalue in the A matrix in the equation Ax-b and Atb. 
-%          Empirical tests show that for, the headphantom object:
-%               
-%               geo.nVoxel = [64,64,64]'    ,      hyper (approx=) 2.e6
-%               geo.nVoxel = [512,512,512]' ,      hyper (approx=) 2.e4
-%          Default: 2.e8
+% 'hyper': Gradient step denominator. When omitted, FISTA estimates
+%          2.02*sigma_max(A)^2 with power_method on the selected GPUs.
+%          The computed value is printed and can be reused for the same
+%          geometry to avoid repeating the estimation. Explicit hyper values
+%          below are illustrative and are not universal defaults.
 % 'tviter':  Number of iterations of Im3ddenoise to use. Default: 20
 % 'lambda':  Multiplier for the tvlambda used, which is proportional to 
 %            L (hyper). Default: 0.1

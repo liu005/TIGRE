@@ -1,4 +1,5 @@
-%% Demo 11: Postprocessing 
+%% Demo 11: Image postprocessing
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 % This demo demonstrates the available postprocessing tools in TIGRE.
 %

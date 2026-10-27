@@ -1,4 +1,5 @@
-%% DEMO 14:  Playing with offsets
+%% Demo 14: Volume and detector offsets
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 % In this demo we show how to change offsets to either the image or the

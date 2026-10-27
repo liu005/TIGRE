@@ -1,4 +1,5 @@
-%% Demo 4: Simple Image reconstruction
+%% Demo 04: Simple FDK and OS-SART reconstruction
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 % This demo will show how a simple image reconstruction can be performed,

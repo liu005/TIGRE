@@ -1,4 +1,5 @@
-%% Creating one CUDA accelerated test radiography
+%% Dataset example: CUDA-accelerated proton radiography
+% Requires: pCTCubicSpline_mex, bundled pCT data and Image Processing Toolbox.
 
 %--------------------------------------------------------------------------
 %--------------------------------------------------------------------------

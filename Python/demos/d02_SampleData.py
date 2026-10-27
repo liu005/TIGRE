@@ -1,4 +1,4 @@
-#%% DEMO 02: Sample data in TIGRE
+# %% Demo 02: Load bundled sample data
 #
 #
 # TIGRE has some sample data so you can use without the need of having
@@ -33,6 +33,14 @@ from tigre.utilities import sl3d
 
 #%% Define geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([256, 256, 256])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 
 #%%

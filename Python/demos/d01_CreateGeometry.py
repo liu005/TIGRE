@@ -1,4 +1,4 @@
-#%% DEMO 01: Describing your geometry
+# %% Demo 01: Describe CT geometry
 #
 #  In TIGRE the geometry is stored in an structure. To see documentation
 #  about geometry, run:

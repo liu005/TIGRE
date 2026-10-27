@@ -1,4 +1,4 @@
-#%% DEMO 14:  Playing with offsets
+# %% Demo 14: Volume and detector offsets
 #
 #
 # In this demo we show how to change offsets to either the image or the
@@ -30,6 +30,14 @@ import tigre.algorithms as algs
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 
 # Offsets
@@ -46,7 +54,7 @@ geo.accuracy = 0.5
 # see previous demo for explanation
 angles = np.linspace(0, 2 * np.pi, 100)
 
-# Load thorax phantom data
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 projections = tigre.Ax(head, geo, angles)
 
@@ -90,5 +98,5 @@ projections3 = tigre.Ax(head, geo, angles)
 ## lets see it
 tigre.plotproj(projections3, angles)
 ## reconstruction
-res = algs.sart(projections3, geo, angles, 10)
+res = algs.sart(projections3, geo, angles, 10, OrderStrategy="ordered")
 tigre.plotimg(res, dim="z")

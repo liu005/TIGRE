@@ -1,4 +1,5 @@
-%% Demo 21: Loading scanner data to TIGRE. 
+%% Demo 21: Load external scanner data
+% Requires: external scanner data and native CUDA; run one scanner section at a time.
 %
 % This demo will demonstrate the options for loading scanner data into
 % TIGRE.
@@ -47,20 +48,24 @@
 % If you have a Varian scanner that saves data in XIM format, the following
 % code will be able to load your dataset. 
 %
-% If you have a rreconstructed image, it will take the geometry from there,
-% but if you don't, it will estimate appropiate geometry. You can always
+% If you have a reconstructed image, it will take the geometry from there,
+% but if you don't, it will estimate appropriate geometry. You can always
 % change the image parameters, but the detector parameters should stay the
 % same unless you change the projections. 
 
 % Sample data: https://zenodo.org/record/8045749
+% External scanner data is required; this placeholder is not a bundled sample.
+% Set datafolder to the actual acquisition folder containing Scan.xml.
+% Varian preprocessing uses MATLAB gpuArray, separately from native TIGRE MEX.
 datafolder='~/your_data_path/varian/2020-01-01_123456/';
 [proj,geo, angles ] = VarianDataLoader(datafolder);
-[proj,geo, angles ] = VarianDataLoader(datafolder, false); %remove motion lag correction.
+% Alternative: disable motion lag correction instead of loading twice.
+% [proj,geo,angles] = VarianDataLoader(datafolder, 'acdc', false);
 
 % You can directly call reconstruction code now:
 
-img=OS_SART(proj,geo,angles,100);
-img=FDK(proj,geo,angles);
+imgOSSART=OS_SART(proj,geo,angles,100);
+imgFDK=FDK(proj,geo,angles);
 
 %% Nikon micro-CT
 
@@ -73,30 +78,28 @@ datafolder='~/your_data_path/Nikon/Sample_name/';
 % amount of data is available:
 
 % load equidistant angles, but only few:
-[proj,geo, angles ] = NikonDataLoader(datafolder,'sampling','equidistant','num_angles',150);
+% [proj,geo,angles] = NikonDataLoader(datafolder,'sampling','equidistant','num_angles',150);
 % load every X angles (10)
-[proj,geo, angles ] = NikonDataLoader(datafolder,'sampling','step','sampling_step',10);
+% [proj,geo,angles] = NikonDataLoader(datafolder,'sampling','step','sampling_step',10);
 % load first X angles (1000)
-[proj,geo, angles ] = NikonDataLoader(datafolder,'sampling','continuous','num_angles',1000);
+% [proj,geo,angles] = NikonDataLoader(datafolder,'sampling','continuous','num_angles',1000);
 
 % You can directly call reconstruction code now:
 
-img=OS_SART(proj,geo,angles,100);
-img=FDK(proj,geo,angles);
+imgOSSART=OS_SART(proj,geo,angles,100);
+imgFDK=FDK(proj,geo,angles);
 
 
 %% YXLON
 
-% You can replace NikonDataLoader in the above code by YXLONDataLoader().
-% the rest of the functionality is the same. 
+% Use YXLONDataLoader for a YXLON acquisition.
 
 datafolder='~/your_data_path/YXLON/Sample_name/';
 [proj,geo, angles ] = YXLONDataLoader(datafolder);
 
 %% Diondo
 
-% You can replace NikonDataLoader in the above code by YXLONDataLoader().
-% the rest of the functionality is the same. 
+% Use DiondoDataLoader for a Diondo acquisition.
 
 datafolder='~/your_data_path/Diondo/Sample_name/';
 [proj,geo, angles ] = DiondoDataLoader(datafolder);
@@ -115,8 +118,8 @@ datafolder='~/your_data_path/Dicom/Some_folder/';
 
 % You can directly call reconstruction code now:
 
-img=OS_SART(proj,geo,angles,100);
-img=FDK(proj,geo,angles);
+imgOSSART=OS_SART(proj,geo,angles,100);
+imgFDK=FDK(proj,geo,angles);
 %% Generic
 
 % It is possible that your scanner is not currently supported, or that it
@@ -125,31 +128,32 @@ img=FDK(proj,geo,angles);
 
 % if this is the case, the general way of tackling the problem is:
 
+% Template only: define scanner-specific geometry and angles before these steps.
 % Step 1: define your geometry and angles
     
 % Step 2: Load projections:
-[num_files, filenames] % Figure out a way of finding this. Often dir([path,'/*.extension'])
+% filenames=dir(fullfile(datafolder,'*.tif')); num_files=numel(filenames);
 % prealocate
-proj = single(zeros(geo.nDetector(1),geo.nDetector(2),length(angles)));
+% proj = single(zeros(geo.nDetector(2),geo.nDetector(1),length(angles)));
 % load files
-for ii=1:num_files
-    proj(:,:,ii)=single(imread(filenames(ii)));
-end
+% for ii=1:num_files
+%     proj(:,:,ii)=single(imread(fullfile(filenames(ii).folder,filenames(ii).name)));
+% end
 
 % Step 3: validate
 
-plotProj(proj,angles)
+% plotProj(proj,angles)
 % you need to make sure that:
 %     1) white=metal/bone/high density and black=air.
 %         If this is not the case
-proj=-log(proj/(max(proj(:))+1)); % Beer-Lanbert law
+% proj=-log(proj/(max(proj(:))+1)); % Beer-Lanbert law
 %     2) rotation happens left-right instead of top-bottom.
 %        If its top bottom:
-proj=permute(proj,[2,1,3]);
+% proj=permute(proj,[2,1,3]);
 
 % Step 4: test
-imgfdk=FDK(proj,geo,angles);
-plotImg(imgFDK,'dim','z');
+% imgFDK=FDK(proj,geo,angles);
+% plotImg(imgFDK,'dim','z');
 % If this does not look good, possible things to check:
 % - Are the angles in the right direction? maybe they need to be inverted. 
 % - Is your geometry properly defined? mistake on geometry will be

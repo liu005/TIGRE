@@ -1,14 +1,16 @@
-clc;clear;close all
+%% Demo 19: Digital breast tomosynthesis
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %%
 %
 % Code by Rodrigo Vimiero.
 % https://github.com/rodrigovimieiro
-%% Digital brest Thomosynthesis demo
+%% Fixed detector and moving source
 %
 % Few tricks to the geometry are needed to fix the detector in place.
-% OTherwise its basic tomgoraphy.
+% Otherwise the projection and reconstruction workflow is unchanged.
 %
 
+clc;clear;close all
 
 %% Example
 %
@@ -68,6 +70,13 @@ geo=staticDetectorGeo(geo,angles);
 % example in TIGRE. Make sure to use a true tomosynthesis data.
 head=headPhantom(geo.nVoxel);
 projections=Ax(head,geo,angles,'interpolated');
+
+%% Plot projections, then animate the acquisition geometry
+plotProj(projections,angles);
+geometrySurface=surfaceFromGeometry(geo,angles);
+geometryFigure=animateGeometry(geo,[],1,'SD',true,'',geometrySurface);
+clear geometrySurface;
+
 % If you use a true DBT projection, use the following lines to adapt you
 % data to TIGRE CT.Remember to use -log in your data.
 % projections = -log(projections./single(2^14-1)); %your maximum white

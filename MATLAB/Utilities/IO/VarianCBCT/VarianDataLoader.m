@@ -9,6 +9,9 @@ function [proj_lg, geo, angles] = VarianDataLoader(datafolder, varargin)
 % datafolder = '~/your_data_path/varian/2020-01-01_123456/';
 
 
+%% Load geometry
+[geo, ScanXML] = GeometryFromXML(datafolder);
+
 %% Input Parser
 % ACDC: acceleration & deceleration correction (default: true)
 % DPS: Detector Point Spread correction (default: true)
@@ -20,9 +23,6 @@ for ii=1:length(gpuids)
     g = gpuDevice(gpuids.devices(ii)+1);
     reset(g);
 end
-%% Load geometry
-[geo, ScanXML] = GeometryFromXML(datafolder);
-
 %% Load Scatter Correction Calibration Parameter Structure
 if(tag_DPS || tag_SC)
     ScCalib = ScCalibFromXML(datafolder);

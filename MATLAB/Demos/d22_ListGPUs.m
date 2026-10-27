@@ -1,13 +1,13 @@
+%% Demo 22: List and select available GPUs
+% Requires: native GPU enumeration MEX; no projection or reconstruction.
 % List the names of installed GPUs
 listGpuNames = getGpuNames();
 disp('listGpuNames');
 disp(listGpuNames);
 
-% Choose one of them
-%targetGpuName='';
-%targetGpuName = 'GeForce GTX 1060 6GB';
-targetGpuName = 'GeForce RTX 2080 Ti';
-%targetGpuName = 'GeForce GTX 1070';
+% Choose an installed model rather than a hard-coded example GPU.
+assert(getGpuCount_mex()>0,'TIGRE:demo:noGPU','No CUDA GPU detected.');
+targetGpuName = listGpuNames{1};
 
 % You can get the list of GPU IDs
 gpuidarray = getGpuIds(targetGpuName);
@@ -38,10 +38,10 @@ disp(gpuidarray);
 %    gpuids.devices = int32(2:3);
 
 gpuids = GpuIds();
-gpuids.devices = int32(1:10);
+gpuids.devices = int32(0); % First installed GPU; IDs are zero-based.
 disp(gpuids);
 
-gpuids2080 = GpuIds('GeForce RTX 2080 Ti');
-disp(gpuids2080);
+matchingGpuIds = GpuIds(targetGpuName);
+disp(matchingGpuIds);
 
 

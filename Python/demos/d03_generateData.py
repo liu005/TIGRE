@@ -1,4 +1,4 @@
-#%% DEMO 03: Generate sample data and add realistic CT noise to it.
+# %% Demo 03: Generate projections and CT noise
 #
 # This demo will show how to generate sample data for image reconstruction
 #
@@ -26,12 +26,20 @@ from tigre.utilities import sample_loader
 from tigre.utilities import CTnoise
 
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([256, 256, 256])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 #%% Define angles of projection and load phantom image
 
 # define projection angles (in radians)
-angles = np.linspace(0, 2 * np.pi, 50)
-# load phatnom image
+angles = np.linspace(0, 2 * np.pi, 100)
+# load phantom image
 head = sample_loader.load_head_phantom(geo.nVoxel)
 
 # Simulate forward projection.

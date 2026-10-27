@@ -72,3 +72,7 @@ MATLAB/mex_CUDA_win64.xml
 # Generated local demonstration outputs
 /.codex-results/
 /Python/results/
+
+# Generated external-CUDA compiler configuration and build logs
+/MATLAB/Mex_files/**/mex_blackwell.xml
+/MATLAB/Mex_files/**/build_*.log

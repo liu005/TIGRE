@@ -5,7 +5,7 @@ function [material1_proj,material2_proj, angles_out] = DeDecompose(proj_l, angle
 %   functions (may need to be modified for different systems)
 %
 %   Other basis materials and kV settings can be employed by adding
-%   additional calibration data to "de_cal.mat"
+%   additional calibration data to Common/data/dual_energy_calibrations.json.
 %
 %   Proj_l and angles_l are the projection and angle data for the low-kV
 %   scan
@@ -14,12 +14,12 @@ function [material1_proj,material2_proj, angles_out] = DeDecompose(proj_l, angle
 %   scan
 %
 %   Optional Arguments
-%       scanner - default VarianTrueVeam
+%       scanner - default VarianTrueBeam
 %
 %       kVl, kVh - the kV settings for the low- and high-kV scans,
 %       respectively.  defaults: 80, 140
 %
-%       interp_model - model for sinogram interpolation
+%       interpolation - model for sinogram interpolation (angles in radians)
 %
 %           'nearest' - nearest neighbor (default).
 %
@@ -39,7 +39,7 @@ function [material1_proj,material2_proj, angles_out] = DeDecompose(proj_l, angle
 [scanner, calibration_pair, model, tolerance, material1, material2] = parse_inputs(varargin);
 
 % read NIST database (values in TIGRE)
-fid = fopen('./../../../Common/data/dual_energy_calibrations.json');
+fid = fopen(fullfile(fileparts(mfilename('fullpath')),'..','..','..','Common','data','dual_energy_calibrations.json'));
 raw = fread(fid,inf);
 str = char(raw');
 fclose(fid);
@@ -56,7 +56,7 @@ materials = fieldnames(calibration_data.(scanner).(calibration_pair));
 if ~isfield(calibration_data.(scanner).(calibration_pair),material1)
     disp([material1, ' not a (yet) supported material in the scanner at the given energies'])
     disp("Supported materials:")
-    for i=1:len(materials)
+    for i=1:numel(materials)
         disp(materials{i})
     end
     error("")
@@ -64,7 +64,7 @@ end
 if ~isfield(calibration_data.(scanner).(calibration_pair),material2)
     disp([material2, ' not a (yet) supported material in the scanner at the given energies'])
     disp("Supported materials:")
-    for i=1:len(materials)
+    for i=1:numel(materials)
         disp(materials{i})
     end
     error("")
@@ -83,6 +83,9 @@ end
 
 % initialize skip counter for unmatched projections
 skipcount = 0;
+material1_proj=zeros(size(proj_h),'like',proj_h);
+material2_proj=zeros(size(proj_h),'like',proj_h);
+angles_out=zeros(1,size(proj_h,3));
 
 for k = 1:size(proj_h,3)
     if (~mod(k,50))
@@ -91,7 +94,7 @@ for k = 1:size(proj_h,3)
 
     L_array = proj_interp(proj_l, angles_l, angles_h(k), model, tolerance);
 
-    if(isnan(L_array))
+    if isscalar(L_array) && isnan(L_array)
         fprintf("No matches for projection %d.  Skipping.\n", k);
         skipcount = skipcount+1;
         continue;
@@ -108,10 +111,13 @@ for k = 1:size(proj_h,3)
         end
     end
 end
+material1_proj=material1_proj(:,:,1:size(proj_h,3)-skipcount);
+material2_proj=material2_proj(:,:,1:size(proj_h,3)-skipcount);
+angles_out=angles_out(1:size(proj_h,3)-skipcount);
 end
 
 function [scanner,calibration_pair, model, tolerance, material1, material2] = parse_inputs(argin)
-opts = {'scanner','kVl', 'kVh', 'interpolation', 'tolerance','material1','material2'};
+opts = {'scanner','kvl', 'kvh', 'interpolation', 'tolerance','material1','material2'};
 defaults=ones(length(opts),1);
 
 % check if option has been passed as input
@@ -151,7 +157,7 @@ for ii=1:length(opts)
                 end
                 scanner=val;
             end
-        case 'kVl'
+        case 'kvl'
             if default
                 kVl=80;
             else
@@ -160,7 +166,7 @@ for ii=1:length(opts)
                 end
                 kVl=val;
             end
-        case 'kVh'
+        case 'kvh'
             if default
                 kVh=140;
             else

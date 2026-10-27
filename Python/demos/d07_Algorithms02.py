@@ -1,4 +1,4 @@
-##% Demo 7: Algorithms02
+# %% Demo 07: SART-family algorithms
 #
 # In this demo the usage of the algorithms on the SART family among with their options are presented.
 # --------------------------------------------------------------------------
@@ -27,11 +27,19 @@ from matplotlib import pyplot as plt
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 #%% Load data and generate projections
 # define angles
 angles = np.linspace(0, 2 * np.pi, 100)
-# Load thorax phantom data
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 # generate projections
 projections = tigre.Ax(head, geo, angles)
@@ -99,7 +107,7 @@ verbose = True
 #                quality measurement names. Example: ['CC','RMSE','MSSIM']
 #                These will be computed in each iteration.
 #                Note that this is the change in parameter value per iteration, not the quality of the result.
-qualmeas = ["RMSE", "SSD"]
+qualmeas = ["RMSE"]
 
 # SIRT and SART both have no extra input parameters.
 # =========================================================================
@@ -142,7 +150,7 @@ blcks = 10
 #                                     biggest angular distance with the
 #                                     ones used.  (default)
 order = "random"
-imgOSSART, qualityOSSART = algs.ossart(
+imgOSSART, qualityOSSART = algs.os_sart(
     projections,
     geo,
     angles,

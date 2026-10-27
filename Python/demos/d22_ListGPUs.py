@@ -1,3 +1,4 @@
+# %% Demo 22: List and select available GPUs
 import tigre
 from tigre.utilities import gpu
 # List the names of installed GPUs
@@ -9,7 +10,9 @@ print("===================")
 
 # Choose one of them
 # targetGpuName=''  # noqa: N816
-targetGpuName = "GeForce GTX 1060 6GB"  # noqa: N816
+if not listDeviceNames:
+    raise RuntimeError("No CUDA GPU detected")
+targetGpuName = listDeviceNames[0]  # noqa: N816
 # targetGpuName = 'GeForce RTX 2080 Ti'  # noqa: N816
 # targetGpuName = 'GeForce GTX 1070'  # noqa: N816
 
@@ -25,14 +28,14 @@ print("\t gpuids: {}".format(gpuids))
 # Your code will look like:
 
 # projections=tigre.Ax(head,geo,angles)
-# imgFDK=tigre.fdk(noise_projections,geo,angles)
-# imgOSSART=tigre.fdk.os_sart(noise_projections,geo,angles,niter)
+# imgFDK=algs.fdk(noise_projections,geo,angles)
+# imgOSSART=algs.os_sart(noise_projections,geo,angles,niter)
 
 # or you can write like:
 
 # projections=tigre.Ax(head,geo,angles,gpuids=gpuids)
-# imgFDK=tigre.fdk(noise_projections,geo,angles,gpuids=gpuids)
-# imgOSSART=tigre.fdk.os_sart(noise_projections,geo,angles,niter,gpuids=gpuids)
+# imgFDK=algs.fdk(noise_projections,geo,angles,gpuids=gpuids)
+# imgOSSART=algs.os_sart(noise_projections,geo,angles,niter,gpuids=gpuids)
 
 
 # In the case where you have multiple types of GPUs installed or you are going to limit the number
@@ -45,10 +48,10 @@ print("\t gpuids: {}".format(gpuids))
 #    gpuids.devices = int32(2:3);
 
 gpuids = gpu.GpuIds()
-gpuids.devices = list(range(0, 10))
+gpuids.devices = [0]  # Select the first installed GPU (zero-based).
 print(gpuids)
 
-gpuids2080 = gpu.GpuIds("GeForce RTX 2080 Ti")
-print(gpuids2080)
+matching_gpuids = gpu.GpuIds(targetGpuName)
+print(matching_gpuids)
 
 

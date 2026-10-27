@@ -9,7 +9,7 @@ function [VM_proj] = MakeVMproj(material1_proj, material2_proj, energy, varargin
 [material1, material2] = parse_inputs(varargin);
 
 % read NIST database (values in TIGRE)
-fid = fopen('./../../../Common/data/NIST_material_attenuation.json');
+fid = fopen(fullfile(fileparts(mfilename('fullpath')),'..','..','..','Common','data','NIST_material_attenuation.json'));
 raw = fread(fid,inf);
 str = char(raw');
 fclose(fid);
@@ -20,7 +20,7 @@ materials = fieldnames(NIST);
 if ~isfield(NIST,material1)
     disp([material1, ' not a (yet) supported material in NIST dataset'])
     disp("Supported materials:")
-    for i=1:len(materials)
+    for i=1:numel(materials)
         disp(materials{i})
     end
     error("")
@@ -28,7 +28,7 @@ end
 if ~isfield(NIST,material2)
     disp([material2, ' not a (yet) supported material in NIST dataset'])
     disp("Supported materials:")
-    for i=1:len(materials)
+    for i=1:numel(materials)
         disp(materials{i})
     end
     error("")

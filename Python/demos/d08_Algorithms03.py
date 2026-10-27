@@ -1,14 +1,9 @@
-#% DEMO 8:  Algorithms 03. Krylov subspace
+# %% Demo 08: Krylov subspace algorithms
 #
 #
-# In this demo the usage of the the Krylov subspace family is explained.
-# This family of algorithms iterates through the eigenvectors of the
-# residual (Ax-b) of the problem in descending order, achieving increased
-# convergence rates comparing to SART family.
-#
-# In cases where the data is good quality, SART type families tend to reach
-# to a better image, but when the data gets very big, or has bad quality,
-# CGLS is a good and fast algorithm
+# Compare Krylov subspace solvers for the least-squares problem Ax = b.
+# They build successive search spaces using forward and matched
+# backprojection. Results depend on data, geometry and the stopping rule.
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 # This file is part of the TIGRE Toolbox
@@ -35,11 +30,19 @@ from matplotlib import pyplot as plt
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([128, 128])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 #%% Load data and generate projections
 # define angles
 angles = np.linspace(0, 2 * np.pi, 100)
-# Load thorax phantom data
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 # generate projections
 projections = tigre.Ax(head, geo, angles)
@@ -87,7 +90,7 @@ imgbagmresfdk, normhbagmresfdk = algs.ba_gmres(noise_projections, geo, angles, 3
 
 
 # SIRT for comparison.
-imgSIRT, normL2SIRT = algs.sirt(noise_projections, geo, angles, 60, computel2=True)
+imgSIRT, normL2SIRT = algs.sirt(noise_projections, geo, angles, 30, computel2=True)
 
 #%% plot results
 #

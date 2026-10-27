@@ -1,5 +1,20 @@
 # MATLAB detector builder and surface animation
 
+For a guided build/save/load workflow, run `d27_DetectorGeometryGUI`.
+The Python counterpart uses the same number and panel settings; see the
+[content comparison](./Demo_language_comparison.md) for remaining differences.
+It configures three panels, saves native MAT settings and exact surface files
+in a new temporary folder, then reloads both in the same GUI. Settings reopen
+in editable builder mode; exact coordinates reopen in inspection mode with
+builder fields disabled. **Return to builder** restores the editable recipe.
+Optional YAML recipe and exact YAML + NPZ export/load lines are included.
+No CUDA is needed for this demo. See the [demo index](../MATLAB/Demos/README.md)
+for requirements and the related curved/modular head reconstruction examples.
+
+For the experimentally verified native R2020a/RTX 5070 Ti GPU build, see the
+[Blackwell build instructions](./MATLAB_Blackwell_build.md). That build supports
+standard TIGRE reconstruction and native surface CUDA projection/backprojection.
+
 The MATLAB port provides native modular geometry construction, a desktop
 builder/inspection GUI, and curved/modular surface animation. Tested with
 MATLAB R2020a. These visualization utilities do not invoke CUDA projectors.
@@ -107,12 +122,16 @@ Native MATLAB surface arrays are:
 | `valid_mask` | `rows x columns x views` |
 | `module_slices` | `modules x 4`, zero-based half-open row/column bounds, matching the archive format |
 
-These are visualization geometry arrays, not MATLAB projection-data layout.
+Pixel arrays include an xyz coordinate axis. `Ax_surface`/`Atb_surface`
+projection data instead use `rows x columns x views`, without that axis.
 The bridge preserves singleton dimensions, module boundaries and volume axes.
-The MATLAB port does not add MATLAB surface reconstruction kernels or the
-Python GUI's projection-remapping workflow; those remain Python facilities.
+Native surface CUDA reconstruction is described below. The projection-remapping
+workflow remains a Python facility.
 
 ## Validation
+
+See the [validation guide](Validation.md) for the full native reconstruction,
+quality-history, dual-energy, animation and interchange test commands.
 
 ```matlab
 test_detectorGeometryGUI;   % presets, geometry, renderer, MAT, GUI
@@ -123,4 +142,71 @@ test_geometryInterchange;   % six MATLAB/Python layout/motion comparisons
 
 The interchange tests require the Python `recon` environment. Python tests
 in `test_geometry_matlab_bridge.py` cover MAT/YAML round trips, singleton
-dimensions and volume-axis conversions. No CUDA reconstruction is tested.
+dimensions and volume-axis conversions. Native CUDA checks are available in `test_surfaceProjectors`.
+
+## Native surface reconstruction
+
+`Compile` now builds `Surface_mex` from the same Siddon CUDA kernels used by
+Python. On this machine, build only the added gateway with
+`CompileBlackwell('surface')`, then activate `UseBlackwellBuild`.
+The native operators require no Python, `gpuArray`, or Statistics toolbox.
+
+```matlab
+surface = buildModularSurface(settings);
+projections = Ax_surface(image, geo, surface);
+backprojection = Atb_surface(projections, geo, surface);
+[image, residual] = CGLS_surface(projections, geo, surface, 40);
+[imageSIRT, residualSIRT] = SIRT_surface(projections, geo, surface, 40);
+% Only for circular, vertically extruded detector surfaces:
+imageFDK = FDK_surface(projections, geo, surface, 'Filter', 'hann');
+```
+
+Images have MATLAB dimensions `[nx ny nz]`; projections use
+`[rows columns views]`. Volume `nVoxel`, `dVoxel`, and `offOrigin` are xyz.
+Coordinates are world xyz in mm. A source is required for every view; pixel
+coordinates and logical masks may be shared across views or supplied per view.
+A single fixed volume is used: per-view `offOrigin` is rejected.
+Masked gaps contribute zero to both operators and are excluded from solver
+residuals. Per-panel tilt and COR are already encoded in pixel/source positions;
+the operators do not apply these corrections a second time.
+
+The matched backprojector is the adjoint of the forward projector. It supports
+arbitrary explicit surfaces, including tilted modules, curved panels, stationary
+panels, and changing masks. CGLS is unconstrained least squares; SIRT defaults
+to nonnegative updates. Both return histories truncated to completed iterations.
+The optional operator fourth argument is a zero-based CUDA device number;
+solvers accept `'Device', 0`. This initial MATLAB implementation uses one GPU
+and requires its working set to fit device memory. Automatic multi-GPU/slab
+execution is not ported.
+Standard MATLAB FDK remains a flat-detector algorithm.
+
+`d25_CurvedDetector` projects TIGRE's bundled 64-cubed head phantom onto a
+smooth curved detector, animates the geometry immediately after `plotProj`,
+and reconstructs with native CGLS and optional surface FDK. It requires the
+surface CUDA MEX and displays matching input/reconstruction/error slices,
+projection residuals and relative volume errors. `test_curvedSurfaceDemo`
+checks the full native head demo as well as the analytic sphere-ray utility.
+`d26_ModularDetector` is a separate native CUDA demo using TIGRE's bundled
+64-cubed head phantom and three individually tilted panels, masked gaps and
+a scan-wide COR shift. It forward-projects the voxelized head using `Ax_surface`,
+animates the geometry immediately after `plotProj`, and reconstructs using
+`CGLS_surface`. Matching input/reconstruction/error slices and residuals are
+displayed. Tilted panels require iterative reconstruction rather than FDK.
+Run `UseBlackwellBuild; d26_ModularDetector` with the isolated custom build.
+`test_modularDetectorDemo` runs the complete native head reconstruction demo.
+Run `test_surfaceProjectors` for native GPU checks of analytic box lengths,
+adjointness, gaps, singleton/shared coordinates, changing masks, CGLS and SIRT.
+
+`FDK_surface` uses the shared CUDA voxel-driven surface backprojector, with
+MATLAB equiangular ramp/Hann filtering, cutoff selection and Parker short-scan
+weights. It requires a circular source orbit about world z, constant source
+height, a vertically extruded detector, identical fan-angle tables at every
+view, and whole-column gaps. It rejects arbitrary panel tilt, incomplete short
+scans and nonmonotone orbits. Full scans may include a duplicate endpoint;
+endpoint-free full scans require uniform view spacing. Gap filtering interpolates
+missing columns, so wide gaps favor iterative reconstruction. FDK is approximate
+for cone beams; no experimental per-view FDK fallback is enabled.
+The dense fan filter is limited to 8192 samples and may require substantial host
+memory; iterative reconstruction avoids that dense filter.
+Run `test_surfaceFDK` for full/reversed/Parker scans, sphere amplitude, gap/Hann
+filtering and rejection of non-extruded detectors.

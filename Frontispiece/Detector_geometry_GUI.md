@@ -1,5 +1,18 @@
 # Modular detector geometry GUI manual
 
+Run `Python/demos/d27_DetectorGeometryGUI.py` in `recon` for a guided
+three-panel build and editable/exact geometry save/load example. Its MATLAB
+counterpart has the same demo number. See the
+[demo content comparison](./Demo_language_comparison.md) for matched geometry,
+reconstruction and file workflows across the two languages.
+
+The matching reconstruction demos are `d25_CurvedDetector.py` and
+`d26_ModularDetector.py`. They plot projections, animate geometry, then
+reconstruct the bundled head phantom. `tigre.plotproj` accepts angle arrays
+with shape `(views,)`, `(views, 1)` or `(views, 3)`; ZYZ titles display the
+first component, alpha. Detector-coordinate slices do not use view angles as
+detector indices. The plotter retains its animation during playback.
+
 For the MATLAB port, native array conventions and shared YAML interchange, see
 the [MATLAB detector builder guide](./Detector_geometry_MATLAB.md).
 

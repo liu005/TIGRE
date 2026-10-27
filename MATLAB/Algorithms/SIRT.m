@@ -119,7 +119,7 @@ for ii=1:niter
     if (ii==1 && verbose==1);tic;end
     % If quality is going to be measured, then we need to save previous image
     % THIS TAKES MEMORY!
-    if measurequality & ~strcmp(QualMeasOpts,'error_norm')
+    if measurequality && ~any(strcmp(QualMeasOpts,'error_norm'))
         res_prev = res; % only store if necessary
     end
     % --------- Memory expensive-----------
@@ -165,6 +165,8 @@ for ii=1:niter
             if verbose
                 disp(['Convergence criteria met, exiting on iteration number:', num2str(ii)]);
             end
+            resL2=resL2(1:ii);
+            qualMeasOut=qualMeasOut(:,1:ii);
             return
         end
         

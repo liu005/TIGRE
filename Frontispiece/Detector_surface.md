@@ -1,14 +1,17 @@
 # Detector-surface geometry (curved, modular and U-shaped detectors)
 
 The [MATLAB detector builder and animation guide](./Detector_geometry_MATLAB.md)
-covers the native MATLAB visualization port and YAML/MAT/NPZ interchange.
+covers native surface projection/backprojection, CGLS/SIRT, circular surface
+FDK, visualization and YAML/MAT/NPZ interchange. Matching head-phantom examples
+are demo 25 (smooth cylinder) and demo 26 (tilted modular panels); see the
+[demo comparison](Demo_language_comparison.md).
 
 TIGRE's standard geometry describes a flat detector. The *detector-surface* model
 describes every measured pixel by its physical position, so curved arrays, modules
 with gaps, nonuniform column spacing and U-shaped arrays can be used directly,
 without rebinning the data to a flat uniform detector.
 
-A surface is a `DetectorSurfaceGeometry`:
+ A surface is a `DetectorSurfaceGeometry`:
 
 | Field | Shape | Meaning |
 |---|---|---|

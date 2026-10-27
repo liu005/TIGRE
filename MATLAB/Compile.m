@@ -1,6 +1,9 @@
 function []=Compile(varargin)
 % This file will compile all the necessary mex files for TIGRE to work. You
 % need CUDA nvcc installed in your PC and setup with MATLAB mex.
+% Modern Windows CUDA (12.8+) uses external nvcc and detected native GPU targets.
+% Options: -outdir DIR, -cuda_path DIR, -gpu_arch sm_120, -dry_run,
+%          -no_pinned_mem, -mex_xml FILE. Default output remains Mex_files/win64.
 %
 %
 % IMPORTANT:
@@ -26,6 +29,7 @@ function []=Compile(varargin)
 %% Varargin
 disable_pinned=false;
 mex_xml_file="";
+output_override=''; cuda_override=''; arch_override=''; dry_run=false;
 if nargin
     skip_next_arg=false;
     for i=1:length(varargin)
@@ -35,6 +39,14 @@ if nargin
         end
         if strcmp(varargin{i},'-no_pinned_mem')
             disable_pinned=true;
+        elseif any(strcmp(varargin{i},{'-outdir','-cuda_path','-gpu_arch'}))
+            assert(i<length(varargin),'TIGRE:Compile:argument','Missing value for %s',varargin{i});
+            if strcmp(varargin{i},'-outdir'), output_override=char(varargin{i+1});
+            elseif strcmp(varargin{i},'-cuda_path'), cuda_override=char(varargin{i+1});
+            else, arch_override=char(varargin{i+1}); end
+            skip_next_arg=true;
+        elseif strcmp(varargin{i},'-dry_run')
+            dry_run=true;
         elseif strcmp(varargin{i},'-mex_xml')
             if length(varargin)>i
                 mex_xml_file=varargin{i+1};
@@ -47,6 +59,36 @@ if nargin
         end
     end
 end
+
+%% Resolve paths and route modern Windows CUDA builds through the tested setup.
+caller=pwd; folder=fileparts(mfilename('fullpath'));
+if ~isempty(output_override), output_override=absolutePath(output_override,caller); end
+if strlength(mex_xml_file)>0, mex_xml_file=absolutePath(char(mex_xml_file),caller); end
+oldPath=path; restore=onCleanup(@() restoreContext(caller,oldPath));
+cd(folder); addpath(fullfile(folder,'Utilities','Setup'));
+if ~isempty(cuda_override), setenv('CUDA_PATH',cuda_override); end
+[cuda_folder,cuda_version]=locate_cuda();
+assert(~isempty(cuda_folder),'TIGRE:Compile:CUDA','CUDA not found; set CUDA_PATH or use -cuda_path');
+if ispc && (cuda_version>=12.8 || ~isempty(arch_override))
+    architecture=arch_override;
+    if isempty(architecture)
+        [status,capabilities]=system('nvidia-smi --query-gpu=compute_cap --format=csv,noheader');
+        if status==0
+            values=unique(str2double(strsplit(strtrim(capabilities))));
+            values=values(isfinite(values));
+            architecture=strjoin(arrayfun(@(x) sprintf('sm_%d',round(x*10)),values,'UniformOutput',false),' ');
+        end
+    end
+    assert(~isempty(architecture),'TIGRE:Compile:GPU','Cannot detect GPU architecture; use -gpu_arch sm_120');
+    target=output_override; if isempty(target), target=fullfile(folder,'Mex_files','win64'); end
+    fprintf('External CUDA %.1f; targets %s; output %s\n',cuda_version,architecture,target);
+    if dry_run, return; end
+    CompileBlackwell('all','OutDir',target,'CUDAPath',cuda_folder, ...
+        'GPUArch',architecture,'MexXML',char(mex_xml_file),'NoPinnedMemory',disable_pinned);
+    return;
+end
+assert(isempty(arch_override),'TIGRE:Compile:GPU','Explicit GPU targets currently require Windows');
+if dry_run, fprintf('Legacy CUDA %.1f build configuration\n',cuda_version); return; end
 
 %% FLAGS
 if disable_pinned
@@ -77,11 +119,11 @@ if ispc
                     ' and its C/C++ compiler.']);
             end
         end
-        
+
         % Split version string
         vs_versions = strsplit(vs_version_string, ".");
         vs_major_version = vs_versions{1, 1};
-        
+
         if strcmp("17", vs_major_version)
             mex_xml_file="mex_CUDA_win64_MVS2022.xml";
             vs_version_year="2022";
@@ -102,8 +144,8 @@ if ispc
         end
         fprintf("Visual Studio %s detected\n", vs_version_year);
     end
-    if exist(fullfile(pwd, mex_xml_file), "file") == 2
-        copyfile(fullfile(pwd, mex_xml_file), 'mex_CUDA_win64.xml', 'f');
+    if exist(mex_xml_file, "file") == 2
+        copyfile(mex_xml_file, 'mex_CUDA_win64.xml', 'f');
     else
         error('Error: mex xml file not found');
     end
@@ -156,30 +198,37 @@ else
     outdir=[outdir,'32'];
 end
 
+if ~isempty(output_override), outdir=output_override; end
+if ~exist(outdir,'dir'), mkdir(outdir); end
+
 if contains(computer('arch'),'64')
-    
-    mex('-largeArrayDims', './Utilities/cuda_interface/Ax_mex.cpp', '../Common/CUDA/ray_interpolated_projection.cu', '../Common/CUDA/Siddon_projection.cu', '../Common/CUDA/ray_interpolated_projection_parallel.cu', '../Common/CUDA/Siddon_projection_parallel.cu', '../Common/CUDA/GpuIds.cpp', '-outdir', outdir, FLAGS)
-    mex('-largeArrayDims', './Utilities/cuda_interface/Atb_mex.cpp', '../Common/CUDA/voxel_backprojection.cu', '../Common/CUDA/voxel_backprojection2.cu', '../Common/CUDA/voxel_backprojection_parallel.cu', '../Common/CUDA/GpuIds.cpp', '-outdir', outdir, FLAGS)
-    mex('-largeArrayDims', './Utilities/cuda_interface/minTV.cpp', '../Common/CUDA/GD_TV.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex('-largeArrayDims', './Utilities/cuda_interface/AwminTV.cpp', '../Common/CUDA/GD_AwTV.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex('-largeArrayDims', './Utilities/cuda_interface/tvDenoise.cpp', '../Common/CUDA/tv_proximal.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex('-largeArrayDims', './Utilities/cuda_interface/AddNoise.cpp', '../Common/CUDA/RandomNumberGenerator.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex('-largeArrayDims', './Utilities/GPU/getGpuName_mex.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex('-largeArrayDims', './Utilities/GPU/getGpuCount_mex.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex('-largeArrayDims', './Utilities/cuda_interface/minPICCS.cpp', '../Common/CUDA/PICCS.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
+
+    mex('-largeArrayDims', './Utilities/cuda_interface/Surface_mex.cpp', '../Common/CUDA/Siddon_surface_projection.cu', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/cuda_interface/FDKSurface_mex.cpp', '../Common/CUDA/Siddon_surface_projection.cu', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/cuda_interface/Ax_mex.cpp', '../Common/CUDA/ray_interpolated_projection.cu', '../Common/CUDA/Siddon_projection.cu', '../Common/CUDA/ray_interpolated_projection_parallel.cu', '../Common/CUDA/Siddon_projection_parallel.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/cuda_interface/Atb_mex.cpp', '../Common/CUDA/voxel_backprojection.cu', '../Common/CUDA/voxel_backprojection2.cu', '../Common/CUDA/voxel_backprojection_parallel.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/cuda_interface/minTV.cpp', '../Common/CUDA/GD_TV.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/cuda_interface/AwminTV.cpp', '../Common/CUDA/GD_AwTV.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/cuda_interface/tvDenoise.cpp', '../Common/CUDA/tv_proximal.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/cuda_interface/AddNoise.cpp', '../Common/CUDA/RandomNumberGenerator.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/GPU/getGpuName_mex.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/GPU/getGpuCount_mex.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('-largeArrayDims', './Utilities/cuda_interface/minPICCS.cpp', '../Common/CUDA/PICCS.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
     mex('-largeArrayDims', './Utilities/IO/VarianCBCT/mexReadXim.cpp', '-outdir', outdir, FLAGS)
 
 else
-    
-    mex( './Utilities/cuda_interface/Ax_mex.cpp', '../Common/CUDA/ray_interpolated_projection.cu', '../Common/CUDA/Siddon_projection.cu', '../Common/CUDA/ray_interpolated_projection_parallel.cu', '../Common/CUDA/Siddon_projection_parallel.cu', '../Common/CUDA/GpuIds.cpp', '-outdir', outdir, FLAGS)
-    mex( './Utilities/cuda_interface/Atb_mex.cpp', '../Common/CUDA/voxel_backprojection.cu', '../Common/CUDA/voxel_backprojection2.cu', '../Common/CUDA/voxel_backprojection_parallel.cu', '../Common/CUDA/GpuIds.cpp', '-outdir', outdir, FLAGS)
-    mex( './Utilities/cuda_interface/minTV.cpp', '../Common/CUDA/GD_TV.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex( './Utilities/cuda_interface/AwminTV.cpp', '../Common/CUDA/GD_AwTV.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex( './Utilities/cuda_interface/tvDenoise.cpp', '../Common/CUDA/tv_proximal.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex( './Utilities/cuda_interface/AddNoise.cpp', '../Common/CUDA/RandomNumberGenerator.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex( './Utilities/GPU/getGpuName_mex.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex('./Utilities/GPU/getGpuCount_mex.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
-    mex('./Utilities/cuda_interface/minPICCS.cpp', '../Common/CUDA/PICCS.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '-outdir', outdir, FLAGS)
+
+    mex('./Utilities/cuda_interface/Surface_mex.cpp', '../Common/CUDA/Siddon_surface_projection.cu', '-outdir', outdir, FLAGS)
+    mex('./Utilities/cuda_interface/FDKSurface_mex.cpp', '../Common/CUDA/Siddon_surface_projection.cu', '-outdir', outdir, FLAGS)
+    mex( './Utilities/cuda_interface/Ax_mex.cpp', '../Common/CUDA/ray_interpolated_projection.cu', '../Common/CUDA/Siddon_projection.cu', '../Common/CUDA/ray_interpolated_projection_parallel.cu', '../Common/CUDA/Siddon_projection_parallel.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex( './Utilities/cuda_interface/Atb_mex.cpp', '../Common/CUDA/voxel_backprojection.cu', '../Common/CUDA/voxel_backprojection2.cu', '../Common/CUDA/voxel_backprojection_parallel.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex( './Utilities/cuda_interface/minTV.cpp', '../Common/CUDA/GD_TV.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex( './Utilities/cuda_interface/AwminTV.cpp', '../Common/CUDA/GD_AwTV.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex( './Utilities/cuda_interface/tvDenoise.cpp', '../Common/CUDA/tv_proximal.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex( './Utilities/cuda_interface/AddNoise.cpp', '../Common/CUDA/RandomNumberGenerator.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex( './Utilities/GPU/getGpuName_mex.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('./Utilities/GPU/getGpuCount_mex.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
+    mex('./Utilities/cuda_interface/minPICCS.cpp', '../Common/CUDA/PICCS.cu', '../Common/CUDA/GpuIds.cpp', '../Common/CUDA/gpuUtils.cu', '../Common/CUDA/TIGRE_common.cpp', '-outdir', outdir, FLAGS)
     mex( './Utilities/IO/VarianCBCT/mexReadXim.cpp', '-outdir', outdir, FLAGS)
 
 end
@@ -187,3 +236,11 @@ end
 disp('')
 disp('Compilation complete')
 
+
+end
+function value=absolutePath(value,base)
+if isempty(regexp(value,'^([A-Za-z]:[\\/]|[\\/])','once')), value=fullfile(base,value); end
+end
+function restoreContext(folder,oldPath)
+cd(folder); path(oldPath);
+end

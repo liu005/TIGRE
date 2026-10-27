@@ -1,4 +1,5 @@
-%% DEMO 17: Detector Rotation
+%% Demo 17: Detector rotation
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 %
@@ -88,6 +89,13 @@ projections=Ax(head,geo,angles,'interpolated');
 
 %% Lets plot the projections with a rotated detector
 plotProj(projections,angles);
+
+%% Animate acquisition geometry
+% Explicit coordinates show the same per-view pose as the projectors.
+geometrySurface=surfaceFromGeometry(geo,angles);
+geometryFigure=animateGeometry(geo,[],1,'SD',true,'',geometrySurface);
+clear geometrySurface; % the figure retains the renderer while open
+
 
 %% lets reconstruct with and without detector rotation
 % 

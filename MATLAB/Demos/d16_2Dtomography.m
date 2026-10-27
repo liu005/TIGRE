@@ -1,4 +1,5 @@
-%% DEMO 16: TIGRE 2D tomography 
+%% Demo 16: 2D tomography
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 %  In demo we show how to do 2D tomography in TIGRE. It is exactly the same
@@ -63,7 +64,7 @@ geo.mode='parallel';
 angles=linspace(0,2*pi,100);
 phantom=single(phantom('Modified Shepp-Logan',geo.nVoxel(1)));
 projections=Ax(phantom,geo,angles);
-%% recosntruct
+%% reconstruct
 
 imgOSSART=OS_SART(projections,geo,angles,40);
 imgASDPOCS=ASD_POCS(projections,geo,angles,40);
@@ -78,7 +79,7 @@ plotImg([imgOSSART;imgASDPOCS ],'Dim',3,'Slice',1); %top is ASD_POCS, bottom OSS
 %% 
 % The same thing!
 clear;
-close all;
+%close all;
 
 %% FAN BEAM 2D
 disp('Fan beam 2D:')
@@ -111,7 +112,7 @@ angles=linspace(0,2*pi,100);
 phantom=single(phantom('Modified Shepp-Logan',geo.nVoxel(1)));
 % phantom=cat(3,phantom,phantom);
 projections=Ax(phantom,geo,angles,'interpolated');
-%% recosntruct
+%% reconstruct
 
 imgOSSART=OS_SART(projections,geo,angles,40);
 % in 2D, the TV norm minimization happens in CPU, this causes the

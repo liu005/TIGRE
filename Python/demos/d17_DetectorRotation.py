@@ -1,4 +1,4 @@
-#% DEMO 17: Detector Rotation
+# %% Demo 17: Detector rotation
 #
 #
 #
@@ -36,9 +36,18 @@ import numpy as np
 from tigre.utilities import sample_loader
 from tigre.utilities import CTnoise
 import tigre.algorithms as algs
+from matplotlib import pyplot as plt
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([128.0, 128.0, 128.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([512, 512])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 0.5
 
 
 #%% Load data and generate projections
@@ -52,7 +61,7 @@ yaw = 0.7 * np.linspace(0, 1, len(angles))
 geo.rotDetector = np.array(np.vstack([roll, pitch, yaw])).T
 
 #%%
-# Load thorax phantom data
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 # generate projections
 projections = tigre.Ax(head, geo, angles)
@@ -61,15 +70,22 @@ noise_projections = CTnoise.add(projections, Poisson=1e5, Gaussian=np.array([0, 
 
 tigre.plotproj(projections, angles)
 
+#%% Animate acquisition geometry
+# The explicit surface follows the projector's per-view rotation convention.
+geometry_animation = tigre.animate_geometry(
+    geo, surface=tigre.surface_from_geometry(geo, angles))
+plt.show()  # Close the preview windows to continue to reconstruction.
+
+
 
 #%% recon
-imgRotDet = algs.ossart(projections, geo, angles, 50)
+imgRotDet = algs.os_sart(projections, geo, angles, 50)
 
 #% No rotation
 geo.rotDetector = np.array([0, 0, 0])
 projections2 = tigre.Ax(head, geo, angles)
 
-imgnoRot = algs.ossart(projections2, geo, angles, 50)
+imgnoRot = algs.os_sart(projections2, geo, angles, 50)
 # %% Plot to show that indeed the reconstruction is right
 
 tigre.plotimg(np.concatenate([imgRotDet, imgnoRot], axis=1), dim="z")

@@ -1,4 +1,5 @@
-%% DEMO 6:  Algorithms 01.
+%% Demo 06: FDK options
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 % In this demo the usage of the FDK is explained

@@ -19,7 +19,9 @@ function [cor]=CC(real,res)
 % Coded by:           Manasavee Lohvithee
 %--------------------------------------------------------------------------
 
-cor=corr(real(:),res(:));
+% corrcoef is part of base MATLAB; corr requires the Statistics Toolbox.
+coefficients=corrcoef(double(real(:)),double(res(:)));
+cor=coefficients(1,2);
 
 
 end

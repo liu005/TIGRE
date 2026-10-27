@@ -1,8 +1,9 @@
-%% DEMO 9:  Algorithms 06.Anatomical Priors
+%% Demo 24: Anatomical priors and PICCS
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 %  This demo presents the TIGRE capability of using image priors for
-%  CT recosntruction. The most known algorithm for this is PICCS
+%  CT reconstruction. The most known algorithm for this is PICCS
 % 
 %--------------------------------------------------------------------------
 %--------------------------------------------------------------------------

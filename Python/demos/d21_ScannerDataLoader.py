@@ -1,11 +1,11 @@
-## Demo 21: Loading scanner data to TIGRE. 
+# %% Demo 21: Load external scanner data
 #
 # This demo will demonstrate the options for loading scanner data into
 # TIGRE.
 #
 #   Supported Manufacturers:
 #
-#       (not yet, work in progress) Varian     
+#       Varian TrueBeam 2.0/2.7 (CPU baseline; see correction limits below)
 #
 #       Nikon
 #
@@ -39,12 +39,24 @@
 # Coded by:           Ander Biguri 
 #--------------------------------------------------------------------------
 ##
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import tigre.utilities.io as tigreio
 import tigre.algorithms as algs
 import tigre
 #%% Varian onboard CBCT.
 
-###### TODO
+# Run this section only with an actual unzipped TrueBeam acquisition folder.
+# CPU baseline: XIM/XML loading, blank/chamber normalization and ring filtering.
+# MATLAB enables DPS/object-scatter corrections by default; these are not yet
+# ported here. Requests for dps=True, sc=True or bh=True raise explicit errors.
+datafolder='~/your_data_path/varian/2020-01-01_123456/'
+proj, geo, angles = tigreio.VarianDataLoader(datafolder, dps=False, sc=False, bh=False)
+imgFDK = algs.fdk(proj, geo, angles)
+imgOSSART = algs.os_sart(proj, geo, angles, 100)
 
 #%% Nikon micro-CT
 
@@ -66,7 +78,7 @@ proj, geo, angles  = tigreio.NikonDataLoader(datafolder,sampling='continuous',nu
 
 # You can directly call reconstruction code now:
 
-img=algs.ossart(proj,geo,angles,100)
+img=algs.os_sart(proj,geo,angles,100)
 img=algs.fdk(proj,geo,angles)
 
 
@@ -101,9 +113,10 @@ proj,geo, angles  = tigreio.YXLONDataLoader(datafolder)
 
 # if this is the case, the general way of tackling the problem is:
 
+# Template only: define scanner-specific geometry and load proj before using these steps.
 # Step 1: define your geometry and angles
-geo=tigre.geometry()
-angles=
+# geo=tigre.geometry()
+# angles = np.linspace(0, 2*np.pi, proj.shape[0], endpoint=False)
 
 # Step 2: Load projections:
 #store in NP array. Use whichever python library will help you get the data loaded. 
@@ -111,17 +124,17 @@ angles=
 
 # Step 3: validate
 
-tigre.plotproj(proj,angles)
+# tigre.plotproj(proj,angles)
 # you need to make sure that:
 #     1) white=metal/bone/high density and black=air.
 #         If this is not the case
-proj=-np.log(proj/(np.max(proj+1)); # Beer-Lanbert law
+# proj = -np.log(proj / (np.max(proj) + 1)) # Beer-Lanbert law
 #     2) rotation happens left-right instead of top-bottom.
 #        If its top bottom permute your data as required
 
 # Step 4: test
-imgfdk=algs.fdk(proj,geo,angles)
-tigre.plotimg(imgFDK,dim='z')
+# imgFDK = algs.fdk(proj,geo,angles)
+# tigre.plotimg(imgFDK,dim='z')
 # If this does not look good, possible things to check:
 # - Are the angles in the right direction? maybe they need to be inverted. 
 # - Is your geometry properly defined? mistake on geometry will be

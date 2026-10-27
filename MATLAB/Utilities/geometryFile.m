@@ -13,6 +13,13 @@ if strcmp(operation,'load')
     end
     if ~isfield(document,'geo'), document.geo=[]; end
     if isfield(document,'settings')
+        % SciPy preserves YAML integer scalars as int64. MATLAB geometry
+        % arithmetic (including linspace) expects floating-point settings.
+        names=fieldnames(document.settings);
+        for k=1:numel(names)
+            value=document.settings.(names{k});
+            if isnumeric(value), document.settings.(names{k})=double(value); end
+        end
         document.surface=buildModularSurface(document.settings);
     elseif ~isfield(document,'surface') && isfield(document,'angles') && ~isempty(document.geo)
         document.surface=surfaceFromGeometry(document.geo,document.angles);

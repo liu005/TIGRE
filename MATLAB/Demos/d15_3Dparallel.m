@@ -1,7 +1,8 @@
-%% DEMO 15: 3D parallel tomgoraphy
+%% Demo 15: 3D parallel tomography
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
-%  This demo shows how to run 3D paralel geometry
+%  This demo shows how to run 3D parallel geometry
 %
 %--------------------------------------------------------------------------
 %--------------------------------------------------------------------------

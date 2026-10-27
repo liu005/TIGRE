@@ -1,7 +1,7 @@
-#%% Demo 10: How to use Image quality measures
+# %% Demo 10: Image quality measurements
 #
 # This demo demonstrate how to compute all the image quality measures
-# by calling the "Measure_Quality.m" function with detailed description.
+# by calling the "Measure_Quality.py" function with detailed description.
 #
 #
 # --------------------------------------------------------------------------
@@ -28,14 +28,23 @@ from tigre.utilities import CTnoise
 import tigre.algorithms as algs
 from matplotlib import pyplot as plt
 from tigre.utilities.Measure_Quality import Measure_Quality as MQ
+from tigre.utilities.visualization.plot_quality_measures import plot_quality_measures
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 #%% Load data and generate projections
 # define angles
 angles = np.linspace(0, 2 * np.pi, 100)
-# Load thorax phantom data
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 # generate projections
 projections = tigre.Ax(head, geo, angles)
@@ -90,45 +99,17 @@ qualmeas = ["RMSE", "CC", "MSSIM", "UQI"]
 
 #%% Reconstruct image using SIRT, SART and OS-SART
 # =========================================================================
-imgSIRT, qualitySIRT = algs.sirt(projections, geo, angles, 20, Quameasopts=qualmeas)
-imgSART, qualitySART = algs.sart(projections, geo, angles, 20, Quameasopts=qualmeas)
-imgOSSART, qualityOSSART = algs.ossart(projections, geo, angles, 20, Quameasopts=qualmeas)
+imgSIRT, qualitySIRT = algs.sirt(noise_projections, geo, angles, 30, Quameasopts=qualmeas)
+imgSART, qualitySART = algs.sart(noise_projections, geo, angles, 30, Quameasopts=qualmeas)
+imgOSSART, qualityOSSART = algs.os_sart(noise_projections, geo, angles, 30, blocksize=22, Quameasopts=qualmeas)
 
 #%% Plot the changes of image quality measures over iterations, i.e. how much each iteration looks like the previous iteration.
 # (without the original image one can not compute the absolute image quality, of course)
 
-##RMSE plot
-plt.figure()
-plt.plot(np.vstack((qualitySIRT[0, :], qualityOSSART[0, :], qualitySART[0, :])).T)
-plt.title("Evolution of RMSE per iteration")
-plt.xlabel("Iteration")
-plt.ylabel("RMSE")
-plt.gca().legend(("SIRT", "OS-SART", "SART"))
-
-##CC plot
-plt.figure()
-plt.plot(np.vstack((qualitySIRT[1, :], qualityOSSART[1, :], qualitySART[1, :])).T)
-plt.title("Evolution of CC per iteration")
-plt.xlabel("Iteration")
-plt.ylabel("CC")
-plt.gca().legend(("SIRT", "OS-SART", "SART"))
-
-##MSSIM plot
-plt.figure()
-plt.plot(np.vstack((qualitySIRT[2, :], qualityOSSART[2, :], qualitySART[2, :])).T)
-plt.title("Evolution of MSSIM per iteration")
-plt.xlabel("Iteration")
-plt.ylabel("MSSIM")
-plt.gca().legend(("SIRT", "OS-SART", "SART"))
-
-
-##UQI plot
-plt.figure()
-plt.plot(np.vstack((qualitySIRT[3, :], qualityOSSART[3, :], qualitySART[3, :])).T)
-plt.title("Evolution of UQI per iteration")
-plt.xlabel("Iteration")
-plt.ylabel("UQI")
-plt.gca().legend(("SIRT", "OS-SART", "SART"))
+# Plot each algorithm on its own completed-iteration axis, without stacking
+# or padding histories. The ART solvers currently run all requested iterations.
+plot_quality_measures(
+    {"SIRT": qualitySIRT, "SART": qualitySART, "OS-SART": qualityOSSART}, qualmeas)
 
 plt.show()
 

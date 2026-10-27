@@ -1,4 +1,5 @@
-%% DEMO 02: Sample data in TIGRE
+%% Demo 02: Load bundled sample data
+% Requires: MATLAB graphics and bundled sample data; no CUDA.
 %
 %
 % TIGRE has some sample data so you can use without the need of having

@@ -1,4 +1,4 @@
-#%% Demo 13: Helical Geometry tests
+# %% Demo 13: Helical scan geometry
 #
 #
 # This demo shows an example of TIGRE working on Helical scan geometries
@@ -29,11 +29,19 @@ import time
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([512, 128, 128])
+geo.sVoxel = np.array([1024.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([512, 512])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 0.5
 
 angles = np.linspace(0, 2 * np.pi, 100)
 angles = np.hstack([angles, angles, angles])  # loop 3 times
 
-# Load thorax phantom data
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 
 # This makes it helical.
@@ -57,10 +65,10 @@ data = tigre.Ax(head, geo, angles)
 # plotProj(data,angles);
 ## Reconstruct Helical
 
-SIRTimg = algs.sirt(data, geo, angles, 30)
+OSSARTimg = algs.os_sart(data, geo, angles, 30)
 # SARTimg=SART(data,geo,angles,30); # takes time
 CGLSimg = algs.cgls(data, geo, angles, 20)
 ## Plot results
 
-# CGLS and SIRT
-tigre.plotImg(np.concatenate([head, SIRTimg, CGLSimg], axis=1), dim="z", step=3, clims=[0, 1])
+# CGLS and OS-SART
+tigre.plotImg(np.concatenate([head, OSSARTimg, CGLSimg], axis=1), dim="z", step=3, clims=[0, 1])

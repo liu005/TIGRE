@@ -11,8 +11,17 @@ if nargin>1
 else
     load_geo=true;
 end
+% Validate before any calibration processing or GPU initialization.
+assert((ischar(datafolder) && isrow(datafolder)) || (isstring(datafolder) && isscalar(datafolder)), ...
+    'TIGRE:Varian:DataFolder','datafolder must be a directory path');
+datafolder=char(datafolder);
+assert(isfolder(datafolder),'TIGRE:Varian:DataFolder', ...
+    'Varian dataset folder does not exist: %s. Replace the demo placeholder with your scan folder.',datafolder);
 %% Scan.xml
 filestr = dir([datafolder filesep 'Scan.xml']);
+assert(numel(filestr)==1 && ~filestr.isdir,'TIGRE:Varian:MissingScanXML', ...
+    'Expected Scan.xml in %s. Select the Varian acquisition folder containing Scan.xml and the projection files.',datafolder);
+
 
 ScanXML = getfield(xml2struct(fullfile(filestr.folder, filestr.name)),...
     'Scan');
@@ -21,6 +30,9 @@ ScanXML = getfield(xml2struct(fullfile(filestr.folder, filestr.name)),...
 filestr = dir([datafolder filesep '**' filesep 'Reconstruction.xml']);
 ReconXML=[];
 if ~isempty(filestr) && load_geo
+    assert(numel(filestr)==1,'TIGRE:Varian:AmbiguousReconstruction', ...
+        'Multiple Reconstruction.xml files found. Use GeometryFromXML(datafolder,false) to estimate geometry instead.');
+
     warning('Loading up geometry from already reconstructed dataset. Call geo=GeometryFromXML(datafolder,false) to autocompute plausible geometry')
     ReconXML = getfield(xml2struct(fullfile(filestr.folder, filestr.name)),...
         'Reconstruction');

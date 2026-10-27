@@ -1,4 +1,4 @@
-##% Demo 5: How to use plotting functions
+# %% Demo 05: Plot images and projections
 #
 # This demo will demonstrate the options for plotting projection and images
 # on TIGRE. The functions have been in previous demos, but in here an
@@ -29,11 +29,19 @@ import tigre.algorithms as algs
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 #%% Load data and generate projections
 # define angles
 angles = np.linspace(0, 2 * np.pi, 100)
-# Load thorax phantom data
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 # generate projections
 projections = tigre.Ax(head, geo, angles)
@@ -45,7 +53,7 @@ noise_projections = CTnoise.add(projections, Poisson=1e5, Gaussian=np.array([0, 
 # FDK
 imgFDK = algs.fdk(noise_projections, geo, angles)
 niter = 50
-imgOSSART = algs.ossart(noise_projections, geo, angles, 50)
+imgOSSART = algs.os_sart(noise_projections, geo, angles, 50)
 
 #%% Lets use PlotProj
 #

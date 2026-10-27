@@ -1,4 +1,4 @@
-## DEMO 16:  TIGRE 2D tomography
+# %% Demo 16: 2D tomography
 #
 #
 #  In demo we show how to do 2D tomography in TIGRE. It is exactly the same
@@ -64,9 +64,9 @@ angles = np.linspace(0, 2 * np.pi, 100)
 head = sample_loader.load_head_phantom(geo.nVoxel)
 projections = tigre.Ax(head, geo, angles)
 tigre.plotSinogram(projections, 0)
-#%% recosntruct
+#%% reconstruct
 
-imgOSSART = algs.ossart(projections, geo, angles, 40)
+imgOSSART = algs.os_sart(projections, geo, angles, 40)
 imgCGLS = algs.cgls(projections, geo, angles, 40)
 
 #%% Plot
@@ -105,9 +105,9 @@ geo.mode = "cone"
 angles = np.linspace(0, 2 * np.pi, 100)
 head = sample_loader.load_head_phantom(geo.nVoxel)
 projections = tigre.Ax(head, geo, angles)
-#%% recosntruct
+#%% reconstruct
 
-imgOSSART = algs.ossart(projections, geo, angles, 40)
+imgOSSART = algs.os_sart(projections, geo, angles, 40)
 imgCGLS = algs.cgls(projections, geo, angles, 40)
 
 #%% Plot

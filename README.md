@@ -46,6 +46,22 @@ YAML settings, and reload those settings for editing. `animate_geometry` accepts
 the same YAML and NPZ geometry files.
 A [MATLAB builder and animation port](Frontispiece/Detector_geometry_MATLAB.md)
 supports native MAT files and shared YAML/NPZ interchange.
+It also provides native CUDA surface projection/backprojection, CGLS/SIRT and
+validated circular surface FDK. See the [MATLAB build guide](Frontispiece/MATLAB_Blackwell_build.md)
+for the custom local Blackwell toolchain and its limits.
+
+The [MATLAB](MATLAB/Demos/README.md) and [Python](Python/demos/README.md) demo
+indexes use matching names where implementations are available. The
+[content comparison](Frontispiece/Demo_language_comparison.md) records shared
+geometry, algorithms and remaining differences. Demos 25/26 reconstruct the
+head phantom with curved/modular detectors; demo 27 demonstrates GUI geometry
+creation and editable/exact file round trips. The
+[dual-energy guide](Frontispiece/Dual_energy.md) covers demo 23's shared
+calibration tables and MATLAB-data import. Python's
+[Varian loader](Frontispiece/Varian_loader.md) is an explicitly limited CPU
+baseline, with unported corrections reported rather than silently omitted.
+The [validation guide](Frontispiece/Validation.md) lists reproducible test
+commands and the limits of the local Python/MATLAB checks.
 
 ## TIGRE features
 

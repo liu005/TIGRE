@@ -28,6 +28,15 @@ assert(contains(scene.axes.Title.String,'0 valid pixels')); close(h);
 base=tempname; path=[base '.mat']; remove=onCleanup(@() deleteIfPresent(path));
 geometryFile('save',path,struct('settings',s)); loaded=geometryFile('load',path);
 assert(isequal(loaded.surface.pixel_centers_mm,surface.pixel_centers_mm));
+% YAML/SciPy numeric counts arrive as int64; normalize before MATLAB math.
+integerSettings=s; integerSettings.n_views=int64(s.n_views);
+integerSettings.n_modules=int64(s.n_modules);
+integerSettings.module_shape=int64(s.module_shape);
+integerSettings.angular_span_deg=int64(s.angular_span_deg);
+geometryFile('save',path,struct('settings',integerSettings));
+loaded=geometryFile('load',path);
+assert(isa(loaded.settings.n_modules,'double'));
+assert(isequal(loaded.surface.pixel_centers_mm,surface.pixel_centers_mm));
 app=detectorGeometryGUI(path); app.figure.Visible='off';
 assert(isequal(app.surface().pixel_centers_mm,surface.pixel_centers_mm));
 delete(app.figure);

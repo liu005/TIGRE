@@ -1,4 +1,5 @@
-%% Demo 23: Dual Energy CBCT in TIGRE. 
+%% Demo 23: Dual-energy CBCT
+% Requires: two external energy datasets, calibration files and native CUDA.
 %
 % This demo will illustrate the options for performing dual-energy analysis
 % using the TIGRE toolkit.
@@ -16,7 +17,11 @@
 datafolder_low='~/your_data_path/varian/low_kV/2020-01-01_123456/';
 datafolder_high='~/your_data_path/varian/high_kV/2020-01-01_123456/';
 [proj_h, geo, angles_h] = VarianDataLoader(datafolder_high, 'bh', false);
-[proj_l, ~, angles_l] = VarianDataLoader(datafolder, 'bh', false);
+[proj_l, ~, angles_l] = VarianDataLoader(datafolder_low, 'bh', false);
+
+% Optional: use these same preprocessed scans in Python demo 23.
+% save('dual_energy_input.mat','proj_l','angles_l','proj_h','angles_h','geo','-v7');
+% conda run -n recon python Python/demos/d23_DualEnergy.py dual_energy_input.mat
 
 %% Material Decomposition
 % DE-CBCT decomposes the two scans into equivalent thicknesses of two basis
@@ -39,8 +44,8 @@ datafolder_high='~/your_data_path/varian/high_kV/2020-01-01_123456/';
 energy = 60; % keV
 VM_proj = MakeVMproj(Al_proj, PMMA_proj, energy,'material1','Al','material2','PMMA');
 
-VMimg = FDK(VM_proj, geo, angles);
-VMimg = OS_SART(VM_proj, geo, angles, 100);
+VMimgFDK = FDK(VM_proj, geo, angles);
+VMimgOSSART = OS_SART(VM_proj, geo, angles, 100);
 
 %% Plot image
-plotImg(VMimg)
+plotImg([VMimgFDK VMimgOSSART]);

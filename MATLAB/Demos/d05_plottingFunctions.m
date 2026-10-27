@@ -1,4 +1,5 @@
-%% Demo 5: How to use plotting functions
+%% Demo 05: Plot images and projections
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 % This demo will demonstrate the options for plotting projection and images
 % on TIGRE. The functions have been in previous demos, but in here an
@@ -50,7 +51,7 @@ imgOSSART=OS_SART(noise_projections,geo,angles,50);
 step=2;
 
 % 'Colormap': Defines the colormap used to plot. Default is 'gray'. any
-% MATLAB colromap can be used, also any user created Nx3 colorpam can be
+% MATLAB colormap can be used, also any user created Nx3 colormap can be
 % used. Additionally, TIGRE includes perceptually uniform colormaps, where
 % ?color == ?data. The perceptuall uniform options are the default 'gray',
 %  abd 'magma', 'viridis', 'inferno' and 'plasma'
@@ -102,7 +103,7 @@ dimension='Z'; % or 'z' or 3
 
 step=2;
 % 'Colormap': Defines the colormap used to plot. Default is 'gray'. any
-% MATLAB colromap can be used, also any user created Nx3 colorpam can be
+% MATLAB colormap can be used, also any user created Nx3 colormap can be
 % used. Additionally, TIGRE includes perceptually uniform colormaps, where
 % ?color == ?data. The perceptuall yuniform options are the default 'gray',
 % 'magma', 'viridis', 'inferno' and 'plasma'

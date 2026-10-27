@@ -1,4 +1,4 @@
-#%% DEMO 12: Understanding different Forward projections
+# %% Demo 12: Forward and backprojection operators
 #
 #
 #  In this more advanced demo, an explanation of the difference between the
@@ -28,11 +28,19 @@
 #%%Initialize
 import tigre
 import numpy as np
-from tigre.utilities import sample_loader
+from tigre.utilities import sl3d
 import time
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 #%% This parameter is key for the accuracy of the interpolated FWD projection.
 geo.accuracy = 0.5
@@ -48,7 +56,7 @@ angles = np.array([0])
 
 #%% Main difference
 
-head = sample_loader.load_head_phantom(geo.nVoxel)
+head = sl3d.shepp_logan_3d(geo.nVoxel)
 start_time = time.time()
 projInterp = tigre.Ax(head, geo, angles, "interpolated")
 interptime = time.time() - start_time
@@ -68,7 +76,7 @@ print("Time Siddon      : " + str(raytime))
 geo.nVoxel = np.array([32, 32, 32])  # number of voxels              (vx)
 geo.sVoxel = np.array([256, 256, 256])  # total size of the image       (mm)
 geo.dVoxel = geo.sVoxel / geo.nVoxel  # size of each voxel            (mm)
-head = sample_loader.load_head_phantom(geo.nVoxel)
+head = sl3d.shepp_logan_3d(geo.nVoxel)
 
 geo.accuracy = 3
 projInterp3 = tigre.Ax(head, geo, angles, "interpolated")

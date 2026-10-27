@@ -1,4 +1,5 @@
-%% Demo 13: Helical Geometry tests
+%% Demo 13: Helical scan geometry
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 % This demo shows an example of TIGRE working on Helical scan geometries

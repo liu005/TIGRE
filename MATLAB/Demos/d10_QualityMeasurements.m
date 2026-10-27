@@ -1,4 +1,5 @@
-%% Demo 10: How to use Image quality measures
+%% Demo 10: Image quality measurements
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 % This demo demonstrate how to compute all the image quality measures
 % by calling the "Measure_Quality.m" function with detailed description.
@@ -103,29 +104,10 @@ blcks=22;
                         
 %% Plot the changes of image quality measures over iterations
 
-%%RMSE plot
-figure
-plot([qualitySIRT(1,:);[qualitySART(1,:) nan(1,length(qualityOSSART)-length(qualitySART))];qualityOSSART(1,:)]');
-title('Evolution of RMSE per iteration')
-legend('SIRT','SART','OS-SART')
-                   
-%%CC plot
-figure
-plot([qualitySIRT(2,:);[qualitySART(2,:) nan(1,length(qualityOSSART)-length(qualitySART))];qualityOSSART(2,:)]');
-title('Evolution of correlation coefficient (CC) per iteration')
-legend('SIRT','SART','OS-SART')
-
-%%MSSIM plot
-figure
-plot([qualitySIRT(3,:);[qualitySART(3,:) nan(1,length(qualityOSSART)-length(qualitySART))];qualityOSSART(3,:)]');
-title('Evolution of mean structural similarity index per iteration')
-legend('SIRT','SART','OS-SART')
-                        
-%%UQI plot
-figure
-plot([qualitySIRT(4,:);[qualitySART(4,:) nan(1,length(qualityOSSART)-length(qualitySART))];qualityOSSART(4,:)]');
-title('Evolution of universal quality index per iteration')
-legend('SIRT','SART','OS-SART')
+% Each algorithm may stop at a different iteration. Plot its own history,
+% without zero padding, NaN padding or assuming SART stops first.
+plotQualityMeasures({qualitySIRT,qualitySART,qualityOSSART}, ...
+    {'SIRT','SART','OS-SART'},qualmeas);
 
 %% Compute the parameters for the target image
 % Knowing change of the parameters per iteration can be interesting, but

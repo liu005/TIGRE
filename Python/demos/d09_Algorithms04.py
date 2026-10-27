@@ -1,4 +1,4 @@
-#% DEMO 9:   Algorithms 04. Total Variation minimization algorithms
+# %% Demo 09: Total variation algorithms
 #
 #
 #  This demo presents the Total variation algorithms in TIGRE. Total
@@ -49,11 +49,19 @@ from tigre.utilities.im3Dnorm import im3DNORM
 
 #%% Geometry
 geo = tigre.geometry_default(high_resolution=False)
+# Match the MATLAB acquisition; Python volume and detector axes are reversed.
+geo.nVoxel = np.array([128, 128, 128])
+geo.sVoxel = np.array([256.0, 256.0, 256.0])
+geo.dVoxel = geo.sVoxel / geo.nVoxel
+geo.nDetector = np.array([256, 256])
+geo.dDetector = np.array([409.6, 409.6]) / geo.nDetector
+geo.sDetector = geo.nDetector * geo.dDetector
+geo.accuracy = 1.0
 
 #%% Load data and generate projections
 # define angles
-angles = np.linspace(0, 2 * np.pi, 100)
-# Load thorax phantom data
+angles = np.linspace(0, 2 * np.pi, 30, endpoint=False)
+# Load bundled head phantom data
 head = sample_loader.load_head_phantom(geo.nVoxel)
 # generate projections
 projections = tigre.Ax(head, geo, angles)
@@ -61,7 +69,7 @@ projections = tigre.Ax(head, geo, angles)
 noise_projections = CTnoise.add(projections, Poisson=1e5, Gaussian=np.array([0, 10]))
 
 #%% Lets create a OS-SART test for comparison
-imgOSSART = algs.ossart(noise_projections, geo, angles, 10)
+imgOSSART = algs.os_sart(noise_projections, geo, angles, 60)
 
 #%% Total Variation algorithms
 #
@@ -129,7 +137,7 @@ imgASDPOCS = algs.asd_pocs(
     noise_projections,
     geo,
     angles,
-    10,  # these are very important
+    50,  # Match the main MATLAB ASD-POCS comparison.
     tviter=ng,
     maxl2err=epsilon,
     alpha=alpha,  # less important.

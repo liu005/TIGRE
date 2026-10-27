@@ -1,11 +1,12 @@
-%% DEMO 12: Understanding different Forward projections
+%% Demo 12: Forward and backprojection operators
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 %  In this more advanced demo, an explanation of the difference between the
 %  forward projections will be given.
 % 
 %  While there are 2 backprojectors, these are less different, they just
-%  have different weights. One of the has a FDK weightt and the other on has
+%  have different weights. One of the has a FDK weight and the other on has
 %  a weight that makes it mathematically very close to the transpose of
 %  matrix A.
 %

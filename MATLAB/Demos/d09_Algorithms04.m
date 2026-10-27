@@ -1,4 +1,5 @@
-%% DEMO 9:  Algorithms 04. Total Variation minimization algorithms
+%% Demo 09: Total variation algorithms
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 %  This demo presents the Total variation algorithms in TIGRE. Total

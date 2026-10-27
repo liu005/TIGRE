@@ -1,4 +1,5 @@
-%% DEMO 7:  Algorithms 02. SART
+%% Demo 07: SART-family algorithms
+% Requires: native TIGRE CUDA MEX and bundled or generated data.
 %
 %
 % In this demo the usage of the algorithms on the SART family among with
