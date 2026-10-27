@@ -20,7 +20,9 @@ def test_animate_geometry_with_surface(name):
     n_modules = {"arc": 1, "modular_gaps": 3, "u": 3}[name]
     assert len(_detector_runs(surf)) == n_modules
     ani = animate_geometry(volume_geo(), surface=surf, animate=True)
+    ani._fig.canvas.draw()
     ani._func(2)  # one update step
+    ani._draw_was_started = True
 
 
 def test_surface_mode_rejects_object_rotation():
@@ -40,10 +42,13 @@ def test_module_slices_define_runs():
                    module_slices=[(slice(0, 1), slice(0, 10 * n))])
 
 
-def test_surface_mode_rejects_per_view_masks():
+def test_surface_mode_updates_per_view_masks():
     surf = SURFACES["arc"]()
     mask = surf.valid_mask.copy()
     mask[1, :, :5] = False
     varying = type(surf)(surf.source_positions_mm, surf.pixel_centers_mm, mask)
-    with pytest.raises(ValueError, match="same in every view"):
-        animate_geometry(volume_geo(), surface=varying, animate=False)
+    ani = animate_geometry(volume_geo(), surface=varying, animate=True)
+    ani._func(1)
+    assert f"{int(mask[1].sum())} valid pixels" in ani._fig.axes[0].get_title()
+    ani._fig.canvas.draw()
+    ani._draw_was_started = True

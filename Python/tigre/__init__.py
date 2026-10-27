@@ -24,7 +24,14 @@ from .utilities.geometry_default import FanGeometryDefault as fan_geometry_defau
 from .utilities.Ax import Ax
 from .utilities.Atb import Atb
 from .utilities.Ax_surface import Ax_surface, Atb_surface
-from .utilities.detector_geometry import DetectorModule, DetectorSurfaceGeometry, surface_from_geometry, linear_source_surface
+from .utilities.detector_geometry import (
+    DetectorModule,
+    DetectorSurfaceGeometry,
+    cylindrical_modular_detector_surface,
+    linear_source_surface,
+    piecewise_linear_modular_detector_surface,
+    surface_from_geometry,
+)
 from .utilities.visualization.plotproj import plotproj, plotProj, plotSinogram
 from .utilities.visualization.plotimg import plotimg, plotImg
 from .utilities.visualization.plot_geometry import plot_geometry

@@ -1,4 +1,4 @@
-function h = animateGeometry(geo, angles, pos, rotation, animate, fname)
+function h = animateGeometry(geo, angles, pos, rotation, animate, fname, surface)
 %ANIMATEGEOMETRY Plot an animated (or static) TIGRE cone-beam geometry.
 %
 %   H = ANIMATEGEOMETRY(GEO, ANGLES, POS, ROTATION, ANIMATE, FNAME) draws the
@@ -16,6 +16,9 @@ function h = animateGeometry(geo, angles, pos, rotation, animate, fname)
 %   ANIMATE  true (default) steps through all views; false draws view POS.
 %   FNAME    if given, the animation is written to [FNAME '_geometry.gif'].
 %
+%   GEO may also be a surface struct or a .mat/.yaml/.yml/.npz path.
+%   A seventh SURFACE argument uses explicit curved/modular coordinates.
+%   Surface arrays follow buildModularSurface; see Detector_geometry_MATLAB.md.
 %   Returns the figure handle.
 %
 %   MATLAB port of tigre.utilities.visualization.animate_geometry. Uses
@@ -36,6 +39,24 @@ function h = animateGeometry(geo, angles, pos, rotation, animate, fname)
 % Codes:              https://github.com/CERN/TIGRE/
 % Coded by:           Ander Biguri (plotgeometry), animated port by Yi Liu
 %--------------------------------------------------------------------------
+
+%% Surface and file inputs (legacy flat-geometry calls remain unchanged)
+if nargin<7, surface=[]; end
+if ischar(geo) || isstring(geo)
+    document=geometryFile('load',char(geo));
+    geo=document.geo; surface=document.surface;
+elseif isstruct(geo) && isfield(geo,'pixel_centers_mm')
+    surface=geo; geo=[];
+end
+if ~isempty(surface)
+    if nargin<3, pos=1; end
+    if nargin<4 || isempty(rotation), rotation='SD'; end
+    if nargin<5 || isempty(animate), animate=true; end
+    if nargin<6, fname=''; end
+    assert(strcmp(rotation,'SD'),'TIGRE:surface:rotation','Surface mode supports SD only');
+    h=animateDetectorSurface(surface,geo,pos,animate,fname);
+    return;
+end
 
 %% Arguments
 if nargin < 2 || isempty(angles)

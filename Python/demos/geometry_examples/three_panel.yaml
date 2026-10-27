@@ -1,0 +1,55 @@
+schema: tigre.geometry
+version: 1
+units:
+  length: mm
+  angle: degree
+rotation_convention: Rz(gantry+z) @ Ry(y) @ Rx(x)
+kind: modular
+builder:
+  layout: Piecewise linear
+  n_views: 48
+  source_radius_mm: 1000
+  source_z_mm: 0
+  module_shape:
+  - 16
+  - 32
+  pixel_spacing_mm:
+  - 3
+  - 3
+  detector_radius_mm: 536
+  column_gap: 2
+  n_modules: 3
+  angular_span_deg: 0
+  transverse_centers_mm:
+  - -96
+  - 0
+  - 96
+  normal_offsets_mm:
+  - 0
+  - 5
+  - 0
+  panel_angles_deg:
+  - 20
+  - 0
+  - -20
+  z_offsets_mm:
+  - 0
+  - 0
+  - 0
+  source_motion: Rotating source + detector
+  source_end_mm:
+  - 1000.0
+  - 200.0
+  - 0.0
+  source_start_mm: null
+  orbit_start_deg: 0.0
+  scan_span_deg: 360.0
+  panel_x_angles_deg:
+  - 5
+  - 0
+  - -5
+  panel_y_angles_deg:
+  - 0
+  - 10
+  - 0
+  cor_mm: 0

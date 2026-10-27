@@ -20,7 +20,9 @@ def _source_positions(source_positions_mm):
 
 
 def _pixel_centers(pixel_centers_mm, n_views):
-    centers = np.asarray(pixel_centers_mm, dtype=np.float64)
+    centers = np.asarray(pixel_centers_mm)
+    if centers.dtype != np.float32:
+        centers = np.asarray(centers, dtype=np.float64)
     if centers.ndim == 3 and centers.shape[-1] == 3:
         centers = np.broadcast_to(centers, (n_views,) + centers.shape)
     if (centers.ndim != 4 or centers.shape[0] != n_views
@@ -193,35 +195,32 @@ class DetectorSurfaceGeometry:
         if not modules or not all(isinstance(m, DetectorModule) for m in modules):
             raise ValueError("modules must be a non-empty sequence of DetectorModule objects")
 
-        placements = []
         n_rows = 0
         n_columns = 0
         for module in modules:
-            centers = module.world_pixel_centers(len(source))
-            row_end = module.row_offset + centers.shape[1]
-            column_end = module.column_offset + centers.shape[2]
+            row_end = module.row_offset + module.pixel_centers_mm.shape[0]
+            column_end = module.column_offset + module.pixel_centers_mm.shape[1]
             n_rows = max(n_rows, row_end)
             n_columns = max(n_columns, column_end)
-            placements.append((module, centers, row_end, column_end))
 
         owner = np.zeros((n_rows, n_columns), dtype=np.bool_)
-        for module, centers, row_end, column_end in placements:
+        module_slices = []
+        for module in modules:
+            row_end = module.row_offset + module.pixel_centers_mm.shape[0]
+            column_end = module.column_offset + module.pixel_centers_mm.shape[1]
             rows = slice(module.row_offset, row_end)
             columns = slice(module.column_offset, column_end)
             if owner[rows, columns].any():
                 raise ValueError("detector modules overlap in the dense data layout")
             owner[rows, columns] = True
+            module_slices.append((rows, columns))
 
         dense_centers = np.zeros(
             (len(source), n_rows, n_columns, 3), dtype=np.float32)
         dense_mask = np.zeros((n_rows, n_columns), dtype=np.bool_)
-        module_slices = []
-        for module, centers, row_end, column_end in placements:
-            rows = slice(module.row_offset, row_end)
-            columns = slice(module.column_offset, column_end)
-            dense_centers[:, rows, columns, :] = centers
+        for module, (rows, columns) in zip(modules, module_slices):
+            dense_centers[:, rows, columns, :] = module.world_pixel_centers(len(source))
             dense_mask[rows, columns] = True
-            module_slices.append((rows, columns))
 
         result = cls(source, dense_centers, dense_mask)
         result._module_slices = tuple(module_slices)
@@ -264,6 +263,155 @@ class DetectorSurfaceGeometry:
             raise ValueError("dense_data must contain only finite values")
         return [np.ascontiguousarray(values[:, rows, columns])
                 for rows, columns in self._module_slices]
+
+
+def _modular_surface(source_positions_mm, module_shape, pixel_spacing_mm,
+                     detector_radius_mm, module_centers_mm, panel_angles_rad,
+                     column_gap, detector_center_z_mm):
+    source = _source_positions(source_positions_mm)
+
+    shape = np.asarray(module_shape)
+    if (shape.shape != (2,) or shape.dtype.kind not in "iu"
+            or shape.dtype.kind == "b" or np.any(shape <= 0)):
+        raise ValueError("module_shape must contain positive integer (rows, columns)")
+    n_rows, n_columns = (int(value) for value in shape)
+
+    spacing = np.asarray(pixel_spacing_mm, dtype=np.float64)
+    if spacing.ndim == 0:
+        spacing = np.repeat(spacing, 2)
+    if (spacing.shape != (2,) or not np.isfinite(spacing).all()
+            or np.any(spacing <= 0)):
+        raise ValueError("pixel_spacing_mm must be a positive scalar or (row, column) pair")
+    row_spacing, column_spacing = spacing
+
+    try:
+        radius = float(detector_radius_mm)
+        center_z = float(detector_center_z_mm)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("detector radius and center z must be finite scalars") from exc
+    if not np.isfinite(radius) or radius <= 0:
+        raise ValueError("detector_radius_mm must be a positive finite scalar")
+    if not np.isfinite(center_z):
+        raise ValueError("detector_center_z_mm must be a finite scalar")
+
+    centers = np.asarray(module_centers_mm, dtype=np.float64)
+    if centers.ndim != 2 or centers.shape[1] != 3 or centers.shape[0] == 0:
+        raise ValueError("module_centers_mm must have shape (n_modules, 3)")
+    if not np.isfinite(centers).all():
+        raise ValueError("module_centers_mm must contain only finite values")
+    angles = np.asarray(panel_angles_rad, dtype=np.float64)
+    if angles.shape != (len(centers),) or not np.isfinite(angles).all():
+        raise ValueError("panel_angles_rad must contain one finite angle per module")
+    if (not isinstance(column_gap, (int, np.integer))
+            or isinstance(column_gap, (bool, np.bool_)) or column_gap < 0):
+        raise ValueError("column_gap must be a non-negative integer")
+
+    source_angles = np.arctan2(source[:, 1], source[:, 0]).astype(np.float64)
+    if np.any(np.hypot(source[:, 0], source[:, 1]) == 0):
+        raise ValueError("source positions must not lie on the z axis")
+
+    local_pixels = np.zeros((n_rows, n_columns, 3), dtype=np.float64)
+    local_pixels[..., 1] = column_spacing * (
+        np.arange(n_columns) - (n_columns - 1) / 2.0)[None, :]
+    local_pixels[..., 2] = row_spacing * (
+        np.arange(n_rows) - (n_rows - 1) / 2.0)[:, None]
+
+    modules = []
+    for index, (center, panel_angle) in enumerate(zip(centers, angles)):
+        poses = np.zeros((len(source), 4, 4), dtype=np.float64)
+        poses[:, 3, 3] = 1.0
+        for view, gantry_angle in enumerate(source_angles):
+            angle = gantry_angle + panel_angle
+            cosine, sine = np.cos(angle), np.sin(angle)
+            poses[view, :3, :3] = [
+                [cosine, -sine, 0.0],
+                [sine, cosine, 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+            gantry_cosine, gantry_sine = (
+                np.cos(gantry_angle), np.sin(gantry_angle))
+            poses[view, :3, 3] = [
+                -radius * gantry_cosine
+                + center[0] * gantry_cosine - center[1] * gantry_sine,
+                -radius * gantry_sine
+                + center[0] * gantry_sine + center[1] * gantry_cosine,
+                center_z + center[2],
+            ]
+        modules.append(DetectorModule(
+            local_pixels, poses, column_offset=index * (n_columns + column_gap)))
+
+    return DetectorSurfaceGeometry.from_modules(source, modules)
+
+
+def piecewise_linear_modular_detector_surface(
+        source_positions_mm, module_shape, pixel_spacing_mm, detector_radius_mm,
+        module_centers_mm, panel_angles_rad=None, column_gap=0,
+        detector_center_z_mm=0.0):
+    """Build a modular surface from panel centers and in-plane panel angles.
+
+    ``module_centers_mm`` contains one ``(normal, transverse, z)`` offset per
+    module, relative to the center of a nominal detector plane at
+    ``(-detector_radius_mm, 0, detector_center_z_mm)``. ``panel_angles_rad``
+    gives each panel's rotation about z relative to that plane; zero makes a
+    flat panel facing the source. This supports flat, faceted, and U-shaped
+    layouts. Module pixels are centered, equally spaced flat grids.
+
+    The detector follows the source's azimuth about the z axis. ``module_shape``
+    is ``(rows, columns)`` and ``pixel_spacing_mm`` is a scalar or
+    ``(row, column)`` pair. ``column_gap`` inserts absent data columns between
+    adjacent modules.
+    """
+    centers = np.asarray(module_centers_mm, dtype=np.float64)
+    if centers.ndim != 2 or centers.shape[1] != 3 or centers.shape[0] == 0:
+        raise ValueError("module_centers_mm must have shape (n_modules, 3)")
+    if panel_angles_rad is None:
+        angles = np.zeros(len(centers), dtype=np.float64)
+    else:
+        angles = panel_angles_rad
+    return _modular_surface(
+        source_positions_mm, module_shape, pixel_spacing_mm, detector_radius_mm,
+        centers, angles, column_gap, detector_center_z_mm)
+
+
+def cylindrical_modular_detector_surface(
+        source_positions_mm, module_shape, pixel_spacing_mm, detector_radius_mm,
+        n_modules, angular_span_rad, column_gap=0, detector_center_z_mm=0.0):
+    """Build equally spaced flat modules along a cylindrical detector arc.
+
+    ``angular_span_rad`` is the angle between the first and last module-center
+    radial directions. Module centers lie on the cylinder of
+    ``detector_radius_mm`` about the z axis, and each module is tangent to it.
+    The center of the arc faces the source at gantry azimuth zero. As with
+    :func:`piecewise_linear_modular_detector_surface`, the detector follows the
+    source azimuth, module pixels are centered flat grids, and ``column_gap``
+    controls absent data columns between modules.
+    """
+    if (not isinstance(n_modules, (int, np.integer))
+            or isinstance(n_modules, (bool, np.bool_)) or n_modules < 1):
+        raise ValueError("n_modules must be a positive integer")
+    try:
+        span = float(angular_span_rad)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("angular_span_rad must be a finite positive scalar") from exc
+    if not np.isfinite(span) or span <= 0 or span > 2.0 * np.pi:
+        raise ValueError("angular_span_rad must be in the range (0, 2*pi]")
+    try:
+        radius = float(detector_radius_mm)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("detector_radius_mm must be a positive finite scalar") from exc
+    if not np.isfinite(radius) or radius <= 0:
+        raise ValueError("detector_radius_mm must be a positive finite scalar")
+
+    if n_modules == 1:
+        angles = np.zeros(1, dtype=np.float64)
+    else:
+        angles = np.linspace(span / 2.0, -span / 2.0, int(n_modules))
+    centers = np.zeros((int(n_modules), 3), dtype=np.float64)
+    centers[:, 0] = radius * (1.0 - np.cos(angles))
+    centers[:, 1] = -radius * np.sin(angles)
+    return _modular_surface(
+        source_positions_mm, module_shape, pixel_spacing_mm, radius, centers,
+        angles, column_gap, detector_center_z_mm)
 
 
 def linear_source_surface(pixel_centers_mm, source_start_mm, source_end_mm, n_views, valid_mask=None):

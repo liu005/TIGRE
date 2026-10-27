@@ -1,4 +1,5 @@
 
+from os import PathLike
 import numpy as np
 import copy
 from matplotlib import pyplot as plt
@@ -14,8 +15,9 @@ def animate_geometry(ogeo,angles=None,pos=None,rotation="SD",animate=True,fname=
 
     Parameters
     ----------
-    ogeo : tigre geometry object
-        Geometry to be plotted.
+    ogeo : tigre geometry object or path
+        Geometry to plot, or a versioned .yaml/.yml or numeric .npz geometry file.
+        Files use surface rendering and carry their own trajectory; omit angles.
     angles : array, optional
         Angles to plot for the geometry. The default is np.linspace(0,2*np.pi,100).
     pos : float, optional
@@ -33,9 +35,12 @@ def animate_geometry(ogeo,angles=None,pos=None,rotation="SD",animate=True,fname=
     surface : DetectorSurfaceGeometry, optional
         Per-view source positions and per-pixel detector positions (curved,
         modular or U-shaped detectors). When given, the source, every detector
-        module and its pixels are drawn from the surface, and ``ogeo`` only
+        module and sampled pixels are drawn from the surface, and ``ogeo`` only
         supplies the volume (sVoxel, offOrigin). ``angles`` is ignored (one
         frame per view of the surface) and only rotation="SD" is supported.
+        Module row/column slices and changing masks are respected. Curved grids
+        use sampled triangles; one-row/column detectors use lines. The drawing
+        connects pixel centres rather than extrapolating physical pixel edges.
     view : tuple (elev, azim) in degrees, optional
         Camera angle. Defaults to (26, 52).
 
@@ -67,6 +72,13 @@ def animate_geometry(ogeo,angles=None,pos=None,rotation="SD",animate=True,fname=
 # Codes:              https://github.com/CERN/TIGRE/
 # Coded by:           Ander Biguri, modified by Yi Liu
 #--------------------------------------------------------------------------
+
+    if isinstance(ogeo, (str, PathLike)):
+        if surface is not None or angles is not None:
+            raise ValueError("A geometry file supplies its own surface and trajectory; omit angles/surface.")
+        from tigre.utilities.geometry_io import load_geometry_file
+        document = load_geometry_file(ogeo)
+        ogeo, surface = document.geometry, document.surface
 
     if surface is not None:
         if rotation != "SD":
@@ -236,123 +248,26 @@ def animate_geometry(ogeo,angles=None,pos=None,rotation="SD",animate=True,fname=
         return ax
 
 
-def _detector_runs(surface):
-    """Modules (or, without module info, contiguous valid column runs) as (start, stop)."""
-    cols = surface.valid_mask.any(axis=(0, 1))
-    slices = getattr(surface, "_module_slices", None)
-    if slices:
-        return [(c.start, c.stop) for _, c in slices if cols[c.start:c.stop].any()]
-    runs, start = [], None
-    for c, ok in enumerate(np.append(cols, False)):
-        if ok and start is None:
-            start = c
-        elif not ok and start is not None:
-            runs.append((start, c))
-            start = None
-    return runs
+from .surface_renderer import SurfaceRenderer, _detector_runs, _surface_mesh
 
 
 def _animate_surface(geo, surface, pos, animate, fname, max_points=4000, view=None):
-    """Draw source, object and a per-pixel detector surface (see animate_geometry)."""
-    src = np.asarray(surface.source_positions_mm, dtype=np.float64)
-    pix = np.asarray(surface.pixel_centers_mm, dtype=np.float64)
-    mask = np.asarray(surface.valid_mask)
-    if not (mask == mask[0]).all():
-        raise ValueError("animating a surface requires a valid_mask that is the same in every view")
-    n_views = src.shape[0]
-
-    pos = 0 if pos is None or pos < 0 or pos >= n_views else int(pos)
-    runs = _detector_runs(surface)
-    if not runs:
-        raise ValueError("the detector surface has no valid pixels")
-
+    """Render curved/modular surfaces with arbitrary per-view poses and masks."""
     fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
     elev, azim = (26, 52) if view is None else view
     ax.view_init(azim=azim, elev=elev)
-    ln = np.min(geo.sVoxel) / 2
-
-    # world frame == plot frame (x, y, z)
-    otj = np.fliplr(np.atleast_2d(geo.offOrigin)).astype(np.float64)[0]
-    overts = calCube(otj, np.asarray(geo.sVoxel)[[2, 1, 0]])
-    ocube = art3d.Poly3DCollection(overts, color='c', alpha=0.2)
-    ax.add_collection3d(ocube)
-    ax.quiver(0, 0, 0, 1, 0, 0, length=ln, color='r')
-    ax.quiver(0, 0, 0, 0, 1, 0, length=ln, color='b')
-    ax.quiver(0, 0, 0, 0, 0, 1, length=ln, color='g')
-    ax.text(-10, -10, -10, 'O', None)
-
-    # source trajectory and current source
-    ax.plot3D(src[:, 0], src[:, 1], src[:, 2], color='plum', ls='', marker='.', markersize=2.5)
-    source = ax.scatter(*src[pos], color='plum', s=5)
-    stext = ax.text(src[pos, 0], src[pos, 1], src[pos, 2] + 30, 'S')
-
-    # detector: outline polygon of every module, plus a subsample of its pixels
-    row_ok = mask.any(axis=(0, 2))
-    r0, r1 = np.flatnonzero(row_ok)[[0, -1]]
-
-    def outline(view, c0, c1):
-        p = pix[view]
-        return np.vstack([p[r0, c0:c1], p[r0:r1, c1 - 1], p[r1, c0:c1][::-1], p[r0:r1, c0][::-1]])
-
-    polys = [art3d.Poly3DCollection([outline(pos, *run)], color='brown', alpha=0.2) for run in runs]
-    for poly in polys:
-        ax.add_collection3d(poly)
-
-    flat = mask[0].reshape(-1)
-    stride = max(1, int(np.ceil(flat.sum() / max_points)))
-    sample = np.flatnonzero(flat)[::stride]
-    points = pix.reshape(n_views, -1, 3)[:, sample]
-    cloud = ax.scatter(*points[pos].T, s=0.6, color='k', alpha=0.6)
-
-    def corners(view):
-        out = []
-        for c0, c1 in runs:
-            p = pix[view]
-            out += [p[r0, c0], p[r0, c1 - 1], p[r1, c1 - 1], p[r1, c0]]
-        return np.array(out)
-
-    corner = corners(pos)
-    beam = [ax.plot3D(*zip(src[pos], c), color='y')[0] for c in corner]
-    centre = pix[:, r0:r1 + 1][:, :, np.flatnonzero(mask[0].any(axis=0))].reshape(n_views, -1, 3).mean(axis=1)
-    cbeam = ax.plot3D(*zip(src[pos], centre[pos]), color='pink')[0]
-
-    lo = np.minimum(points.reshape(-1, 3).min(0), src.min(0))
-    hi = np.maximum(points.reshape(-1, 3).max(0), src.max(0))
-    lo, hi = np.minimum(lo, otj - np.max(geo.sVoxel) / 2), np.maximum(hi, otj + np.max(geo.sVoxel) / 2)
-    ax.set_xlim3d(lo[0], hi[0]); ax.set_ylim3d(lo[1], hi[1]); ax.set_zlim3d(lo[2], hi[2])
-    ax.set_box_aspect(hi - lo)
-    ax.set_xlabel('X'); ax.set_ylabel('Y'); ax.set_zlabel('Z')
-
-    def title_text(view):
-        az = np.degrees(np.arctan2(src[view, 1], src[view, 0]))
-        return (f"Detector surface geometry - view {view}/{n_views}, source azimuth {az:.1f}°\n\n"
-                f"{len(runs)} detector module(s), {int(mask[view].sum())} valid pixels")
-
-    title = ax.set_title(title_text(pos))
-
-    def update(view):
-        source.set_offsets(src[view, :2])
-        source.set_3d_properties(src[view, 2], 'z')
-        stext.set_position(src[view, :2] + 15)
-        stext.set_3d_properties(src[view, 2] + 30, 'z')
-        for poly, run in zip(polys, runs):
-            poly.set_verts([outline(view, *run)])
-        cloud._offsets3d = tuple(points[view].T)
-        for line, c in zip(beam, corners(view)):
-            line.set_data(*zip(src[view, :2], c[:2]))
-            line.set_3d_properties((src[view, 2], c[2]), 'z')
-        cbeam.set_data(*zip(src[view, :2], centre[view, :2]))
-        cbeam.set_3d_properties((src[view, 2], centre[view, 2]), 'z')
-        title.set_text(title_text(view))
-
+    n_views = len(surface.source_positions_mm)
+    pos = 0 if pos is None or pos < 0 or pos >= n_views else int(pos)
+    renderer = SurfaceRenderer(ax, surface, geo=geo, pos=pos, max_points=max_points)
+    update = renderer.update
     if animate:
-        ani = animation.FuncAnimation(fig, update, n_views, interval=100)
+        ani = animation.FuncAnimation(fig, update, frames=range(pos, n_views), interval=100)
         if fname:
-            fname += '_geometry'
-            for writer in ['ffmpeg', 'pillow', 'imagemagick']:
+            for writer in ("ffmpeg", "pillow", "imagemagick"):
                 try:
-                    ani.save(f'{fname}.mp4' if writer == 'ffmpeg' else f'{fname}.gif', writer=writer, fps=30)
+                    suffix = ".mp4" if writer == "ffmpeg" else ".gif"
+                    ani.save(str(fname) + "_geometry" + suffix, writer=writer, fps=30)
                     break
                 except ValueError:
                     continue

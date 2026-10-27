@@ -38,6 +38,15 @@ application, do not hesitate to [contact us](#contact) or open a  [discussion th
  - [Licensing](#licensing)
 
 
+For modular detector layouts, 3D panel orientation, and COR, see the
+[detector geometry GUI manual](Frontispiece/Detector_geometry_GUI.md) and
+[detector-surface API guide](Frontispiece/Detector_surface.md).
+The GUI can also load existing geometry in read-only inspection mode, save editable
+YAML settings, and reload those settings for editing. `animate_geometry` accepts
+the same YAML and NPZ geometry files.
+A [MATLAB builder and animation port](Frontispiece/Detector_geometry_MATLAB.md)
+supports native MAT files and shared YAML/NPZ interchange.
+
 ## TIGRE features
 
 TIGRE is a GPU-based CT reconstruction software repository that contains a wide variety of iterative algorithms.

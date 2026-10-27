@@ -64,7 +64,8 @@ def staticDetLinearSourceGeo(geo, s_pos, s_rot=0, rot=0, offDet=None) -> Geometr
         offDet0, offDet1 = offDet[:,0], offDet[:,1]
     
     # Compute new DSD, DSO
-    ngeo.DSO = np.sqrt(ngeo.DSO**2 + s_pos**2) 
+    ngeo.DSO = np.hypot(ngeo.DSO + s_pos * np.sin(s_rot),
+                        s_pos * np.cos(s_rot))
     ngeo.DSD = ngeo.DSO + R * cos_ang - sin_ang * offDet1 
     
     # Update offDetector
@@ -177,8 +178,8 @@ def ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos=None, d_rot=None) -> Geometry:
     nd_local = np.einsum('nij,nj->ni', Rs_T, nd)
     sd_cross = np.cross(ns_local, nd_local)
     # note: A x B = ||A||.||B||sin(theta)
-    sd_ang = np.arcsin(sd_cross)
-    if np.any(sd_ang >= np.pi/2):  
+    sd_ang = np.arcsin(np.clip(sd_cross, -1.0, 1.0))
+    if np.any(np.einsum('ij,ij->i', ns, nd) >= 0):
         raise RuntimeError("Source and detector must always on opposite sides")        
     
     # Compute detector offset in xyz
@@ -201,7 +202,7 @@ def ArbitrarySourceDetMoveGeo(geo, s_pos, d_pos=None, d_rot=None) -> Geometry:
     # 2026-07-20 (same fix pattern, same root cause, as sd_ang/sd_cross).
     shift = d_pos - Int
     shift = np.einsum('nij,nj->ni', Rs_T, shift)
-    dd = np.linalg.norm(shift, axis=1, keepdims=True) * np.sign(shift)
+    dd = shift
     ngeo.offDetector = np.column_stack((dd[:,2], dd[:,1])) + Rotation.from_euler('XYZ', sd_ang).apply(d_offset)[:,2:0:-1]
         
     # Update rotDetector
@@ -231,7 +232,7 @@ def find_intersection_planes(plane_points, normal, line_points=None):
     """
     plane_points = np.asarray(plane_points)
     normal = np.asarray(normal)
-    line_points = 0*plane_points if line_points == None else np.asarray(line_points)
+    line_points = 0*plane_points if line_points is None else np.asarray(line_points)
 
     # Compute D = A*x0 + B*y0 + C*z0
     A, B, C = normal[:,0], normal[:,1], normal[:,2]

@@ -1,4 +1,4 @@
-"""Approximate FDK reconstruction for a circular orbit with a curved/modular detector.
+"""Approximate FDK reconstruction for circular or experimental per-view surfaces.
 
 The detector is described by a DetectorSurfaceGeometry (per-pixel positions). The
 algorithm is the equiangular fan-beam FDK (Kak & Slaney, 3.5) with a Feldkamp cone
@@ -15,12 +15,16 @@ weight, generalised in three ways:
 Requirements (checked, ValueError / NotImplementedError otherwise):
 circular source orbit about the z axis at constant height, a detector extruded along
 z (pixel x/y independent of the row, z independent of the column and view), and the
-same valid columns in every view (whole-column gaps only).
+same valid columns in every view (whole-column gaps only). ``allow_approximate=True``
+opts into a separate, unvalidated per-view filtered-backprojection path.
 """
+import warnings
+
 import numpy as np
 
 from tigre.utilities.Ax_surface import (
     _volume_params, _fdk_surface_ext, _devices, _slabs, _slab_offset, _run_slabs)
+from tigre.utilities.Ax_surface import Atb_surface
 
 
 class _Fan:
@@ -167,8 +171,186 @@ def parker_weights(beta_rel, gamma_tilde, gamma_max):
     return np.where(b <= 2 * a, w1, np.where(b <= np.pi - 2 * g, 1.0, w3))
 
 
+def _surface_fan_angles(surface):
+    """Return per-pixel fan angles and monotone column order for each view/row."""
+    source = surface.source_positions_mm.astype(np.float64)
+    pixels = surface.pixel_centers_mm
+    mask = surface.valid_mask
+    nv, nr, nc = mask.shape
+    gamma = np.empty((nv, nr, nc), dtype=np.float32)
+    orders = np.empty((nv, nr), dtype=object)
+
+    for view in range(nv):
+        view_pixels = pixels[view].astype(np.float64)
+        rays = view_pixels - source[view]
+        valid_rays = rays[mask[view]]
+        if valid_rays.size == 0:
+            raise ValueError(f"view {view} has no valid detector pixels")
+        axis = valid_rays.mean(axis=0)
+        axis_norm = np.linalg.norm(axis)
+        if axis_norm <= 0:
+            raise ValueError(f"view {view} has no defined detector central ray")
+        axis /= axis_norm
+
+        column_direction = np.mean(
+            view_pixels[:, -1] - view_pixels[:, 0], axis=0)
+        transverse = column_direction - np.dot(column_direction, axis) * axis
+        transverse_norm = np.linalg.norm(transverse)
+        if transverse_norm <= 1e-8:
+            raise ValueError(f"view {view} has no defined detector column direction")
+        transverse /= transverse_norm
+
+        forward = np.einsum("...i,i->...", rays, axis)
+        lateral = np.einsum("...i,i->...", rays, transverse)
+        if np.any(forward[mask[view]] <= 0):
+            raise ValueError(f"view {view} contains detector pixels behind its central ray")
+        gamma[view] = np.arctan2(lateral, forward)
+
+        for row in range(nr):
+            columns = np.flatnonzero(mask[view, row])
+            if columns.size < 2:
+                raise ValueError(
+                    f"view {view}, row {row} needs at least two valid columns for filtering")
+            delta = np.diff(gamma[view, row, columns])
+            if np.all(delta > 0):
+                orders[view, row] = columns
+            elif np.all(delta < 0):
+                orders[view, row] = columns[::-1]
+            else:
+                raise NotImplementedError(
+                    f"view {view}, row {row} has non-monotone fan angles; "
+                    "a single 1D FDK filter cannot represent this detector row")
+    return gamma, orders
+
+
+def _filter_surface_row(values, gamma, valid_columns, cutoff, window):
+    """Filter one row after resampling its valid samples to uniform fan angles."""
+    columns = valid_columns
+    angles = gamma[columns]
+    data = values[columns]
+    if angles[0] > angles[-1]:
+        angles, data = angles[::-1], data[::-1]
+    spacing = float(np.min(np.diff(angles)))
+    count = int(np.ceil((angles[-1] - angles[0]) / spacing - 1e-9)) + 1
+    grid = angles[0] + spacing * np.arange(count)
+    uniform = np.interp(grid, angles, data)
+
+    nfft = 1
+    while nfft < 2 * count:
+        nfft <<= 1
+    frequency = np.fft.rfftfreq(nfft, d=spacing)
+    nyquist = 0.5 / spacing
+    response = 2.0 * frequency
+    cutoff_frequency = cutoff * nyquist
+    if window == "hann":
+        response *= 0.5 * (1.0 + np.cos(np.pi * frequency / cutoff_frequency))
+        response[frequency > cutoff_frequency] = 0.0
+    elif window == "ram-lak":
+        response[frequency > cutoff_frequency] = 0.0
+    else:
+        raise ValueError("filter must be 'ram-lak' or 'hann'")
+    filtered = np.fft.irfft(np.fft.rfft(uniform, nfft) * response, nfft)[:count]
+    result = np.zeros(values.shape, dtype=np.float64)
+    result[columns] = np.interp(angles if columns[0] < columns[-1] else angles[::-1],
+                                grid, filtered)
+    return result
+
+
+def _fdk_surface_per_view(proj, geo, surface, cutoff, filter, parker,
+                          max_short_deficiency, gpuids, n_slabs):
+    """Experimental filtered backprojection for per-view detector surfaces."""
+    warnings.warn(
+        "Per-view fdk_surface is experimental: it uses per-view fan-angle filtering "
+        "and a ray-driven surface backprojection. Reconstruction quality is not "
+        "validated for arbitrary source or detector trajectories.",
+        RuntimeWarning, stacklevel=3)
+    source = surface.source_positions_mm.astype(np.float64)
+    pixels = surface.pixel_centers_mm
+    mask = surface.valid_mask
+    nv, nr, nc = mask.shape
+    gamma, orders = _surface_fan_angles(surface)
+
+    center = np.asarray(geo.offOrigin, dtype=np.float64)
+    if center.ndim == 2:
+        if not np.allclose(center, center[0]):
+            raise ValueError("offOrigin must be identical for all views")
+        center = center[0]
+    beta = np.unwrap(np.arctan2(source[:, 1] - center[1],
+                                source[:, 0] - center[0]))
+    if nv < 2 or np.any(np.diff(beta) == 0) or not (
+            np.all(np.diff(beta) > 0) or np.all(np.diff(beta) < 0)):
+        raise ValueError(
+            "experimental fdk_surface needs at least two views with monotone "
+            "source azimuth around the volume centre")
+    rel, dbeta, direction, span, full = _view_weights(beta)
+
+    radial = np.hypot(source[:, 0] - center[0], source[:, 1] - center[1])
+    circular = (np.ptp(radial) <= 1e-4 * radial.mean()
+                and np.ptp(source[:, 2]) <= 1e-3)
+    apply_parker = bool(parker and not full and circular)
+    if parker and not full and not circular:
+        warnings.warn(
+            "Parker weighting was skipped because the source trajectory is not "
+            "a constant-height circular orbit.",
+            RuntimeWarning, stacklevel=3)
+
+    gamma_max = max(float(np.max(np.abs(gamma[v][mask[v]]))) for v in range(nv))
+    col_weights = None
+    if apply_parker:
+        gamma_m = 0.5 * (span - np.pi)
+        deficiency = gamma_max - gamma_m
+        if deficiency > max_short_deficiency:
+            raise ValueError(
+                f"scan is {np.degrees(deficiency):.2f} deg short of the "
+                f"{np.degrees(np.pi + 2 * gamma_max):.2f} deg needed; "
+                "pass a larger max_short_deficiency to accept it")
+        gamma_m = max(gamma_m, 1e-3)
+        col_weights = np.zeros_like(gamma)
+        for view in range(nv):
+            for row in range(nr):
+                col_weights[view, row] = 2.0 * parker_weights(
+                    rel[view:view + 1], direction * gamma[view, row], gamma_m)[0]
+
+    filtered = np.zeros_like(proj, dtype=np.float32)
+    for view in range(nv):
+        view_pixels = pixels[view].astype(np.float64)
+        column_step = np.gradient(view_pixels, axis=1)
+        if nr > 1:
+            row_step = np.gradient(view_pixels, axis=0)
+            pixel_area = np.linalg.norm(np.cross(column_step, row_step), axis=-1)
+        else:
+            pixel_area = np.linalg.norm(column_step, axis=-1)
+        rays = view_pixels - source[view]
+        ray_length = np.linalg.norm(rays, axis=-1)
+        central = view_pixels.mean(axis=(0, 1)) - source[view]
+        central_length = np.linalg.norm(central)
+        if central_length <= 0:
+            raise ValueError(f"view {view} has no defined detector central ray")
+        central /= central_length
+        if np.any(ray_length[mask[view]] <= 0):
+            raise ValueError(f"view {view} has a valid detector pixel at its source")
+        cosine = np.maximum(
+            np.einsum("rcd,d->rc", rays / np.maximum(ray_length[..., None], 1e-12),
+                      central), 0.0)
+        weights = (pixel_area * cosine / np.maximum(ray_length ** 2, 1e-12)
+                   * dbeta[view])
+        if col_weights is not None:
+            weights *= col_weights[view]
+        elif not full and circular:
+            weights *= 2.0
+        for row in range(nr):
+            columns = orders[view, row]
+            row_filtered = _filter_surface_row(
+                proj[view, row], gamma[view, row], columns, cutoff, filter)
+            filtered[view, row] = row_filtered * weights[row]
+    filtered[~mask] = 0.0
+    return Atb_surface(np.ascontiguousarray(filtered, dtype=np.float32), geo, surface,
+                       gpuids=gpuids, n_slabs=n_slabs)
+
+
 def fdk_surface(proj, geo, surface, filter="ram-lak", cutoff=1.0, parker=True,
-                max_short_deficiency=np.radians(2.0), gpuids=None, n_slabs=None):
+                max_short_deficiency=np.radians(2.0), gpuids=None, n_slabs=None,
+                allow_approximate=False):
     """FDK-style reconstruction for a circular orbit and an arbitrary extruded detector.
 
     proj: (views, rows, cols) measured data aligned with ``surface``.
@@ -177,6 +359,8 @@ def fdk_surface(proj, geo, surface, filter="ram-lak", cutoff=1.0, parker=True,
     parker: apply Parker weights when the scan is shorter than 2*pi.
     gpuids: :class:`tigre.utilities.gpu.GpuIds` (default all GPUs); the volume is
     split into z-slabs (``n_slabs``, default one per device) backprojected concurrently.
+    allow_approximate: opt in to an experimental per-view surface path when the
+    detector or source does not meet the circular-orbit requirements.
     Returns the volume (nz, ny, nx), float32.
 
     Approximations: cone-beam error grows with the cone angle (as in FDK), and
@@ -190,7 +374,14 @@ def fdk_surface(proj, geo, surface, filter="ram-lak", cutoff=1.0, parker=True,
         raise ValueError("proj contains NaN or Inf at valid samples")
     if not (np.isfinite(cutoff) and 0 < cutoff <= 1):
         raise ValueError(f"cutoff must be in (0, 1], got {cutoff!r}")
-    fan = _analyse(surface)
+    try:
+        fan = _analyse(surface)
+    except NotImplementedError:
+        if not allow_approximate:
+            raise
+        return _fdk_surface_per_view(
+            proj, geo, surface, cutoff, filter, parker,
+            max_short_deficiency, gpuids, n_slabs)
     gamma, rho, zrow = fan.gamma, fan.rho, fan.zrow
     data = proj[:, :, fan.cols]
     if fan.flip_rows:
