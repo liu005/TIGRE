@@ -25,6 +25,12 @@ opens a per-panel table; **Apply** updates the field and **Preview** rebuilds
 the scene. **Play** toggles timer-based playback; the slider selects a view.
 Disabled fields are ignored by the builder. Piecewise-linear geometry derives
 the panel count from the transverse list, reported below the controls.
+Changing mode, loading geometry, or loading another preset closes open panel
+list editors. Applying a list does not rebuild the preview. Returning from
+inspection preserves edits that had not yet been previewed. Playback stops on
+mode changes and Preview; an invalid Preview marks the previous display as
+out of date and disables playback until corrected. Closing or deleting the
+main window removes its playback timer and list editor windows.
 
 Panel x/y angles accept a shared value or one per panel. Piecewise-linear z
 angles and position offsets require one entry per panel; cylindrical z angles
@@ -110,6 +116,7 @@ Python GUI's projection-remapping workflow; those remain Python facilities.
 
 ```matlab
 test_detectorGeometryGUI;   % presets, geometry, renderer, MAT, GUI
+test_detectorGeometryGUI_usability; % callbacks, field states, lists and timers
 test_animateGeometry;       % existing eight animation/GIF tests
 test_geometryInterchange;   % six MATLAB/Python layout/motion comparisons
 ```

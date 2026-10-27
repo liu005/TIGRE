@@ -5,11 +5,13 @@ function app=detectorGeometryGUI(input,angles)
 % MATLAB surface ordering and YAML interoperability: Detector_geometry_MATLAB.md.
 examples=detectorGeometryExamples(); settings=examples(1).settings;
 inspection=false; surface=[]; geo=[]; builderGeo=[]; scene=[]; player=[]; current=1;
+builderFields=[]; builderLayout=''; builderMotion=''; listWindows=gobjects(0);
 screen=get(groot,'ScreenSize');
 windowSize=[min(1280,screen(3)-80) min(720,screen(4)-120)];
 position=[screen(1:2)+(screen(3:4)-windowSize)/2 windowSize];
 f=uifigure('Name','TIGRE Modular Detector Builder','Position',position);
 f.CloseRequestFcn=@closeWindow;
+f.DeleteFcn=@(~,~) cleanupWindow();
 main=uigridlayout(f,[1 2]); main.ColumnWidth={470,'1x'};
 panel=uipanel(main,'Title','Geometry controls','Scrollable','on');
 names={'n_views','source_radius_mm','source_z_mm','orbit_start_deg','scan_span_deg', ...
@@ -65,6 +67,8 @@ if nargin>=1 && ~isempty(input)
 end
 app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDocument(geometryFile('load',path)), ...
     'surface',@getSurface,'settings',@getSettings);
+app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',motion, ...
+    'preview',preview,'back',back,'play',play,'slider',slider,'preset',preset);
 
     function populate()
         layout.Value=settings.layout; motion.Value=settings.source_motion;
@@ -96,7 +100,7 @@ app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDo
             note.Text='Apply list edits, then press Preview.';
         end
     end
-    function changeMode(~,~), updateState(); end
+    function changeMode(~,~), stopPlayer(); closeEditors(); updateState(); end
     function values=numbers(text)
         if isempty(strtrim(text)), values=[]; return; end
         values=str2double(regexp(strtrim(text),'[,\s]+','split'));
@@ -110,11 +114,17 @@ app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDo
     end
     function previewBuilder()
         if inspection, return; end
+        stopPlayer();
         try
             s=readSettings(); next=buildModularSurface(s);
             stopPlayer(); settings=s; surface=next; drawScene();
             status.Text='Builder mode. List Apply updates fields; Preview rebuilds geometry.';
-        catch ex, uialert(f,ex.message,'Invalid geometry'); end
+        catch ex
+            status.Text=['Preview failed: ' ex.message];
+            title(ax,'Preview out of date - correct inputs and press Preview');
+            play.Enable='off'; slider.Enable='off';
+            uialert(f,ex.message,'Invalid geometry');
+        end
     end
     function drawScene()
         if inspection, scene=renderDetectorSurface(ax,surface,geo);
@@ -129,7 +139,8 @@ app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDo
     end
     function togglePlay(~,~)
         if ~isempty(player) && isvalid(player) && strcmp(player.Running,'on'), stopPlayer(); return; end
-        player=timer('ExecutionMode','fixedSpacing','Period',.1,'BusyMode','drop','TimerFcn',@tick);
+        player=timer('ExecutionMode','fixedSpacing','Period',.1,'BusyMode','drop', ...
+            'Tag','TIGREDetectorPlayback','TimerFcn',@tick);
         play.Text='Pause'; start(player);
     end
     function tick(~,~)
@@ -142,7 +153,7 @@ app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDo
         player=[]; if isvalid(play), play.Text='Play'; end
     end
     function loadExample(~,~)
-        stopPlayer(); settings=examples(strcmp(preset.Value,{examples.name})).settings;
+        stopPlayer(); closeEditors(); settings=examples(strcmp(preset.Value,{examples.name})).settings;
         inspection=false; geo=[]; builderGeo=[]; populate(); previewBuilder();
     end
     function listEditor(name)
@@ -153,7 +164,9 @@ app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDo
             values=numbers(edits.(name).Value);
             if any(strcmp(name,{'panel_x_angles_deg','panel_y_angles_deg'})) && isscalar(values), values=repmat(values,1,count); end
             assert(numel(values)==count,'TIGRE:GUI:list','Enter one value per panel');
-            w=uifigure('Name',name,'Position',[200 200 400 450]);
+            w=uifigure('Name',labels{strcmp(names,name)},'Position',[200 200 400 450], ...
+                'Tag','TIGREPanelList','UserData',name);
+            listWindows(end+1)=w;
             g=uigridlayout(w,[2 2]); g.RowHeight={'1x',30};
             table=uitable(g,'Data',values(:),'ColumnEditable',true,'ColumnName',{'Value'}, ...
                 'RowName',arrayfun(@num2str,1:count,'UniformOutput',false)); table.Layout.Column=[1 2];
@@ -163,6 +176,11 @@ app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDo
         function applyList(~,~)
             if inspection || strcmp(edits.(name).Enable,'off') || ~isvalid(f)
                 delete(w); return;
+            end
+            if strcmp(layout.Value,'Cylindrical'), nowCount=numbers(edits.n_modules.Value);
+            else, nowCount=numel(numbers(edits.transverse_centers_mm.Value)); end
+            if ~isequal(nowCount,count)
+                uialert(w,'Panel count changed. Reopen this list.','List out of date'); return;
             end
             if ~all(isfinite(table.Data(:))), uialert(w,'Enter finite values','Invalid list'); return; end
             edits.(name).Value=regexprep(sprintf('%.12g, ',table.Data(:)),',\s*$',''); delete(w);
@@ -174,16 +192,30 @@ app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDo
         catch ex, uialert(f,ex.message,'Cannot load'); end
     end
     function applyDocument(d)
+        closeEditors();
         if isfield(d,'settings')
             stopPlayer(); settings=d.settings; inspection=false; geo=d.geo; builderGeo=geo; populate(); previewBuilder();
         else, inspect(d.surface,d.geo); end
     end
     function inspect(s,g)
+        if ~inspection
+            builderFields=struct();
+            for i=1:numel(names), builderFields.(names{i})=edits.(names{i}).Value; end
+            builderLayout=layout.Value; builderMotion=motion.Value;
+        end
+        closeEditors();
         stopPlayer(); surface=s; geo=g; inspection=true; drawScene();
         status.Text='Inspection mode: coordinates and masks are preserved; builder fields are inactive.';
     end
     function returnBuilder(~,~)
-        stopPlayer(); inspection=false; geo=builderGeo; populate(); previewBuilder();
+        stopPlayer(); closeEditors(); inspection=false; geo=builderGeo;
+        if isempty(builderFields), populate();
+        else
+            layout.Value=builderLayout; motion.Value=builderMotion;
+            for i=1:numel(names), edits.(names{i}).Value=builderFields.(names{i}); end
+            updateState();
+        end
+        previewBuilder();
     end
     function saveFile(exact)
         [name,folder]=uiputfile({'*.mat','MAT geometry';'*.yaml','YAML geometry'},'Save geometry'); if isequal(name,0), return; end
@@ -193,7 +225,12 @@ app=struct('figure',f,'axes',ax,'preview',@previewBuilder,'load',@(path) applyDo
             geometryFile('save',fullfile(folder,name),d);
         catch ex, uialert(f,ex.message,'Cannot save'); end
     end
-    function closeWindow(~,~), stopPlayer(); delete(f); end
+    function closeEditors()
+        for window=listWindows(:)', if isvalid(window), delete(window); end; end
+        listWindows=gobjects(0);
+    end
+    function closeWindow(~,~), stopPlayer(); closeEditors(); delete(f); end
+    function cleanupWindow(), stopPlayer(); closeEditors(); end
     function value=getSurface(), value=surface; end
     function value=getSettings(), value=settings; end
 end

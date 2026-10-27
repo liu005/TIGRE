@@ -473,6 +473,12 @@ it does not provide GUI editing or infer the original COR value.
 
 ## Compatibility check and reconstruction
 
+For a runnable YAML-to-projection-to-reconstruction example, see
+[`d_geometry_yaml_reconstruction.py`](../Python/demos/d_geometry_yaml_reconstruction.py)
+and the [end-to-end instructions](./Detector_surface.md#examples-and-tests).
+It uses the shipped three-panel geometry unchanged and saves phantom,
+reconstruction, projections, quantitative errors, and comparison slices.
+
 The compatibility check validates finite coordinates, array shapes, and a
 non-empty mask, then tests the stricter geometry conditions used by the
 validated `fdk_surface` path. A successful iterative status means the geometry

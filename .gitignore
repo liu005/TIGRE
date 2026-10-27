@@ -68,3 +68,7 @@ MATLAB/mex_CUDA_win64.xml
 *.pdf
 *.dcm
 *.mp4
+
+# Generated local demonstration outputs
+/.codex-results/
+/Python/results/

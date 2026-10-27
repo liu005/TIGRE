@@ -228,6 +228,33 @@ remapped reconstructions against results from the original measured geometry.
 
 ## Examples and tests
 
+`Python/demos/d_geometry_yaml_reconstruction.py` exercises the complete Python
+workflow: load the shipped three-panel YAML unchanged, load the bundled head phantom
+with `sample_loader.load_head_phantom` (as in `Python/example.py`), simulate
+projections with `Ax_surface`, reconstruct with 100 CGLS iterations,
+and save `results.npz`, `metrics.json`, and a three-plane `comparison.png`.
+The volume is explicitly chosen as 32 x 96 x 96 mm (z/y/x) for that example;
+other input geometries may need a different reconstruction volume. Run from
+`Python/`, in `recon` with a compatible CUDA surface build:
+
+```powershell
+conda activate recon
+python demos/d_geometry_yaml_reconstruction.py --output results/yaml_reconstruction
+```
+
+The default head is resampled to 16 x 32 x 32 voxels for a quick demonstration.
+`--phantom ellipsoids` selects the original synthetic phantom. Use
+`--voxels Z Y X` to change resolution, `--geometry path.yaml` to select geometry,
+and `--iterations 100` to set the iteration count. Increasing voxel resolution
+without increasing detector/angular sampling may produce undersampling.
+The head is fitted into the explicitly selected physical volume; this does
+not preserve an anatomical calibration from the source dataset. These are
+simulated projections from a data-derived volume, not measured projections. Output includes the exact surface, mask, module boundaries, phantom,
+reconstruction, measured/predicted projections, residual history, volume size,
+and GPU information. This is a noiseless matched-Siddon simulation; a low error
+does not establish measured-data or real-scanner accuracy. The CUDA regression
+test is `Python/tests/test_yaml_reconstruction_demo.py`.
+
 The [GUI manual](./Detector_geometry_GUI.md#tigre-circular-ct-example) uses
 TIGRE's low-resolution circular geometry from `d03_generateData.py`.
 `test_detector_geometry_examples.py` checks all 100 poses from
