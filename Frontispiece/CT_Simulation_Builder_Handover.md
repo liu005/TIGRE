@@ -2,6 +2,20 @@
 
 Updated: 2026-10-28 (Australia/Sydney).
 
+## Manuals and versioned PDFs
+
+The Python and MATLAB manuals are reorganized in user-workflow order: launch,
+basic workflow, each of the four tabs, confirmation/animation, save/load,
+reconstruction export, examples/API reference, limitations and troubleshooting.
+Manual revision **1.1**, dated **28 October 2026**, is separate from the shared
+TIGRE Python package reference **3.0.0**. Both PDFs have a dedicated cover,
+separate contents pages, numbered chapters and wrapped tables/code. Existing
+inbound section anchors and local documentation links are preserved.
+
+Run `Frontispiece/Export_Manuals.ps1` with Pandoc/XeLaTeX available. Its support
+files are under `Frontispiece/pdf_support/`. PDFs are ignored generated files;
+the Markdown and PDF build sources are the maintained documents.
+
 ## Follow-up: linked voxel dimensions
 
 The Volume tab now exposes editable voxel size (Python z/y/x mm; MATLAB
@@ -134,7 +148,7 @@ subsequent unsaved controls. Keep YAML and exact-surface companions together.
 | MATLAB UI and timing | `MATLAB/Utilities/detectorGeometryGUI.m`, `ctAcquisitionTiming.m` |
 | MATLAB construction and renderer | `MATLAB/Utilities/buildModularSurface.m`, `renderDetectorSurface.m` |
 | MATLAB script export | `MATLAB/Utilities/exportCTReconstructionScript.m`, `ctReconstructionTemplate.txt` |
-| User manuals | `Frontispiece/Detector_geometry_GUI.md`, `Detector_geometry_MATLAB.md` |
+| User manuals | `Frontispiece/TIGRE_CT_Simulation_Builder_Python.md`, `TIGRE_CT_Simulation_Builder_MATLAB.md` |
 
 Public launch/API names are retained for compatibility. MATLAB `app.preview()`
 is an alias for explicit Confirm, alongside `app.confirm()`, `app.save(path)`,

@@ -2,7 +2,7 @@ function app=detectorGeometryGUI(input,angles)
 %DETECTORGEOMETRYGUI CT simulation builder and read-only geometry inspector.
 % detectorGeometryGUI(); detectorGeometryGUI('geometry.yaml');
 % detectorGeometryGUI(geo,angles); detectorGeometryGUI(surface);
-% MATLAB surface ordering and YAML interoperability: Detector_geometry_MATLAB.md.
+% MATLAB surface ordering and YAML interoperability: TIGRE_CT_Simulation_Builder_MATLAB.md.
 examples=detectorGeometryExamples(); settings=examples(1).settings;
 inspection=false; surface=[]; geo=[]; builderGeo=[]; scene=[]; player=[]; current=1;
 confirmed=false; lastSavedYaml=''; playbackClock=[]; playbackStart=1;

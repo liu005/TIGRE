@@ -18,7 +18,7 @@ function h = animateGeometry(geo, angles, pos, rotation, animate, fname, surface
 %
 %   GEO may also be a surface struct or a .mat/.yaml/.yml/.npz path.
 %   A seventh SURFACE argument uses explicit curved/modular coordinates.
-%   Surface arrays follow buildModularSurface; see Detector_geometry_MATLAB.md.
+%   Surface arrays follow buildModularSurface; see TIGRE_CT_Simulation_Builder_MATLAB.md.
 %   Returns the figure handle.
 %
 %   MATLAB port of tigre.utilities.visualization.animate_geometry. Uses

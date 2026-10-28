@@ -1,6 +1,6 @@
 # Detector-surface geometry (curved, modular and U-shaped detectors)
 
-The [MATLAB detector builder and animation guide](./Detector_geometry_MATLAB.md)
+The [MATLAB detector builder and animation guide](./TIGRE_CT_Simulation_Builder_MATLAB.md)
 covers native surface projection/backprojection, CGLS/SIRT, circular surface
 FDK, visualization and YAML/MAT/NPZ interchange. Matching head-phantom examples
 are demo 25 (smooth cylinder) and demo 26 (tilted modular panels); see the
@@ -95,7 +95,7 @@ including U-shaped panels; rotating scans can specify an orbit start and scan
 span and COR. Both layouts support panel x/y tilts; stationary-detector modes
 support linear and circular-arc source motion. Panel angles and COR are
 constant during each GUI scan. See the
-[modular detector GUI manual](./Detector_geometry_GUI.md) for launch
+[modular detector GUI manual](./TIGRE_CT_Simulation_Builder_Python.md) for launch
 instructions, control definitions, workflows, a TIGRE circular CT example, and
 reconstruction usage.
 
@@ -110,7 +110,7 @@ If a circular-orbit detector is incompatible with `fdk_surface`'s extruded,
 view-invariant fan requirements, the GUI can optionally interpolate projection
 data onto an idealized circular/equiangular detector. This changes the
 measurements and cannot repair a non-circular source path; review the warnings
-and validation limits in the [GUI manual](./Detector_geometry_GUI.md#remap-measured-projections).
+and validation limits in the [GUI manual](./TIGRE_CT_Simulation_Builder_Python.md#remap-measured-projections).
 
 The GUI builder adds panel-centred rotations using
 `Rz(gantry + panel_z) @ Ry(panel_y) @ Rx(panel_x)`. Its x/y inputs are in
@@ -128,7 +128,7 @@ panels together. In the GUI, x/y angles accept a shared value or one per panel;
 piecewise-linear z angles and transverse/normal/z offsets require one entry
 per panel. Cylindrical z angles come from the arc layout. Use panel offsets
 and tilts for individual panel calibration, rather than per-panel COR values.
-See the [multi-panel alignment instructions](./Detector_geometry_GUI.md#multi-panel-alignment-individual-tilt-global-cor)
+See the [multi-panel alignment instructions](./TIGRE_CT_Simulation_Builder_Python.md#multi-panel-alignment-individual-tilt-global-cor)
 for a three-panel example. The GUI provides **From list...** editors for panel
 angles and offsets, with the same enabled/disabled rules as the main fields.
 
@@ -140,7 +140,7 @@ disabled while playback, saving, and remapping remain available. Return to
 builder restores its retained settings. From scripts use
 `launch_detector_geometry_gui(geometry=geo, angles=angles)` or
 `launch_detector_geometry_gui(surface=surface, geometry=geo)`. See the
-[loading instructions and archive schema](./Detector_geometry_GUI.md#load-existing-geometry-for-inspection).
+[loading instructions and archive schema](./TIGRE_CT_Simulation_Builder_Python.md#load-existing-geometry-for-inspection).
 The GUI and `animate_geometry(surface=...)` both use `SurfaceRenderer` for
 mesh construction, source/volume display and frame updates. The legacy
 standard-geometry animation path remains available.
@@ -150,7 +150,7 @@ Use `tigre.animate_geometry("geometry.yaml")` or
 same loader. File inputs provide their own trajectory. Existing geometry-object
 calls remain supported. YAML uses explicit mm/degree units and a versioned
 rotation convention; standard TIGRE arrays remain in radians. See the
-[YAML settings guide](./Detector_geometry_GUI.md#save-and-reload-editable-yaml-settings)
+[YAML settings guide](./TIGRE_CT_Simulation_Builder_Python.md#save-and-reload-editable-yaml-settings)
 and `Python/demos/geometry_examples/three_panel.yaml` for an editable example.
 The shared loader API is `tigre.utilities.geometry_io.load_geometry_file`;
 `save_geometry_yaml` saves recipes or exact-surface references.
@@ -258,7 +258,7 @@ and GPU information. This is a noiseless matched-Siddon simulation; a low error
 does not establish measured-data or real-scanner accuracy. The CUDA regression
 test is `Python/tests/test_yaml_reconstruction_demo.py`.
 
-The [GUI manual](./Detector_geometry_GUI.md#tigre-circular-ct-example) uses
+The [GUI manual](./TIGRE_CT_Simulation_Builder_Python.md#tigre-circular-ct-example) uses
 TIGRE's low-resolution circular geometry from `d03_generateData.py`.
 `test_detector_geometry_examples.py` checks all 100 poses from
 `d17_DetectorRotation.py` and the geometry in `d01_CreateGeometry.py`, with

@@ -78,4 +78,4 @@ configuration. No real paired dual-energy or Varian acquisition is available
 locally. Python Varian DPS, object-scatter and beam-hardening corrections remain
 unported, and MATLAB surface reconstruction currently uses one GPU. See the
 [Varian](Varian_loader.md), [dual-energy](Dual_energy.md) and
-[MATLAB surface](Detector_geometry_MATLAB.md) manuals for those limits.
+[MATLAB surface](TIGRE_CT_Simulation_Builder_MATLAB.md) manuals for those limits.

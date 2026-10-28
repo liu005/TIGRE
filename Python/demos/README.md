@@ -49,7 +49,7 @@ Python-only example. The [content comparison](../../Frontispiece/Demo_language_c
 records matched acquisitions, algorithms, outputs and remaining differences.
 See the
 [MATLAB demo index](../../MATLAB/Demos/README.md) and
-[Python GUI manual](../../Frontispiece/Detector_geometry_GUI.md).
+[Python GUI manual](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md).
 
 The [validation guide](../../Frontispiece/Validation.md) lists current test
 commands, plotting-angle regressions, scanner fixtures and hardware limits.

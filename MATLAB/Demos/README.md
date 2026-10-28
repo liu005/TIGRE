@@ -18,7 +18,7 @@ and **Load geometry...** provide the same operations interactively.
 MAT files need no Python or CUDA. Optional YAML lines demonstrate an editable
 recipe and an exact YAML + NPZ pair; that interchange requires Python `recon`
 with TIGRE, SciPy and PyYAML. Keep an exact archive's YAML and NPZ files together.
-The [MATLAB manual](../../Frontispiece/Detector_geometry_MATLAB.md) describes
+The [MATLAB manual](../../Frontispiece/TIGRE_CT_Simulation_Builder_MATLAB.md) describes
 coordinate ordering, masks, panel tilts, global COR and inspection mode.
 
 ## Choosing a demo

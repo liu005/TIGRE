@@ -1,0 +1,6 @@
+\usepackage{fvextra}
+\fvset{breaklines=true,breakanywhere=true,fontsize=\small}
+\setlength{\emergencystretch}{2em}
+% Keep the cover and contents separate from the numbered workflow chapters.
+\let\ManualTableOfContents\tableofcontents
+\renewcommand{\tableofcontents}{\ManualTableOfContents\clearpage}

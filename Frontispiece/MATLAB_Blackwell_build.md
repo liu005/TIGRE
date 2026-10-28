@@ -150,7 +150,7 @@ then `UseBlackwellBuild`, `test_surfaceProjectors` and `test_surfaceFDK`.
 with Python; `CGLS_surface` and `SIRT_surface` reconstruct directly from
 explicit pixel positions and logical masks. `FDK_surface` provides approximate
 circular/extruded surface FDK with geometry validation. See
-[the MATLAB surface manual](Detector_geometry_MATLAB.md#native-surface-reconstruction)
+[the MATLAB surface manual](TIGRE_CT_Simulation_Builder_MATLAB.md#native-surface-reconstruction)
 for layouts and limits. This path does not use a Python reconstruction bridge.
 
 Run `d25_CurvedDetector` for the smooth-cylinder head-phantom example, or
