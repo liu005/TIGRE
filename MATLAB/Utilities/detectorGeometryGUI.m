@@ -7,6 +7,7 @@ examples=detectorGeometryExamples(); settings=examples(1).settings;
 inspection=false; surface=[]; geo=[]; builderGeo=[]; scene=[]; player=[]; current=1;
 confirmed=false; lastSavedYaml=''; playbackClock=[]; playbackStart=1;
 lastPhysical=[];
+stationaryAcknowledged='';
 builderFields=[]; builderLayout=''; builderMotion=''; listWindows=gobjects(0);
 builderMotionFields=[];
 screen=get(groot,'ScreenSize');
@@ -61,12 +62,15 @@ for j=1:numel(names)
         uilabel(grid,'Text','');
     end
 end
-volumeEdits=struct(); volumeNames={'nVoxel','sVoxel','offOrigin'};
-volumeLabels={'Voxels (x,y,z)','Full size (x,y,z mm)','Start / center (x,y,z mm)'};
-volumeDefaults={'128, 128, 128','256, 256, 256','0, 0, 0'};
-for j=1:3
+volumeEdits=struct(); volumeNames={'nVoxel','sVoxel','offOrigin','dVoxel'};
+volumeLabels={'Voxels (x,y,z)','Full size (x,y,z mm)','Start / center (x,y,z mm)','Voxel size (x,y,z mm)'};
+volumeDefaults={'128, 128, 128','256, 256, 256','0, 0, 0','2, 2, 2'};
+for j=1:numel(volumeNames)
     uilabel(volumeGrid,'Text',volumeLabels{j}); volumeEdits.(volumeNames{j})=uieditfield(volumeGrid,'text','Value',volumeDefaults{j});
     uilabel(volumeGrid,'Text','');
+end
+for field={'nVoxel','sVoxel','dVoxel'}
+    key=field{1}; volumeEdits.(key).ValueChangedFcn=@(~,~) syncVoxels(key);
 end
 timed=uicheckbox(movementGrid,'Text','Use acquisition timing','ValueChangedFcn',@changeMode); timed.Layout.Column=[1 3];
 timingNames={'readout_period_ms','firing_rate_hz','rotation_period_s','table_speed_mm_s','playback_rate'};
@@ -117,6 +121,21 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         g.RowHeight=repmat({30},1,rows); g.Padding=[6 6 6 6];
     end
     function setStart(value), volumeEdits.offOrigin.Value=value; startPosition.Value=value; end
+    function syncVoxels(changed)
+        try
+            counts=numbers(volumeEdits.nVoxel.Value);
+            validateattributes(counts,{'numeric'},{'numel',3,'positive','integer','finite'});
+            if strcmp(changed,'sVoxel')
+                sizeMM=numbers(volumeEdits.sVoxel.Value);
+                validateattributes(sizeMM,{'numeric'},{'numel',3,'positive','finite'});
+                volumeEdits.dVoxel.Value=vectorText(sizeMM./counts);
+            else
+                spacing=numbers(volumeEdits.dVoxel.Value);
+                validateattributes(spacing,{'numeric'},{'numel',3,'positive','finite'});
+                volumeEdits.sVoxel.Value=vectorText(counts.*spacing);
+            end
+        catch ex, status.Text=['Complete voxel fields: ' ex.message]; end
+    end
     function sourceMode(~,~)
         if strcmp(trajectory.Value,'Linear'), motion.Value='Fixed detector, moving source';
         elseif strcmp(motion.Value,'Fixed detector, moving source'), motion.Value='Fixed detector, arc source'; end
@@ -212,6 +231,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         validateattributes(g.nVoxel,{'numeric'},{'numel',3,'integer','positive','finite'});
         validateattributes(g.sVoxel,{'numeric'},{'numel',3,'positive','finite'});
         validateattributes(g.offOrigin,{'numeric'},{'numel',3,'finite'});
+        validateattributes(g.dVoxel,{'numeric'},{'numel',3,'positive','finite'});
         g.dVoxel=g.sVoxel./g.nVoxel; g.motion_mode='static';
         first=g.offOrigin;
         if endpoints.Value
@@ -229,14 +249,32 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         end
     end
     function confirmBuilder()
+        if ~resolveEndpointMotion(), return; end
         if previewBuilder()
             confirmed=true; play.Enable=onoff(size(surface.source_positions_mm,2)>1);
             lines={sprintf('Physical CT: PASS - %d views; %d crossing samples.',lastPhysical.views,lastPhysical.crossing_samples), ...
+                sprintf('Empty views: %d (allowed; only an entirely empty scan is rejected).',lastPhysical.empty_views), ...
                 'CGLS geometry: supported; moving volumes require the exported script''s fixed-object conversion.', ...
                 'FDK: separate circular trajectory/detector/scan-coverage requirements; exported script checks these.', ...
                 'Geometry checks only; CUDA execution, sampling completeness and clearance are not certified.'};
             checkResults.Value=lines; status.Text='Confirmed. Physical checks passed; see check results.';
         end
+    end
+    function ok=resolveEndpointMotion()
+        ok=true;
+        if timed.Value || endpoints.Value, return; end
+        try, first=numbers(startPosition.Value); last=numbers(endPosition.Value);
+        catch, return; end
+        if numel(first)~=3 || numel(last)~=3 || isequal(first,last), return; end
+        signature=[vectorText(first) '|' vectorText(last)];
+        if strcmp(signature,stationaryAcknowledged), return; end
+        choice=uiconfirm(f,['Start and End differ, but movement is OFF. Enable movement, ' ...
+            'keep the volume stationary at Start, or cancel without applying changes.'], ...
+            'Enable volume movement?','Options',{'Enable movement','Keep stationary','Cancel'}, ...
+            'DefaultOption',1,'CancelOption',3);
+        if strcmp(choice,'Cancel'), ok=false; status.Text='Cancelled; no changes applied.';
+        elseif strcmp(choice,'Enable movement'), endpoints.Value=true; updateState();
+        else, stationaryAcknowledged=signature; end
     end
     function ok=previewBuilder()
         ok=false; if inspection, return; end
@@ -246,6 +284,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
             physical=validateCTTransmission(next,nextGeo);
             lastPhysical=physical;
             stopPlayer(); settings=s; surface=next; geo=nextGeo; builderGeo=geo; drawScene(); ok=true;
+            volumeEdits.dVoxel.Value=vectorText(geo.dVoxel);
             if timed.Value
                 timingEdits.table_speed_mm_s.Value=num2str(geo.acquisition.table_speed_mm_s,12);
                 endPosition.Value=vectorText(geo.offOrigin(:,end));
@@ -295,7 +334,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     function loadExample(~,~)
         stopPlayer(); closeEditors(); settings=examples(strcmp(preset.Value,{examples.name})).settings;
         inspection=false; geo=[]; builderGeo=[]; timed.Value=false; endpoints.Value=false;
-        for k=1:3, volumeEdits.(volumeNames{k}).Value=volumeDefaults{k}; end
+        for k=1:numel(volumeNames), volumeEdits.(volumeNames{k}).Value=volumeDefaults{k}; end
         setStart('0, 0, 0'); endPosition.Value='0, 0, 0'; populate(); previewBuilder();
     end
     function listEditor(name)
@@ -345,7 +384,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         else, inspect(d.surface,d.geo); end
     end
     function populateVolume(g)
-        for k=1:3, volumeEdits.(volumeNames{k}).Value=volumeDefaults{k}; end
+        for k=1:numel(volumeNames), volumeEdits.(volumeNames{k}).Value=volumeDefaults{k}; end
         setStart(volumeEdits.offOrigin.Value); endPosition.Value=startPosition.Value;
         timed.Value=isfield(settings,'acquisition') && isstruct(settings.acquisition) && ~isempty(settings.acquisition);
         if timed.Value
@@ -357,6 +396,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
             if isfield(g,field{1}), volumeEdits.(field{1}).Value=vectorText(g.(field{1})(:,1)); end
         end
         setStart(volumeEdits.offOrigin.Value); endPosition.Value=vectorText(g.offOrigin(:,end));
+        syncVoxels('sVoxel');
         if isfield(g,'motion_mode'), endpoints.Value=strcmp(g.motion_mode,'endpoints');
         else, endpoints.Value=size(g.offOrigin,2)>1; end
     end
@@ -402,6 +442,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     end
     function saveToPath(path,exact)
         if nargin<2, exact=false; end
+        if ~exact && ~inspection && ~resolveEndpointMotion(), return; end
         if exact || inspection, d=struct('surface',surface,'geo',geo);
         else
             s=readSettings(); next=buildModularSurface(s); nextGeo=readVolume(s);

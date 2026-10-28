@@ -22,12 +22,11 @@ def _segment_hits_box(source, pixels, lower, upper):
 
 
 def validate_transmission_geometry(surface, geometry):
-    """Reject impossible transmission views, including moving offOrigin.
+    """Check hardware positions and require some transmission over the scan.
 
-    Source and valid detector pixels must lie outside the volume. Every view
-    needs at least one sampled ray crossing it. A panel wholly in the source's
-    half-space and measuring no crossing rays is rejected as same-side geometry.
-    Far-side overscan panels may legitimately miss the volume. This does not
+    Source and valid detector pixels must lie outside the volume. Empty views
+    and panels are allowed; only an entirely nontransmitting scan is rejected.
+    This accommodates helical entry/exit and overscan. This does not
     certify detector collision clearance, sampling completeness or FDK validity.
     """
     if geometry is None:
@@ -42,7 +41,7 @@ def validate_transmission_geometry(surface, geometry):
     tolerance = 1e-9 * max(float(half.max()), 1)
     modules = getattr(surface, "_module_slices", None) or [
         (slice(None), slice(None))]
-    measured = 0
+    measured, empty_views = 0, 0
     for view, position in enumerate(source):
         center = centers[0 if len(centers) == 1 else view]
         lower, upper = center - half, center + half
@@ -54,27 +53,21 @@ def validate_transmission_geometry(surface, geometry):
             grid = surface.pixel_centers_mm[view, rows, columns]
             valid = surface.valid_mask[view, rows, columns].ravel()
             pixels = grid.reshape(-1, 3)
-            panel_hits, active, same_side = 0, 0, True
+            panel_hits = 0
             for start in range(0, len(pixels), 16384):
                 values = pixels[start:start + 16384][valid[start:start + 16384]]
                 if not len(values):
                     continue
-                active += len(values)
                 relative = values - center
                 if np.any(np.all(np.abs(relative) <= half + tolerance, axis=1)):
                     raise ValueError(f"Physical CT geometry: detector panel {panel} is inside or on the volume at view {view + 1}.")
-                same_side = same_side and bool(np.all(relative @ relative_source > 0))
                 panel_hits += int(np.count_nonzero(_segment_hits_box(position, values, lower, upper)))
-            if active and same_side and not panel_hits:
-                raise ValueError(
-                    f"Physical CT geometry: source and detector panel {panel} are on the same side "
-                    f"of the volume at view {view + 1}; no measured ray crosses it. "
-                    "Reduce the fixed-detector source arc, reposition the detector/volume, "
-                    "or select Moving with Source.")
             view_hits += panel_hits
         if not view_hits:
-            raise ValueError(
-                f"Physical CT geometry: no measured source-to-detector ray crosses the volume "
-                f"at view {view + 1}. Check source/detector sides, volume position, scan span and pixel sampling.")
+            empty_views += 1
         measured += view_hits
-    return {"views": len(source), "crossing_samples": measured}
+    if not measured:
+        raise ValueError(
+            "Physical CT geometry: no measured source-to-detector ray crosses the volume "
+            "in the entire scan. Check source/detector sides, volume position, scan span and pixel sampling.")
+    return {"views": len(source), "crossing_samples": measured, "empty_views": empty_views}

@@ -63,6 +63,16 @@ including the current source position relative to the volume center.
 
 The reconstruction-volume controls use TIGRE **z, y, x** order for voxel counts,
 full physical size and center offset. Select **Confirm** to apply changes.
+The editable **Voxel size (z, y, x mm)** field is linked by
+`full_size = voxel_counts * voxel_size`, independently along each axis:
+
+* Editing voxel counts keeps voxel size fixed and updates full size.
+* Editing voxel size keeps counts fixed and updates full size.
+* Editing full size keeps counts fixed and updates voxel size.
+
+Counts must remain positive integers. Partial edits wait for three valid
+values before updating related fields. Confirm applies the resulting volume
+to the 3D scene; YAML saves counts/full size and derives voxel size on load.
 For a timed helical-motion preview, enable **Use timing** and set:
 
 * **Views**: number of detector frames / source pulses to acquire.
@@ -78,6 +88,10 @@ For a timed helical-motion preview, enable **Use timing** and set:
 In **Movement**, **Start position** and **End position** use z, y, x mm.
 Start is shared with the structural volume center. Enable **Move between start
 and end positions** to interpolate all three coordinates across the views.
+If timing and endpoint movement are both off but Start and End differ,
+**Confirm** and **Save YAML** ask whether to enable movement, explicitly keep
+the volume stationary at Start, or cancel. The same stationary choice is
+remembered until the endpoints change. End values are never silently applied.
 With timing enabled, z speed is derived as `(end_z - start_z) / last_view_time`;
 the z-speed input becomes read-only. At least two views are needed for different
 endpoints. Without timing, the same endpoints define the per-view movement.
@@ -326,14 +340,14 @@ confirmed scene. No success popup interrupts editing.
 
 Confirm and editable YAML save use the actual volume box at every view,
 including per-view offOrigin. The source and
-valid detector pixels must be outside the volume. Each view needs at least
-one sampled source-to-pixel segment crossing it. A detector panel wholly on
-the source side and measuring no crossing rays is rejected. Far-side overscan
-panels may legitimately miss the object, and valid off-center corner rays
-are accepted. A long/full source orbit with a fixed detector will generally
-fail these checks; reduce the arc, reposition the detector/volume, or select
-Moving with Source. Errors identify the offending view/panel and retain the
-previous confirmed scene. Exact archives remain inspectable for diagnosis.
+valid detector pixels must be outside the volume. Empty views and panels are
+allowed, including spiral-scan entry/exit and overscan. The ray-coverage guard
+rejects only a scan in which **no measured ray crosses the volume anywhere**.
+Same-side or empty views do not individually block an otherwise transmitting
+scan. Confirmation checks show the empty-view count. Source/detector positions
+inside or on the volume still cause rejection at the offending view/panel.
+Errors retain the previous confirmed scene; exact archives remain inspectable
+for diagnosis. Passing this relaxed rule does not imply complete scan coverage.
 
 TIGRE's arbitrary-surface Siddon/CGLS APIs can trace these rays, but that alone
 does not certify a physical acquisition. The guard checks transmission, not

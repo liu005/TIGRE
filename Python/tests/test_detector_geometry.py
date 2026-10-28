@@ -602,6 +602,7 @@ def test_gui_has_help_text_for_every_input_label():
     assert set(DETECTOR_FIELD_HELP) == {
         "Source trajectory",
         "Voxel counts",
+        "Voxel size (z, y, x mm)",
         "Full size (mm)",
         "Center offset (mm)",
         "Start position (z, y, x mm)",

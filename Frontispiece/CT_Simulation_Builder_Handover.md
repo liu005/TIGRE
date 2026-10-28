@@ -2,16 +2,35 @@
 
 Updated: 2026-10-28 (Australia/Sydney).
 
+## Follow-up: linked voxel dimensions
+
+The Volume tab now exposes editable voxel size (Python z/y/x mm; MATLAB
+x/y/z mm). Counts and voxel size edits update full size; full-size edits
+update voxel size with counts fixed. Invalid/partial input does not overwrite
+related fields, and invalid active spacing is rejected before applying.
+Loading controls suspends Python traces until saved counts and extent are
+restored, then derives spacing. Persistence still uses canonical counts/size;
+no YAML schema change is required. `test_voxel_field_sync.py` covers all update
+directions, partial typing and load behavior without a desktop window.
+
 ## Follow-up: detector choices and physical transmission guard
+
+Forgotten movement selection is now guarded in both GUIs: when timing and
+endpoint movement are off but Start differs from End, Confirm/editable save
+offers enable movement, keep stationary, or cancel. Stationary intent is
+remembered for the same pair of endpoints. Timing mode never prompts on its
+calculated endpoint. Python tests cover all choices and cancellation before
+any candidate scene is built.
 
 The Python detector selector now explicitly offers Moving with Source and
 Fixed Position, synchronized with the cylindrical/linear source selector.
 Python and MATLAB Confirm, editable saves and exported reconstructions validate
 finite source-to-pixel segments against each view's volume box. Source/detector
-pixels inside/on the box, same-side panels with no transmitted rays, and
-views without any crossing samples are rejected. Errors retain the previous
-confirmed scene. Far-side overscan and actual off-center crossing rays remain
-valid. Exact inspection permits diagnosis of invalid archives. This is a
+pixels inside/on the box remain invalid. Empty views and panels (including
+same-side views, helical entry/exit and overscan) are allowed. The ray-coverage
+guard rejects only scans with zero crossing samples over the entire scan;
+reports include `empty_views`. Errors retain the previous confirmed scene.
+Exact inspection permits diagnosis of invalid archives. This is a
 transmission check, not collision/sampling completeness or FDK certification.
 See `ct_physics.py`, `validateCTTransmission.m` and their dedicated tests.
 Confirm now populates a persistent, scrollable results area in each GUI with

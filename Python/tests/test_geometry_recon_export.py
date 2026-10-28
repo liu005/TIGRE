@@ -57,10 +57,13 @@ def test_moving_volume_changes_both_source_and_detector_to_object_frame(tmp_path
 
 
 def test_exported_script_rejects_nontransmitting_views_before_reconstruction(tmp_path):
-    _, script = saved_example(tmp_path, moving=True)
+    path, script = saved_example(tmp_path, moving=True)
+    document = load_geometry_file(path)
+    document.geometry.offOrigin[:, 0] += 100
+    save_geometry_yaml(path, settings=document.settings, geometry=document.geometry)
     script["fdk_surface"] = Mock()
     script["cgls_surface"] = Mock()
-    with pytest.raises(ValueError, match="view 3"):
+    with pytest.raises(ValueError, match="entire scan"):
         script["main"](["--projections", str(tmp_path / "not_loaded.npy")])
     script["fdk_surface"].assert_not_called()
     script["cgls_surface"].assert_not_called()

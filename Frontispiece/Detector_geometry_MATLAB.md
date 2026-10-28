@@ -96,10 +96,11 @@ in `[u;v]` order and volume values in `[x;y;z]`; Python uses `[v,u]` and
 ## Volume motion and reconstruction export
 
 Confirm, editable save and exported scripts check physical transmission at
-each volume pose. Sources/detector pixels inside the volume, same-side panels
-with no crossing rays, and views with no measured ray crossing the box are
-rejected. Reduce a fixed-detector source arc or reposition the rig/volume to
-correct the reported view. This check does not guarantee complete sampling,
+each volume pose. Sources/detector pixels inside or on the volume remain
+invalid. Empty views and panels are allowed, including spiral-scan entry/exit;
+the ray-coverage check rejects only scans with no crossing ray anywhere.
+Confirmation results report the number of allowed empty views. Reposition
+the rig/volume if the entire scan is empty. This check does not guarantee complete sampling,
 mechanical clearance or FDK support; exact archives remain inspectable.
 After Confirm, the persistent check-results box displays physical PASS/FAILED,
 view and crossing-sample counts, CGLS geometry support and the separate FDK
@@ -112,7 +113,14 @@ Changes are pending until **Confirm**; `app.confirm()` applies them, and the
 legacy `app.preview()` method remains an alias for explicit confirmation.
 
 Volume counts, full size and start/end positions use MATLAB **x,y,z** order.
-The Volume center and Movement start are shared. Timing acquires one frame per
+The editable voxel-size field uses x,y,z mm. Changing counts or voxel size
+updates full size; changing full size updates voxel size with counts fixed.
+Their relationship is `sVoxel = nVoxel .* dVoxel`. Confirm updates the scene.
+The Volume center and Movement start are shared. If timing and endpoint
+movement are off but Start and End differ,
+Confirm and editable save ask to enable movement, keep the volume stationary
+at Start, or cancel. The same stationary choice is remembered until the
+endpoints change. Timing acquires one frame per
 pulse: `t=(view-1)/firing_rate_hz`. Readout limits firing to
 `1000/readout_period_ms`; rotation period determines turns. Choose signed
 z speed or endpoint interpolation. Endpoints derive z speed from travel

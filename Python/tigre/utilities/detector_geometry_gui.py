@@ -63,8 +63,8 @@ DETECTOR_FIELD_HELP = {
         "or Fixed Position to keep it stationary. Fixed Position uses the selected "
         "Linear source trajectory or Cylindrical source arc. Moving with Source "
         "switches a Linear source to Cylindrical. Confirm applies changes. "
-        "Confirm rejects same-side panels with no transmitting rays, sources/detectors "
-        "inside the volume, and views with no ray crossing the volume. "
+        "Confirm rejects sources/detectors inside the volume and scans with no "
+        "ray crossing the volume anywhere. Empty views and panels are allowed. "
         "Use iterative reconstruction for limited-angle scans."
     ),
     "Layout": (
@@ -164,9 +164,10 @@ DETECTOR_FIELD_HELP = {
 }
 
 DETECTOR_FIELD_HELP.update({
+    "Voxel size (z, y, x mm)": "Positive physical voxel spacing in z, y, x mm. Full size = voxel counts * voxel size. Editing voxel size or counts updates full size; editing full size updates voxel size while keeping counts fixed.",
     "Source trajectory": "Cylindrical follows a circular orbit about world +z using radius, height, start angle and scan span. Linear samples the world x, y, z start/end line and requires a fixed detector. Selecting Cylindrical after Linear keeps the detector fixed for an arc source; use Detector motion to rotate it with the source. Confirm applies the selection.",
-    "Voxel counts": "Three positive integer voxel counts in TIGRE z, y, x order. Voxel size equals full physical size divided by these counts; the preview allocates no volume array.",
-    "Full size (mm)": "Full positive physical extent of the volume along z, y, x, in mm. These are full lengths, not half-widths. The box is centered at the center offset.",
+    "Voxel counts": "Three positive integer counts in TIGRE z, y, x order. Changing counts preserves voxel size and updates full physical size. Full size = counts * voxel size. Confirm applies changes; the preview allocates no voxel array.",
+    "Full size (mm)": "Full positive physical extent along z, y, x in mm (not half-widths). Editing this field preserves voxel counts and updates voxel size = full size / counts. The box is centered at the center offset.",
     "Center offset (mm)": "Initial volume center offOrigin in z, y, x mm. Shared with Start position in Movement. Source coordinates use x, y, z instead.",
     "Start position (z, y, x mm)": "Initial volume center in z, y, x mm, shared with the Volume tab's center offset. Movement starts here at the first view (t=0).",
     "End position (z, y, x mm)": "Volume center at the last acquired view, in z, y, x mm. Endpoint mode interpolates all three coordinates and requires at least two views for different endpoints. In timed speed mode this is a calculated, read-only result.",
@@ -669,9 +670,19 @@ class DetectorGeometryBuilder:
             self._entries[name] = entry
             self._bind_parameter_help(entry, label)
         volume_controls.columnconfigure(1, weight=1)
+        self._voxel_size = tk.StringVar(value="2, 2, 2")
+        self._add_help_label(volume_controls, "Voxel size (z, y, x mm)").grid(
+            row=4, column=0, sticky="w", pady=4)
+        self._entries["dVoxel"] = ttk.Entry(volume_controls, textvariable=self._voxel_size, width=18)
+        self._entries["dVoxel"].grid(row=4, column=1, sticky="ew")
+        self._bind_parameter_help(self._entries["dVoxel"], "Voxel size (z, y, x mm)")
         self._voxel_spacing = tk.StringVar(value="Select Confirm to apply volume settings.")
         ttk.Label(volume_controls, textvariable=self._voxel_spacing).grid(
-            row=4, column=0, columnspan=2, sticky="w")
+            row=5, column=0, columnspan=2, sticky="w")
+        self._voxel_fields_syncing = False
+        for name, variable in (("nVoxel", self._volume_fields["nVoxel"]),
+                               ("sVoxel", self._volume_fields["sVoxel"]), ("dVoxel", self._voxel_size)):
+            variable.trace_add("write", lambda *_args, field=name: self._sync_voxel_fields(field))
         self._volume_motion = tk.BooleanVar(value=False)
         self._volume_motion_toggle = ttk.Checkbutton(timing_controls,
             text="Move between start and end positions",
@@ -992,6 +1003,8 @@ class DetectorGeometryBuilder:
         from tkinter import filedialog, messagebox
         try:
             inspection = getattr(self, "_inspection_mode", False)
+            if not inspection and not self._resolve_endpoint_motion():
+                return
             settings = None if inspection else self._read_parameters()
             volume = self._inspection_geometry if inspection else self._read_volume()
             if not inspection:
@@ -1196,6 +1209,12 @@ class DetectorGeometryBuilder:
         timed = hasattr(self, "_timing_enabled") and self._timing_enabled.get()
         for name in getattr(self, "_timing_fields", {}):
             self._entries[name].configure(state=self.tk.NORMAL if timed else self.tk.DISABLED)
+        if not timed and hasattr(self, "_timing_summary"):
+            self._timing_summary.set(
+                "Timing disabled; endpoint movement ON: the volume moves from Start to End."
+                if self._volume_motion.get() else
+                "Volume movement OFF: the volume stays at Start. End position is ignored. "
+                "Enable Move between start and end positions to translate it.")
         if timed:
             self._entries["scan_span_deg"].configure(state=self.tk.DISABLED)
             endpoints = self._volume_motion.get()
@@ -1410,9 +1429,35 @@ class DetectorGeometryBuilder:
             raise ValueError("Start and end positions require three values in z, y, x order.")
         return start, end
 
+    def _sync_voxel_fields(self, changed):
+        """Keep size = counts * spacing without rewriting partially typed inputs."""
+        if self._voxel_fields_syncing:
+            return
+        try:
+            counts = np.atleast_1d(self._parse_numbers(self._volume_fields["nVoxel"].get(), "Voxel counts"))
+            variable = self._volume_fields["sVoxel"] if changed == "sVoxel" else self._voxel_size
+            values = np.atleast_1d(self._parse_numbers(variable.get(), changed))
+            if (counts.shape != (3,) or values.shape != (3,) or np.any(counts <= 0)
+                    or np.any(counts != np.floor(counts)) or np.any(values <= 0)):
+                raise ValueError("Use three positive values; counts must be integers.")
+            with np.errstate(over="raise", invalid="raise", under="raise"):
+                result = values / counts if changed == "sVoxel" else counts * values
+            target = self._voxel_size if changed == "sVoxel" else self._volume_fields["sVoxel"]
+            self._voxel_fields_syncing = True
+            target.set(", ".join(f"{value:.17g}" for value in result))
+            self._voxel_spacing.set("Full size = voxel counts × voxel size. Confirm applies changes.")
+        except (ValueError, TypeError, OverflowError, FloatingPointError):
+            self._voxel_spacing.set("Enter three positive values; voxel counts must be integers.")
+        finally:
+            self._voxel_fields_syncing = False
+
     def _read_volume(self):
         """Read TIGRE volume metadata without allocating voxel data."""
         from tigre.utilities.geometry_io import _volume
+        if hasattr(self, "_voxel_size"):
+            spacing = np.atleast_1d(self._parse_numbers(self._voxel_size.get(), "Voxel size"))
+            if spacing.shape != (3,) or np.any(spacing <= 0):
+                raise ValueError("Voxel size requires three positive values in z, y, x mm.")
         values = {}
         for name, variable in self._volume_fields.items():
             vector = np.atleast_1d(self._parse_numbers(variable.get(), name))
@@ -1451,21 +1496,29 @@ class DetectorGeometryBuilder:
         mode = getattr(geometry, "motion_mode", None)
         self._volume_motion.set(mode == "endpoints" if mode is not None else len(offsets) > 1)
         self._volume_end.set(", ".join(f"{v:g}" for v in offsets[-1]))
-        for name, default in (("nVoxel", [128, 128, 128]),
-                              ("sVoxel", [256, 256, 256]),
-                              ("offOrigin", [0, 0, 0])):
-            values = getattr(geometry, name, default)
-            if name == "offOrigin":
-                values = offsets[0]
-            self._volume_fields[name].set(", ".join(f"{v:g}" for v in np.asarray(values).reshape(-1)))
+        self._voxel_fields_syncing = True
+        try:
+            for name, default in (("nVoxel", [128, 128, 128]),
+                                  ("sVoxel", [256, 256, 256]),
+                                  ("offOrigin", [0, 0, 0])):
+                values = getattr(geometry, name, default)
+                if name == "offOrigin":
+                    values = offsets[0]
+                self._volume_fields[name].set(", ".join(f"{v:.17g}" for v in np.asarray(values).reshape(-1)))
+        finally:
+            self._voxel_fields_syncing = False
+        self._sync_voxel_fields("sVoxel")
 
     def confirm_parameters(self):
         """Explicitly apply the controls before allowing builder playback."""
+        if not self._resolve_endpoint_motion():
+            return
         if self.update_preview():
             self._confirmed_once = True
             self._play_button.configure(state=self.tk.NORMAL)
             physical = self._physical_report
             lines = [f"Physical CT: PASS — {physical['views']} views; {physical['crossing_samples']:,} crossing samples."]
+            lines.append(f"Empty views: {physical['empty_views']} (allowed; only a completely empty scan is rejected).")
             offsets = np.atleast_2d(self._builder_geometry.offOrigin)
             moving = len(offsets) > 1 and not np.all(offsets == offsets[0])
             lines.append("CGLS geometry: supported" + (" after fixed-object conversion (exported script)." if moving else "."))
@@ -1481,6 +1534,36 @@ class DetectorGeometryBuilder:
             lines.append("Geometry checks only; CUDA execution, sampling completeness and mechanical clearance are not certified.")
             self._set_validation_results("\n".join(lines))
             self._status.set("Confirmed. Physical CT checks passed; see Confirmation checks for algorithm details.")
+
+    def _resolve_endpoint_motion(self):
+        """Ask about differing endpoints that would otherwise be ignored."""
+        if self._volume_motion.get() or self._timing_enabled.get():
+            return True
+        try:
+            start, end = self._movement_endpoints()
+        except (TypeError, ValueError):
+            return True  # Normal validation handles active fields.
+        signature = (tuple(start), tuple(end))
+        if np.array_equal(start, end) or signature == getattr(self, "_stationary_endpoints_ack", None):
+            return True
+        from tkinter import messagebox
+        answer = messagebox.askyesnocancel(
+            "Enable volume movement?",
+            "Start and End positions differ, but volume movement is OFF.\n\n"
+            f"Start (z, y, x mm): {self._volume_fields['offOrigin'].get()}\n"
+            f"End (z, y, x mm): {self._volume_end.get()}\n\n"
+            "Yes: enable movement from Start to End.\n"
+            "No: keep the volume stationary at Start and ignore End.\n"
+            "Cancel: return to editing without applying changes.", parent=self.root)
+        if answer is None:
+            self._status.set("Cancelled; no changes applied. Enable movement or choose stationary explicitly.")
+            return False
+        if answer:
+            self._volume_motion.set(True)
+            self._update_field_states()
+        else:
+            self._stationary_endpoints_ack = signature
+        return True
 
     def _set_validation_results(self, text):
         if not hasattr(self, "_validation_text"):
@@ -1504,9 +1587,15 @@ class DetectorGeometryBuilder:
             from tigre.utilities.ct_physics import validate_transmission_geometry
             physical = validate_transmission_geometry(surface, volume)
         except (TypeError, ValueError, OverflowError, MemoryError) as exc:
-            self._set_validation_results(f"Confirm: FAILED\n{exc}\nPrevious confirmed scene retained.")
+            detail = str(exc)
+            if detail.startswith("Physical CT geometry:") and not self._timing_enabled.get() and not self._volume_motion.get():
+                detail += ("\n\nVolume movement is OFF. The check uses a stationary volume at "
+                           f"Start (z, y, x mm): {self._volume_fields['offOrigin'].get()}. "
+                           f"End ({self._volume_end.get()}) is ignored. Enable "
+                           "Move between start and end positions, then press Confirm.")
+            self._set_validation_results(f"Confirm: FAILED\n{detail}\nPrevious confirmed scene retained.")
             self._status.set("Confirm failed. See Confirmation checks; previous scene retained.")
-            messagebox.showerror("Invalid detector layout", str(exc), parent=self.root)
+            messagebox.showerror("Invalid detector layout", detail, parent=self.root)
             return False
         self._stop_animation()
         self._clear_preview()
@@ -1530,7 +1619,10 @@ class DetectorGeometryBuilder:
                 f"z travel to last view: {timing['table_speed_mm_s'] * times[-1]:.6g} mm; "
                 f"travel per turn: {timing['table_speed_mm_s'] * timing['rotation_period_s']:.6g} mm.")
         else:
-            self._timing_summary.set("Timing disabled: scan span and volume end offset define the scan.")
+            self._timing_summary.set(
+                "Timing disabled; endpoint movement ON: Start and End define volume motion."
+                if self._volume_motion.get() else
+                "Volume movement OFF: stationary at Start; End position is ignored.")
 
         axes = self._axes
         axes.clear()
