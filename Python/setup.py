@@ -157,7 +157,7 @@ CUDA, CUDA_VERSION = locate_cuda()
 try:
     cuda_version = float(CUDA_VERSION)
 except ValueError:
-    cuda_list = re.findall('\d+', CUDA_VERSION)
+    cuda_list = re.findall(r'\d+', CUDA_VERSION)
     cuda_version = float( str(cuda_list[0] + '.' + cuda_list[1]))
 
 # Auto detect gpus
@@ -248,7 +248,9 @@ class BuildExtension(build_ext):
         if self.compiler.compiler_type == "msvc":
             self.compiler._cpp_extensions += [".cu", ".cuh"]
             original_compile = self.compiler.compile
-            original_spawn = self.compiler.spawn
+            # New setuptools uses call() instead of spawn() to run MSVC.
+            compiler_runner = "call" if hasattr(self.compiler, "call") else "spawn"
+            original_spawn = getattr(self.compiler, compiler_runner)
         else:
             original_compile = self.compiler._compile
 
@@ -296,7 +298,7 @@ class BuildExtension(build_ext):
             cflags = copy.deepcopy(extra_postargs)
             extra_postargs = None
 
-            def spawn(cmd, cflags):
+            def spawn(cmd, cflags, **kwargs):
                 # Using regex to match src, obj and include files
                 src_regex = re.compile("/T(p|c)(.*)")
                 src_list = [m.group(2) for m in (src_regex.match(elem) for elem in cmd) if m]
@@ -322,7 +324,7 @@ class BuildExtension(build_ext):
                         cflags = COMMON_NVCC_FLAGS + cflags + COMPUTE_CAPABILITY_ARGS
                         for flag in COMMON_MSVC_FLAGS:
                             cflags = ["-Xcompiler", flag] + cflags
-                        for macro in macros:
+                        for macro in macros or []:
                             if len(macro) == 2:
                                 if macro[1] == None:
                                     cflags += ["--define-macro", macro[0]]
@@ -339,10 +341,13 @@ class BuildExtension(build_ext):
                         cflags = COMMON_MSVC_FLAGS + cflags
                         cmd += cflags
 
-                return original_spawn(cmd)
+                return original_spawn(cmd, **kwargs)
 
             try:
-                self.compiler.spawn = lambda cmd: spawn(cmd, cflags)
+                setattr(
+                    self.compiler, compiler_runner,
+                    lambda cmd, **kwargs: spawn(cmd, cflags, **kwargs),
+                )
                 return original_compile(
                     sources,
                     output_dir,
@@ -354,7 +359,7 @@ class BuildExtension(build_ext):
                     depends,
                 )
             finally:
-                self.compiler.spawn = original_spawn
+                setattr(self.compiler, compiler_runner, original_spawn)
 
         # Monkey-patch the _compile method.
         if self.compiler.compiler_type == "msvc":
@@ -575,7 +580,6 @@ setup(
                           "../Common/data/dual_energy_calibrations.json",
                           "../Common/data/NIST_material_attenuation.json"])],
     ext_modules=[Ax_ext, AxSurface_ext, Atb_ext, tv_proximal_ext, minTV_ext, AwminTV_ext, gpuUtils_ext, RandomNumberGenerator_ext],
-    py_modules=["tigre.py"],
     cmdclass={"build_ext": BuildExtension},
     install_requires=["Cython", "matplotlib", "numpy", "scipy", "tqdm", "PyYAML>=6"],
     license_files=("LICENSE",),
