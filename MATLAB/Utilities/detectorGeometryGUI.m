@@ -6,6 +6,7 @@ function app=detectorGeometryGUI(input,angles)
 examples=detectorGeometryExamples(); settings=examples(1).settings;
 inspection=false; surface=[]; geo=[]; builderGeo=[]; scene=[]; player=[]; current=1;
 confirmed=false; lastSavedYaml=''; playbackClock=[]; playbackStart=1;
+lastPhysical=[];
 builderFields=[]; builderLayout=''; builderMotion=''; listWindows=gobjects(0);
 builderMotionFields=[];
 screen=get(groot,'ScreenSize');
@@ -15,7 +16,7 @@ f=uifigure('Name','TIGRE CT Simulation Builder','Position',position);
 f.CloseRequestFcn=@closeWindow;
 f.DeleteFcn=@(~,~) cleanupWindow();
 main=uigridlayout(f,[1 2]); main.ColumnWidth={410,'1x'};
-left=uigridlayout(main,[6 1]); left.RowHeight={28,'1x',80,28,28,32};
+left=uigridlayout(main,[7 1]); left.RowHeight={28,'1x',80,68,28,28,32};
 examplesGrid=uigridlayout(left,[1 3]); examplesGrid.ColumnWidth={55,'1x',90}; examplesGrid.Padding=[0 0 0 0];
 tabs=uitabgroup(left,'SelectionChangedFcn',@(~,~) updateHelp());
 sourceTab=uitab(tabs,'Title','Source'); detectorTab=uitab(tabs,'Title','Detectors');
@@ -25,6 +26,7 @@ if isprop(tabs,'FontWeight'), tabs.FontWeight='bold'; end
 sourceGrid=page(sourceTab,9); detectorGrid=page(detectorTab,17);
 volumeGrid=page(volumeTab,4); movementGrid=page(movementTab,12);
 help=uitextarea(left,'Editable','off','Value',{'Select a settings tab for help.'});
+checkResults=uitextarea(left,'Editable','off','Value',{'Not confirmed. Press Confirm to see check results.'});
 actions=uigridlayout(left,[1 3]); actions.Padding=[0 0 0 0];
 files=uigridlayout(left,[1 3]); files.Padding=[0 0 0 0];
 exportButton=uibutton(left,'Text','Export recon script...','Enable','off','ButtonPushedFcn',@(~,~) exportScript());
@@ -106,7 +108,7 @@ app=struct('figure',f,'axes',ax,'preview',@confirmBuilder,'load',@(path) applyDo
 app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',motion, ...
     'preview',preview,'back',back,'play',play,'slider',slider,'preset',preset,'tabs',tabs, ...
     'trajectory',trajectory,'volume',volumeEdits,'timed',timed,'timing',timingEdits, ...
-    'endpoints',endpoints,'start',startPosition,'end',endPosition,'export',exportButton,'help',help);
+    'endpoints',endpoints,'start',startPosition,'end',endPosition,'export',exportButton,'help',help,'checks',checkResults);
 
     function g=page(tab,rows)
         container=uigridlayout(tab,[1 1]); container.Padding=[0 0 0 0];
@@ -227,13 +229,22 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         end
     end
     function confirmBuilder()
-        if previewBuilder(), confirmed=true; play.Enable=onoff(size(surface.source_positions_mm,2)>1); end
+        if previewBuilder()
+            confirmed=true; play.Enable=onoff(size(surface.source_positions_mm,2)>1);
+            lines={sprintf('Physical CT: PASS - %d views; %d crossing samples.',lastPhysical.views,lastPhysical.crossing_samples), ...
+                'CGLS geometry: supported; moving volumes require the exported script''s fixed-object conversion.', ...
+                'FDK: separate circular trajectory/detector/scan-coverage requirements; exported script checks these.', ...
+                'Geometry checks only; CUDA execution, sampling completeness and clearance are not certified.'};
+            checkResults.Value=lines; status.Text='Confirmed. Physical checks passed; see check results.';
+        end
     end
     function ok=previewBuilder()
         ok=false; if inspection, return; end
         stopPlayer();
         try
             s=readSettings(); next=buildModularSurface(s); nextGeo=readVolume(s);
+            physical=validateCTTransmission(next,nextGeo);
+            lastPhysical=physical;
             stopPlayer(); settings=s; surface=next; geo=nextGeo; builderGeo=geo; drawScene(); ok=true;
             if timed.Value
                 timingEdits.table_speed_mm_s.Value=num2str(geo.acquisition.table_speed_mm_s,12);
@@ -244,10 +255,13 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
             status.Text='Confirm applies all tabs. Play animates the confirmed geometry.';
         catch ex
             status.Text=['Confirm failed; previous geometry retained: ' ex.message];
+            checkResults.Value={'Confirm: FAILED',ex.message,'Previous confirmed scene retained.'};
             uialert(f,ex.message,'Invalid geometry');
         end
     end
     function drawScene()
+        checkResults.Value={'Displayed geometry changed. Confirm to refresh check results.'};
+        if inspection, checkResults.Value={'Inspection mode: exact loaded geometry. Return to builder and Confirm to check edits; exported scripts validate before reconstruction.'}; end
         if inspection, scene=renderDetectorSurface(ax,surface,geo);
         else, scene=renderDetectorSurface(ax,surface,geo,settings); end
         current=1; n=size(surface.source_positions_mm,2);
@@ -389,7 +403,10 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     function saveToPath(path,exact)
         if nargin<2, exact=false; end
         if exact || inspection, d=struct('surface',surface,'geo',geo);
-        else, s=readSettings(); buildModularSurface(s); d=struct('settings',s,'geo',readVolume(s)); end
+        else
+            s=readSettings(); next=buildModularSurface(s); nextGeo=readVolume(s);
+            validateCTTransmission(next,nextGeo); d=struct('settings',s,'geo',nextGeo);
+        end
         geometryFile('save',path,d); [~,~,extension]=fileparts(path);
         if any(strcmpi(extension,{'.yaml','.yml'})), lastSavedYaml=path; exportButton.Enable='on'; end
         status.Text=['Saved geometry: ' path];

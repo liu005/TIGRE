@@ -56,6 +56,16 @@ def test_moving_volume_changes_both_source_and_detector_to_object_frame(tmp_path
     np.testing.assert_array_equal(surface.valid_mask, document.surface.valid_mask)
 
 
+def test_exported_script_rejects_nontransmitting_views_before_reconstruction(tmp_path):
+    _, script = saved_example(tmp_path, moving=True)
+    script["fdk_surface"] = Mock()
+    script["cgls_surface"] = Mock()
+    with pytest.raises(ValueError, match="view 3"):
+        script["main"](["--projections", str(tmp_path / "not_loaded.npy")])
+    script["fdk_surface"].assert_not_called()
+    script["cgls_surface"].assert_not_called()
+
+
 def test_unsupported_fdk_does_not_prevent_cgls(tmp_path):
     path, script = saved_example(tmp_path)
     surface = load_geometry_file(path).surface

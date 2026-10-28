@@ -30,7 +30,7 @@ def test_help_follows_tabs_hover_and_keyboard_focus():
         root.update()
         builder._detector_motion_button.event_generate("<Enter>")
         root.update()
-        assert "Toggle whether the detector" in builder._help_text.get("1.0", "end")
+        assert "Choose Moving with Source" in builder._help_text.get("1.0", "end")
         builder._inspection_mode = True
         builder._on_help_tab_changed()
         assert "Inspection mode" in builder._help_text.get("1.0", "end")
@@ -102,8 +102,19 @@ def test_source_trajectory_selection_and_detector_motion_stay_in_sync():
         assert builder._detector_stationary is False
         builder.toggle_detector_motion()
         assert builder._source_trajectory.get() == "Linear"
+        previous = builder.surface
+        builder._detector_motion.set("Moving with Source")
+        builder._detector_motion_box.event_generate("<<ComboboxSelected>>")
+        assert builder._detector_stationary is False
+        assert builder._source_trajectory.get() == "Cylindrical"
+        builder._detector_motion.set("Fixed Position")
+        builder._on_detector_motion_changed()
+        assert builder._detector_stationary == "arc"
+        assert builder.surface is previous
+        assert str(builder._detector_motion_box.cget("state")) == "readonly"
         builder._inspection_mode = True
         builder._update_field_states()
         assert str(builder._source_trajectory_box.cget("state")) == "disabled"
+        assert str(builder._detector_motion_box.cget("state")) == "disabled"
     finally:
         root.destroy()

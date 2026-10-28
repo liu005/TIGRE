@@ -59,8 +59,12 @@ else:
 
 DETECTOR_FIELD_HELP = {
     "Detector motion": (
-        "Toggle whether the detector rotates with the source or remains fixed. "
-        "Fixed modes use a straight source trajectory or a circular source arc. "
+        "Choose Moving with Source to rotate the detector with a cylindrical source orbit, "
+        "or Fixed Position to keep it stationary. Fixed Position uses the selected "
+        "Linear source trajectory or Cylindrical source arc. Moving with Source "
+        "switches a Linear source to Cylindrical. Confirm applies changes. "
+        "Confirm rejects same-side panels with no transmitting rays, sources/detectors "
+        "inside the volume, and views with no ray crossing the volume. "
         "Use iterative reconstruction for limited-angle scans."
     ),
     "Layout": (
@@ -726,8 +730,12 @@ class DetectorGeometryBuilder:
         self._bind_parameter_help(self._source_trajectory_box, "Source trajectory")
         self._add_help_label(detector_controls, "Detector motion").grid(
             row=0, column=0, sticky="w", pady=2)
-        self._detector_motion_button = ttk.Button(
-            detector_controls, text="Moving with source", command=self.toggle_detector_motion)
+        self._detector_motion = tk.StringVar(value="Moving with Source")
+        self._detector_motion_box = ttk.Combobox(detector_controls,
+            textvariable=self._detector_motion, values=("Moving with Source", "Fixed Position"),
+            state="readonly", width=18)
+        self._detector_motion_button = self._detector_motion_box  # Retain the existing widget alias.
+        self._detector_motion_box.bind("<<ComboboxSelected>>", self._on_detector_motion_changed)
         self._detector_motion_button.grid(row=0, column=1, sticky="ew", pady=2)
         self._bind_parameter_help(self._detector_motion_button, "Detector motion")
 
@@ -824,6 +832,14 @@ class DetectorGeometryBuilder:
         self._help_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._settings_tabs.bind("<<NotebookTabChanged>>", self._on_help_tab_changed)
         self._on_help_tab_changed()
+        checks = ttk.LabelFrame(controls, text="Confirmation checks", padding=4)
+        checks.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+        self._validation_text = tk.Text(checks, height=4, width=34, wrap=tk.WORD, state=tk.DISABLED)
+        checks_scroll = ttk.Scrollbar(checks, orient=tk.VERTICAL, command=self._validation_text.yview)
+        self._validation_text.configure(yscrollcommand=checks_scroll.set)
+        checks_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self._validation_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._set_validation_results("Not confirmed. Press Confirm to see physical and reconstruction checks.")
 
         buttons = ttk.Frame(action_controls)
         buttons.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(8, 2))
@@ -914,9 +930,6 @@ class DetectorGeometryBuilder:
             self._fields[name].set(overrides.get(name, value))
         self._layout.set(layout)
         self._detector_stationary = stationary
-        self._detector_motion_button.configure(
-            text=("Stationary (arc source)" if stationary == "arc" else
-                  "Stationary" if stationary else "Moving with source"))
         self._update_module_count_field()
         self._example_description.set(description)
         self.update_preview()
@@ -969,9 +982,6 @@ class DetectorGeometryBuilder:
             "Fixed detector, moving source": True,
             "Fixed detector, arc source": "arc",
         }[settings["source_motion"]]
-        state = ("Stationary (arc source)" if self._detector_stationary == "arc" else
-                 "Stationary" if self._detector_stationary else "Moving with source")
-        self._detector_motion_button.configure(text=state)
         self._builder_button.configure(state=self.tk.DISABLED)
         self._update_module_count_field()
         self._example_description.set(f"Loaded editable settings: {Path(path).name}")
@@ -984,6 +994,9 @@ class DetectorGeometryBuilder:
             inspection = getattr(self, "_inspection_mode", False)
             settings = None if inspection else self._read_parameters()
             volume = self._inspection_geometry if inspection else self._read_volume()
+            if not inspection:
+                from tigre.utilities.ct_physics import validate_transmission_geometry
+                validate_transmission_geometry(build_modular_surface(**settings), volume)
             if inspection and self.surface is None:
                 raise ValueError("No geometry to save.")
             path = filedialog.asksaveasfilename(parent=self.root,
@@ -1048,6 +1061,7 @@ class DetectorGeometryBuilder:
         self.surface = surface
         self._parameters = {"acquisition": getattr(geometry, "acquisition", None)}
         self._inspection_mode = True
+        self._set_validation_results("Inspection mode: exact loaded geometry is displayed. Return to builder and Confirm to check edited settings; exported scripts validate before reconstruction.")
         self._inspection_geometry = geometry
         self._surface_renderer = SurfaceRenderer(self._axes, surface, geo=geometry)
         self._set_motion_details(geometry)
@@ -1136,12 +1150,16 @@ class DetectorGeometryBuilder:
         if hasattr(self, "_source_trajectory_box"):
             self._source_trajectory.set("Linear" if self._detector_stationary is True else "Cylindrical")
             self._source_trajectory_box.configure(state="disabled" if inspection else "readonly")
+        if hasattr(self, "_detector_motion_box"):
+            self._detector_motion.set("Fixed Position" if self._detector_stationary else "Moving with Source")
+            self._detector_motion_box.configure(state="disabled" if inspection else "readonly")
         for name in ("_volume_motion_toggle", "_timing_toggle"):
             if hasattr(self, name):
                 getattr(self, name).configure(state=self.tk.DISABLED if inspection else self.tk.NORMAL)
         if hasattr(self, "_layout_box"):
             self._layout_box.configure(state="disabled" if inspection else "readonly")
-            self._detector_motion_button.configure(state=self.tk.DISABLED if inspection else self.tk.NORMAL)
+            if not hasattr(self, "_detector_motion_box"):
+                self._detector_motion_button.configure(state=self.tk.DISABLED if inspection else self.tk.NORMAL)
             if hasattr(self, "_preview_button"):
                 self._preview_button.configure(state=self.tk.DISABLED if inspection else self.tk.NORMAL)
         if inspection:
@@ -1238,18 +1256,24 @@ class DetectorGeometryBuilder:
             self._detector_stationary = True
         elif self._detector_stationary is True:
             self._detector_stationary = "arc"
-        state = ("Stationary (arc source)" if self._detector_stationary == "arc" else
-                 "Stationary" if self._detector_stationary else "Moving with source")
-        self._detector_motion_button.configure(text=state)
         self._update_field_states()
         self._set_help("Source trajectory")
+
+    def _on_detector_motion_changed(self, event=None):
+        if self._detector_motion.get() == "Moving with Source":
+            self._detector_stationary = False
+        else:
+            self._detector_stationary = True if self._source_trajectory.get() == "Linear" else "arc"
+        self._update_field_states()
+        self._set_help("Detector motion")
 
     def toggle_detector_motion(self):
         """Toggle between a stationary detector and one rotating with the source."""
         self._detector_stationary = {False: True, True: "arc", "arc": False}[self._detector_stationary]
         state = ("Stationary (arc source)" if self._detector_stationary == "arc" else
                  "Stationary" if self._detector_stationary else "Moving with source")
-        self._detector_motion_button.configure(text=state)
+        if not hasattr(self, "_detector_motion_box"):
+            self._detector_motion_button.configure(text=state)
         self._update_field_states()
         self._help_text.configure(state=self.tk.NORMAL)
         self._help_text.delete("1.0", self.tk.END)
@@ -1440,6 +1464,32 @@ class DetectorGeometryBuilder:
         if self.update_preview():
             self._confirmed_once = True
             self._play_button.configure(state=self.tk.NORMAL)
+            physical = self._physical_report
+            lines = [f"Physical CT: PASS — {physical['views']} views; {physical['crossing_samples']:,} crossing samples."]
+            offsets = np.atleast_2d(self._builder_geometry.offOrigin)
+            moving = len(offsets) > 1 and not np.all(offsets == offsets[0])
+            lines.append("CGLS geometry: supported" + (" after fixed-object conversion (exported script)." if moving else "."))
+            if moving:
+                lines.append("FDK: not assessed after volume-motion conversion; exported script checks the resulting trajectory.")
+            else:
+                try:
+                    report = check_tigre_compatibility(self.surface)
+                    lines.append("FDK geometry: " + ("PASS. Scan coverage still needs checking." if report["fdk_supported"]
+                                                     else "NOT SUPPORTED. " + report["fdk_message"]))
+                except Exception as exc:
+                    lines.append(f"FDK check unavailable: {type(exc).__name__}: {exc}")
+            lines.append("Geometry checks only; CUDA execution, sampling completeness and mechanical clearance are not certified.")
+            self._set_validation_results("\n".join(lines))
+            self._status.set("Confirmed. Physical CT checks passed; see Confirmation checks for algorithm details.")
+
+    def _set_validation_results(self, text):
+        if not hasattr(self, "_validation_text"):
+            return
+        self._validation_text.configure(state=self.tk.NORMAL)
+        self._validation_text.delete("1.0", self.tk.END)
+        self._validation_text.insert("1.0", text)
+        self._validation_text.yview_moveto(0)
+        self._validation_text.configure(state=self.tk.DISABLED)
 
     def update_preview(self):
         from tkinter import messagebox
@@ -1451,13 +1501,18 @@ class DetectorGeometryBuilder:
             parameters = self._read_parameters()
             volume = self._read_volume()
             surface = build_modular_surface(**parameters)
+            from tigre.utilities.ct_physics import validate_transmission_geometry
+            physical = validate_transmission_geometry(surface, volume)
         except (TypeError, ValueError, OverflowError, MemoryError) as exc:
+            self._set_validation_results(f"Confirm: FAILED\n{exc}\nPrevious confirmed scene retained.")
+            self._status.set("Confirm failed. See Confirmation checks; previous scene retained.")
             messagebox.showerror("Invalid detector layout", str(exc), parent=self.root)
             return False
         self._stop_animation()
         self._clear_preview()
         self.surface = surface
         self._builder_geometry = volume
+        self._physical_report = physical
         self._parameters = parameters
         self._voxel_spacing.set("Voxel size (z, y, x mm): " +
             ", ".join(f"{v:.6g}" for v in volume.dVoxel))
@@ -1510,6 +1565,7 @@ class DetectorGeometryBuilder:
         return True
 
     def _clear_preview(self):
+        self._set_validation_results("Displayed geometry changed. Press Confirm to refresh check results.")
         if hasattr(self, "_motion_summary"):
             self._motion_summary.set("Select Confirm to display scan motion.")
             self._motion_current.set("")

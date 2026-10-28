@@ -313,9 +313,36 @@ it is a layout preview, not a projection or a scale-independent schematic.
 
 ## Detector motion and scan controls
 
+Detector motion offers **Moving with Source** and **Fixed Position**. Fixed
+Position follows the Source tab's Cylindrical arc or Linear trajectory;
+Moving with Source selects a cylindrical orbit if Linear was active.
+
+After Confirm, the scrollable **Confirmation
+checks** panel shows PASS/FAILED, checked views and crossing samples, CGLS
+geometry support, and FDK geometry results. FDK scan coverage is separate;
+for moving volumes the object-frame FDK check is deferred to the exported
+script. Failures remain visible with their reason and preserve the previous
+confirmed scene. No success popup interrupts editing.
+
+Confirm and editable YAML save use the actual volume box at every view,
+including per-view offOrigin. The source and
+valid detector pixels must be outside the volume. Each view needs at least
+one sampled source-to-pixel segment crossing it. A detector panel wholly on
+the source side and measuring no crossing rays is rejected. Far-side overscan
+panels may legitimately miss the object, and valid off-center corner rays
+are accepted. A long/full source orbit with a fixed detector will generally
+fail these checks; reduce the arc, reposition the detector/volume, or select
+Moving with Source. Errors identify the offending view/panel and retain the
+previous confirmed scene. Exact archives remain inspectable for diagnosis.
+
+TIGRE's arbitrary-surface Siddon/CGLS APIs can trace these rays, but that alone
+does not certify a physical acquisition. The guard checks transmission, not
+complete sampling, mechanical clearance, panel-front sensitivity, or FDK
+requirements. Exported scripts repeat the physical check before reconstruction.
+
 ### Moving source and detector
 
-With **Detector motion** set to **Moving with source**, the source and panel
+With **Detector motion** set to **Moving with Source**, the source and panel
 layout rotate together around the z axis.
 
 | Control | Meaning |
@@ -337,7 +364,7 @@ require COR = 0; a nonzero value produces a validation error.
 
 ### Stationary detector and moving source
 
-Set **Detector motion** to **Stationary** to hold the panels fixed while the
+Set **Detector motion** to **Fixed Position** and Source trajectory to **Linear** to hold the panels fixed while the
 source travels along a straight line. Enter **Views**, **Source start (x, y, z
 mm)**, and **Source end (x, y, z mm)** in TIGRE world coordinates. Both
 endpoints are included when there is more than one view. Source radius, source
@@ -354,8 +381,8 @@ experimental FDK opt-in is described below.
 
 ### Stationary detector and arc source
 
-Click **Detector motion** to cycle through **Moving with source**,
-**Stationary**, and **Stationary (arc source)**. Arc mode uses **Source radius**,
+Select **Fixed Position** in Detector motion and **Cylindrical** in Source
+trajectory for an arc source with stationary panels. Arc mode uses **Source radius**,
 **Source height**, **Orbit start**, **Scan span**, and **Views**. The detector
 faces the midpoint of the acquisition arc and stays fixed as the source moves.
 Source start/end fields are ignored. Prefer iterative reconstruction.
@@ -485,7 +512,7 @@ This uses the low-resolution cone-beam geometry from TIGRE's
 
 | Setting | Value |
 |---|---:|
-| Detector motion | Moving with source |
+| Detector motion | Moving with Source |
 | Layout | Piecewise linear |
 | Views | 50 |
 | Orbit start / Scan span | 0 / 360 degrees |

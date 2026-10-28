@@ -16,12 +16,13 @@ c=app.controls; assert(strcmp(app.figure.Name,'TIGRE CT Simulation Builder'));
 assert(strcmp(c.play.Enable,'off')); assert(strcmp(c.export.Enable,'off'));
 assert(isequal(sort({c.tabs.Children.Title}),sort({'Movement','Volume','Detectors','Source'})));
 c.fields.n_views.Value='9'; c.fields.module_shape.Value='2, 3'; c.fields.n_modules.Value='1';
-c.volume.nVoxel.Value='16, 12, 8'; c.volume.sVoxel.Value='32, 24, 16';
+c.volume.nVoxel.Value='16, 12, 8'; c.volume.sVoxel.Value='32, 24, 40';
 c.timed.Value=true;
 for name=fieldnames(a)', c.timing.(name{1}).Value=num2str(a.(name{1})); end
 c.endpoints.Value=true; c.start.Value='1, 2, -10'; c.start.ValueChangedFcn(c.start,[]);
 c.end.Value='1, 2, 10'; app.confirm();
 assert(strcmp(c.play.Enable,'on'));
+assert(any(contains(c.checks.Value,'Physical CT: PASS')));
 g=app.geometry(); assert(isequal(g.offOrigin(:,[1 end]),[1 1;2 2;-10 10]));
 assert(g.acquisition.table_speed_mm_s==10);
 assert(size(app.surface().source_positions_mm,2)==9);

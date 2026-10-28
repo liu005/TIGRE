@@ -95,6 +95,17 @@ in `[u;v]` order and volume values in `[x;y;z]`; Python uses `[v,u]` and
 
 ## Volume motion and reconstruction export
 
+Confirm, editable save and exported scripts check physical transmission at
+each volume pose. Sources/detector pixels inside the volume, same-side panels
+with no crossing rays, and views with no measured ray crossing the box are
+rejected. Reduce a fixed-detector source arc or reposition the rig/volume to
+correct the reported view. This check does not guarantee complete sampling,
+mechanical clearance or FDK support; exact archives remain inspectable.
+After Confirm, the persistent check-results box displays physical PASS/FAILED,
+view and crossing-sample counts, CGLS geometry support and the separate FDK
+requirements. Failed-confirmation reasons remain visible without replacing
+the last confirmed scene. The exported script performs the FDK-specific check.
+
 **Source trajectory** selects Cylindrical (circular orbit about +z) or Linear
 (xyz endpoints, fixed detector). It stays synchronized with detector motion.
 Changes are pending until **Confirm**; `app.confirm()` applies them, and the

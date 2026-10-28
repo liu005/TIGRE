@@ -105,6 +105,8 @@ def main(argv=None):
     if args.iterations < 1:
         parser.error("--iterations must be positive")
     geo, surface = prepare_geometry(args.geometry, args.voxels)
+    from tigre.utilities.ct_physics import validate_transmission_geometry
+    validate_transmission_geometry(surface, geo)
     results = dict(geometry_file=str(args.geometry.resolve()), nVoxel=geo.nVoxel,
                    sVoxel=geo.sVoxel, dVoxel=geo.dVoxel, offOrigin=geo.offOrigin)
     if args.projections is None:

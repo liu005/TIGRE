@@ -2,6 +2,31 @@
 
 Updated: 2026-10-28 (Australia/Sydney).
 
+## Follow-up: detector choices and physical transmission guard
+
+The Python detector selector now explicitly offers Moving with Source and
+Fixed Position, synchronized with the cylindrical/linear source selector.
+Python and MATLAB Confirm, editable saves and exported reconstructions validate
+finite source-to-pixel segments against each view's volume box. Source/detector
+pixels inside/on the box, same-side panels with no transmitted rays, and
+views without any crossing samples are rejected. Errors retain the previous
+confirmed scene. Far-side overscan and actual off-center crossing rays remain
+valid. Exact inspection permits diagnosis of invalid archives. This is a
+transmission check, not collision/sampling completeness or FDK certification.
+See `ct_physics.py`, `validateCTTransmission.m` and their dedicated tests.
+Confirm now populates a persistent, scrollable results area in each GUI with
+physical PASS/FAILED, counts, CGLS geometry support and FDK-specific status or
+deferred checks. Failure reasons remain visible; these messages explicitly
+distinguish geometric validation from CUDA execution and sampling/clearance.
+
+Follow-up validation: the affected Python suite passed **146 tests** with no
+skips. It covers the physical guard, selector synchronization, confirmation
+results, timing, YAML/MAT interchange, remapping, exports and visualization.
+MATLAB coverage includes `test_ctTransmission` and the existing builder,
+usability, timing/YAML and guided-demo checks. A fixed-detector linear-source
+export also ran CUDA CGLS successfully (three iterations, residual decreasing
+39.04 to 24.53); validated FDK rejected the noncircular trajectory as expected.
+
 ## Delivered workflow
 
 Python and MATLAB use the application name **TIGRE CT Simulation Builder**.
@@ -151,6 +176,7 @@ The guided demo and manuals use Confirm/Save YAML labels. UI sizing was checked
 at 1024x700 and 1280x720 during development; settings remain scrollable.
 This work does not change CUDA kernels or rebuild dependencies.
 
-The commit intentionally excludes pre-existing modified `.pyd` files,
+The original builder commit `dab22d6` excluded pre-existing `.pyd` binaries,
 `Python/setup.py`, `Python/demos/d_detector_surface_gct.py`, and MATLAB GIF
-changes. Those local changes remain in the worktree for their owner's review.
+changes. Those were subsequently committed separately in `3987109`
+(`python rebuild stuff`); this follow-up does not modify them.
