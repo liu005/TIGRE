@@ -63,9 +63,18 @@ for ii=1:niter
     if (ii==1);tic;end
 
     den = Ax(res,geo,angles,'gpuids',gpuids);
-    den(den<=0.)=inf;
+    % A ray whose forward projection is (near) zero carries no information:
+    % treat it as empty (ratio 0). Guarding only den==0 is not enough - under
+    % the multiplicative update air voxels decay to single denormals, a ray
+    % seeing only those gives proj./den ~1e38, the backprojection sums to Inf
+    % and res.*imgupdate is Inf (or NaN, which max() silently turns into 0).
+    % Negative data (log projections after corrections) cannot feed a
+    % multiplicative update either; clip the ratio at 0.
+    den(den<=1e-6)=inf;
     
-    imgupdate = Atb(proj./den, geo,angles,'matched','gpuids',gpuids)./V;
+    % ... and cap the factor at x10 per iteration: a near-empty ray still gives
+    % ratios of 1e4 and the voxels along it grow without bound otherwise.
+    imgupdate = Atb(min(max(proj./den,0),10), geo,angles,'matched','gpuids',gpuids)./V;
     res = max(res.*imgupdate,0.);
     
     if measurequality
