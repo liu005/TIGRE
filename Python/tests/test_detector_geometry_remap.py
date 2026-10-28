@@ -30,6 +30,27 @@ def _piecewise_surface():
     )
 
 
+def test_gui_remap_archive_retains_volume_metadata(tmp_path):
+    import queue
+    from types import SimpleNamespace
+    from tigre.utilities.detector_geometry_gui import DetectorGeometryBuilder
+    from tigre.utilities.geometry_io import load_geometry_archive
+    surface = _piecewise_surface()
+    projections = tmp_path / "projections.npy"
+    np.save(projections, np.zeros(surface.valid_mask.shape, np.float32))
+    output = tmp_path / "remapped.npz"
+    volume = SimpleNamespace(nVoxel=np.array([2, 3, 4]), sVoxel=np.array([20, 30, 40]),
+                             offOrigin=np.array([1, 2, 3]))
+    builder = object.__new__(DetectorGeometryBuilder)
+    builder._remap_queue = queue.Queue()
+    builder._run_projection_remap(projections, output, surface, volume)
+    result = builder._remap_queue.get_nowait()
+    assert "error" not in result, result
+    geo, _ = load_geometry_archive(output)
+    np.testing.assert_array_equal(geo.nVoxel, volume.nVoxel)
+    np.testing.assert_array_equal(geo.offOrigin, volume.offOrigin)
+
+
 def test_remap_projection_data_to_fdk_surface_without_filling_panel_gap():
     surface = _piecewise_surface()
     projections = np.broadcast_to(

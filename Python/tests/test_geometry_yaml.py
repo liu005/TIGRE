@@ -25,6 +25,31 @@ def settings(layout="Piecewise linear", motion="Rotating source + detector"):
         cor_mm=7 if motion == "Rotating source + detector" else 0)
 
 
+def test_moving_volume_yaml_and_renderer(tmp_path):
+    from types import SimpleNamespace
+    from tigre.utilities.visualization.surface_renderer import SurfaceRenderer
+    offsets = np.array([[-100, 2, 3], [0, 2, 3], [100, 2, 3]])
+    geo = SimpleNamespace(sVoxel=np.array([20, 30, 40]),
+                          nVoxel=np.array([10, 15, 20]), offOrigin=offsets)
+    path = tmp_path / "moving.yaml"
+    save_geometry_yaml(path, settings=settings(), geometry=geo)
+    loaded = load_geometry_file(path)
+    np.testing.assert_array_equal(loaded.geometry.offOrigin, offsets)
+    np.testing.assert_array_equal(loaded.geometry.nVoxel, geo.nVoxel)
+    fig = plt.figure()
+    try:
+        ax = fig.add_subplot(111, projection="3d")
+        renderer = SurfaceRenderer(ax, loaded.surface, geo=loaded.geometry)
+        initial = renderer.volume._vec.copy()
+        renderer.update(2)
+        np.testing.assert_allclose(renderer.volume._vec[2] - initial[2], 200)
+        np.testing.assert_allclose(renderer.volume._vec[:2], initial[:2])
+        assert ax.get_zlim3d()[0] < -110
+        assert ax.get_zlim3d()[1] > 110
+    finally:
+        plt.close(fig)
+
+
 @pytest.mark.parametrize("layout", ["Piecewise linear", "Cylindrical"])
 @pytest.mark.parametrize("motion", ["Rotating source + detector",
     "Fixed detector, moving source", "Fixed detector, arc source"])
@@ -154,3 +179,36 @@ def test_shipped_three_panel_yaml():
     assert loaded.settings["panel_y_angles_deg"] == [0, 10, 0]
     assert loaded.surface.pixel_centers_mm.shape == (48, 16, 100, 3)
     assert len(loaded.surface._module_slices) == 3
+
+
+def test_save_rejects_volume_offsets_with_wrong_view_count(tmp_path):
+    from types import SimpleNamespace
+    volume = SimpleNamespace(sVoxel=np.array([20, 30, 40]), offOrigin=np.zeros((2, 3)))
+    with pytest.raises(ValueError, match="per view"):
+        save_geometry_yaml(tmp_path / "wrong.yaml", settings=settings(), geometry=volume)
+
+
+def test_failed_atomic_save_keeps_existing_yaml(tmp_path):
+    path = tmp_path / "geometry.yaml"
+    save_geometry_yaml(path, settings=settings())
+    original = path.read_bytes()
+    with patch("pathlib.Path.replace", side_effect=OSError("write blocked")):
+        with pytest.raises(OSError):
+            save_geometry_yaml(path, settings=settings(layout="Cylindrical"))
+    assert path.read_bytes() == original
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_nonlinear_volume_recipe_opens_in_exact_inspection(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+    volume = SimpleNamespace(sVoxel=np.array([20, 30, 40]),
+                              offOrigin=np.array([[0, 0, 0], [17, 0, 0], [20, 0, 0]]))
+    path = tmp_path / "nonlinear.yaml"
+    save_geometry_yaml(path, settings=settings(), geometry=volume)
+    builder = object.__new__(DetectorGeometryBuilder)
+    builder.inspect_geometry = Mock()
+    builder.load_geometry_path(path)
+    builder.inspect_geometry.assert_called_once()
+    loaded = builder.inspect_geometry.call_args.args[0]
+    np.testing.assert_array_equal(loaded.offOrigin, volume.offOrigin)

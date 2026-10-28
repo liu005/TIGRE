@@ -1,4 +1,4 @@
-# MATLAB detector builder and surface animation
+# MATLAB TIGRE CT Simulation Builder and surface animation
 
 For a guided build/save/load workflow, run `d27_DetectorGeometryGUI`.
 The Python counterpart uses the same number and panel settings; see the
@@ -27,24 +27,25 @@ app = detectorGeometryGUI();
 ```
 
 The window opens at up to 1280 x 720 pixels, centred and reduced to fit the
-screen. Controls use compact spacing; the left panel remains scrollable on
-smaller displays, and the window can be resized.
+screen. Source, Detectors, Volume and Movement settings use scrollable pages
+beside one shared world-coordinate 3D view. Tab-aware help explains coordinate
+order and motion. The window can be resized.
 
 The presets match the Python builder, including panel roll/pitch/yaw, the
 exaggerated global COR example, linear/arc tomosynthesis, and GCT last.
 GCT is an idealized panel arrangement; it excludes the measured-data demo's
 pixel corrections. Full GCT coordinate/mask arrays need about 240 MiB.
 
-Choose a layout and motion, edit fields, then **Preview**. **From list...**
-opens a per-panel table; **Apply** updates the field and **Preview** rebuilds
+Choose a layout and motion, edit fields, then **Confirm**. **List...**
+opens a per-panel table; **Apply** updates the field and **Confirm** rebuilds
 the scene. **Play** toggles timer-based playback; the slider selects a view.
 Disabled fields are ignored by the builder. Piecewise-linear geometry derives
 the panel count from the transverse list, reported below the controls.
 Changing mode, loading geometry, or loading another preset closes open panel
 list editors. Applying a list does not rebuild the preview. Returning from
 inspection preserves edits that had not yet been previewed. Playback stops on
-mode changes and Preview; an invalid Preview marks the previous display as
-out of date and disables playback until corrected. Closing or deleting the
+mode changes and Confirm; an invalid Confirm retains the previous geometry.
+Play starts disabled until the first successful explicit Confirm. Closing or deleting the
 main window removes its playback timer and list editor windows.
 
 Panel x/y angles accept a shared value or one per panel. Piecewise-linear z
@@ -64,7 +65,7 @@ support, so arrows/labels use colors blended at 30% against white.
 
 ## Loading and saving
 
-**Save settings...** writes an editable recipe to `.mat` or `.yaml`.
+**Save YAML...** writes an editable recipe to `.mat` or `.yaml`.
 **Save surface...** stores exact arrays: a native `.mat`, or YAML with an NPZ
 companion. **Load geometry...** accepts `.mat`, `.yaml`, `.yml`, and `.npz`.
 Recipes reopen in builder mode; explicit geometry opens in inspection mode,
@@ -73,7 +74,7 @@ builder settings. Keep YAML and its NPZ companion together when sharing.
 
 MAT files require no Python. A MAT document contains `settings`, or `surface`,
 or standard MATLAB `geo` plus `angles`. Optional `geo.sVoxel` and
-`geo.offOrigin` draw a fixed reconstruction volume. Loading MAT files does
+`geo.offOrigin` draw a fixed or moving reconstruction volume. Loading MAT files does
 not execute MATLAB source.
 
 YAML/NPZ interchange uses the same Python loader and schema as the Python GUI,
@@ -91,6 +92,43 @@ YAML geometry angles are degrees. Standard TIGRE angles and `rotDetector`
 remain radians. MATLAB native geometry uses `nDetector/dDetector/offDetector`
 in `[u;v]` order and volume values in `[x;y;z]`; Python uses `[v,u]` and
 `[z,y,x]`. The bridge converts these conventions explicitly.
+
+## Volume motion and reconstruction export
+
+**Source trajectory** selects Cylindrical (circular orbit about +z) or Linear
+(xyz endpoints, fixed detector). It stays synchronized with detector motion.
+Changes are pending until **Confirm**; `app.confirm()` applies them, and the
+legacy `app.preview()` method remains an alias for explicit confirmation.
+
+Volume counts, full size and start/end positions use MATLAB **x,y,z** order.
+The Volume center and Movement start are shared. Timing acquires one frame per
+pulse: `t=(view-1)/firing_rate_hz`. Readout limits firing to
+`1000/readout_period_ms`; rotation period determines turns. Choose signed
+z speed or endpoint interpolation. Endpoints derive z speed from travel
+divided by last-view time; different endpoints require at least two views.
+Playback follows elapsed time and may skip display frames. The source keeps
+its structural world trajectory while the volume moves.
+
+YAML/MAT persistence preserves voxel counts, all volume offsets, acquisition
+timing and motion mode. The bridge reverses xyz/zyx and transposes every view;
+it does not collapse motion to its first pose. Nonlinear loaded volume paths
+remain read-only. Save YAML also offers native MAT recipes.
+
+**Export recon script...** is enabled only after a successful YAML save; MAT
+saves do not unlock it. The native `.m` script references the last saved YAML
+and uses `FDK_surface` and `CGLS_surface`. It uses saved voxel settings and
+either simulates `headPhantom` or loads a MAT file containing attenuation
+`projections` in rows/columns/views order. Edit `algorithm`, `iterations`,
+`projectionsPath`, `voxelCounts` and `outputPath` in the script as needed.
+The YAML path is absolute; update it when moving files. Moving rays are
+converted to a fixed object frame for CGLS, and unsupported FDK geometry is
+reported without enabling approximate FDK. YAML loading uses recon Python;
+reconstruction uses native MATLAB CUDA MEX.
+
+For automation, `app.save(path)` saves current controls and volume,
+`app.save(path,true)` saves the exact displayed surface, and `app.export(path)`
+exports after a successful YAML save. `app.geometry()` returns the confirmed
+native xyz volume metadata; `app.settings()` returns the confirmed recipe.
 
 ## Animation and programmatic construction
 

@@ -16,8 +16,8 @@ app.controls.fields.panel_x_angles_deg.Value='-3, 0, 3';
 app.controls.fields.panel_y_angles_deg.Value='2, -2, 1';
 app.controls.fields.cor_mm.Value='5';
 app.preview();
-% In the GUI, "From list..." edits each panel's roll/pitch/yaw or offsets.
-% Apply a list, then press Preview. COR is a scan-wide shift; individual
+% In the GUI, "List..." edits each panel's roll/pitch/yaw or offsets.
+% Apply a list, then press Confirm. COR is a scan-wide shift; individual
 % panel alignment is expressed with per-panel offsets and tilt angles.
 builderSettings=app.settings();
 detectorSurface=app.surface();
@@ -31,7 +31,7 @@ settingsPath=fullfile(outputFolder,'detector_settings.mat');
 surfacePath=fullfile(outputFolder,'detector_surface.mat');
 geometryFile('save',settingsPath,struct('settings',builderSettings,'geo',geo));
 geometryFile('save',surfacePath,struct('surface',detectorSurface,'geo',geo));
-% Equivalent GUI actions: Save settings... and Save surface....
+% Equivalent GUI actions: Save YAML... and Save surface....
 % Recipe files rebuild coordinates; exact archives preserve pixel positions,
 % source positions, valid masks and module boundaries for inspection.
 
@@ -40,7 +40,7 @@ recipe=geometryFile('load',settingsPath);
 assert(isequal(recipe.surface.pixel_centers_mm,detectorSurface.pixel_centers_mm));
 app.load(settingsPath);
 % Builder fields are enabled for the selected layout/motion. Edit a value
-% and press Preview before saving a new exact surface.
+% and press Confirm before saving a new exact surface.
 
 %% Reload the exact archive in inspection mode in the same GUI
 archive=geometryFile('load',surfacePath);

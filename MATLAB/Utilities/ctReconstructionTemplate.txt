@@ -1,0 +1,50 @@
+%% TIGRE CT Simulation Builder: saved-geometry reconstruction
+% Add TIGRE to the MATLAB path and build native Surface_mex/FDKSurface_mex.
+% YAML interchange uses conda recon; reconstruction uses native MATLAB CUDA.
+geometryPath='__SAVED_GEOMETRY__'; % Update this path if you move the YAML.
+projectionsPath=''; % Optional MAT file containing attenuation `projections`.
+algorithm='both'; % 'fdk', 'cgls', or 'both'.
+iterations=20;
+voxelCounts=[]; % Optional override [x;y;z], needed for older YAML without counts.
+outputPath=fullfile(fileparts(mfilename('fullpath')),'reconstruction_results.mat');
+
+document=geometryFile('load',geometryPath);
+geo=document.geo; surface=document.surface;
+assert(~isempty(geo),'TIGRE:export:volume','Save volume settings in the GUI first');
+if ~isempty(voxelCounts), geo.nVoxel=voxelCounts(:); end
+assert(isfield(geo,'nVoxel'),'TIGRE:export:counts','Save voxel counts or set voxelCounts');
+geo.nVoxel=double(geo.nVoxel(:)); geo.sVoxel=double(geo.sVoxel(:));
+geo.dVoxel=geo.sVoxel./geo.nVoxel;
+validateattributes(geo.nVoxel,{'numeric'},{'numel',3,'integer','positive','finite'});
+offsets=double(geo.offOrigin);
+if size(offsets,2)>1 && any(any(offsets~=offsets(:,1)))
+    % Moving object -> fixed object frame, subtract centers from ALL rays.
+    surface.source_positions_mm=surface.source_positions_mm-offsets;
+    surface.pixel_centers_mm=surface.pixel_centers_mm-reshape(single(offsets),1,1,3,[]);
+    geo.offOrigin=zeros(3,1);
+else, geo.offOrigin=offsets(:,1); end
+if isempty(projectionsPath)
+    phantom=single(headPhantom(geo.nVoxel'));
+    projections=Ax_surface(phantom,geo,surface);
+    fprintf('Simulated head phantom; not measured projections.\n');
+else
+    data=load(projectionsPath,'projections'); projections=single(data.projections);
+    assert(isequal(size(projections),size(surface.valid_mask)),'TIGRE:export:shape', ...
+        'Projections must be rows x columns x views, matching the saved detector');
+end
+assert(all(isfinite(projections(surface.valid_mask))),'TIGRE:export:data','Non-finite measured samples');
+projections(~surface.valid_mask)=0;
+assert(any(strcmp(algorithm,{'fdk','cgls','both'})),'TIGRE:export:algorithm','Use fdk, cgls or both');
+results=struct('geo',geo,'geometryPath',geometryPath);
+if any(strcmp(algorithm,{'fdk','both'}))
+    try, results.fdk=FDK_surface(projections,geo,surface);
+    catch ex
+        if strcmp(algorithm,'fdk') || ~strcmp(ex.identifier,'TIGRE:surface:FDKGeometry'), rethrow(ex); end
+        results.fdk_skip_reason=ex.message; fprintf('FDK skipped: %s\n',ex.message);
+    end
+end
+if any(strcmp(algorithm,{'cgls','both'}))
+    [results.cgls,results.residuals]=CGLS_surface(projections,geo,surface,iterations);
+end
+if exist('phantom','var'), results.phantom=phantom; end
+save(outputPath,'-struct','results'); fprintf('Saved reconstruction: %s\n',outputPath);

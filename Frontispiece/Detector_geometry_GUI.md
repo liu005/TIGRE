@@ -1,4 +1,111 @@
-# Modular detector geometry GUI manual
+# TIGRE CT Simulation Builder manual
+
+## Export a reconstruction example
+
+**Export recon script...** starts disabled and becomes available after
+**Save YAML...** succeeds. Cancelled or failed saves do not enable it. The
+exported Python script references the last successfully saved YAML, so save
+again before exporting if you want to include later edits. Keep that YAML and
+any companion surface NPZ files together. The export does not run reconstruction.
+
+Run the script in the TIGRE CUDA environment:
+
+```powershell
+conda run -n recon python saved_recon.py --algorithm both
+conda run -n recon python saved_recon.py --projections projections.npy --algorithm cgls --iterations 30
+```
+
+The script uses the saved voxel counts, physical size, center and surface.
+Without measured data it simulates the bundled head phantom. Measured inputs
+must be attenuation line integrals in `(views, rows, columns)` order, supplied
+as NPY or an NPZ containing `projections`. Use `--voxels Z Y X` when an older
+YAML has no voxel counts, or to explicitly override them. `--output` chooses
+the result NPZ path, and `--geometry` overrides the saved YAML reference.
+
+`--algorithm both` tries validated `fdk_surface` and then `cgls_surface`; an
+unsupported FDK trajectory is reported and recorded while CGLS continues.
+Selecting `--algorithm fdk` directly reports the FDK error. Moving volumes are
+converted to a fixed object frame by subtracting each view's center from both
+source and detector coordinates; CGLS then uses that transformed surface.
+Helical or linear paths may be incompatible with validated FDK. The script
+does not automatically enable experimental FDK. Results contain reconstructed
+volumes, volume metadata and CGLS residuals, plus the phantom for simulated data.
+
+## Acquisition timing and moving volume
+
+In **Source**, choose **Source trajectory: Cylindrical** for a circular orbit
+about world +z, or **Linear** for a straight start-to-end source path. Linear
+mode selects a stationary detector and enables source start/end coordinates.
+Switching back to Cylindrical retains a fixed detector with an arc source;
+use **Detector motion** to rotate the detector with the source. **Confirm**
+applies the selected trajectory. This selector is independent of detector layout.
+
+The workspace has **Source**, **Detectors**, **Volume** and **Movement**
+settings tabs beside one shared 3D preview, with no top-level workspace tabs.
+**Movement** contains scan timing, speed, view count and start/end volume
+positions. Settings scroll when needed; Confirm, save/load actions, playback
+and the view slider remain accessible.
+The compact settings sidebar keeps save/load actions below the settings, while
+the playback strip spans the bottom so the main 3D image has more room.
+In the builder, **Play** stays disabled until the first successful **Confirm**;
+the initial automatic preview does not enable playback.
+Parameter help switches to an overview of the selected settings tab. Hover a
+parameter label or control, or focus its entry using the keyboard, for its
+units, coordinate order and mode-specific behavior. The help box scrolls for
+long explanations and identifies inactive controls during geometry inspection.
+
+The shared preview keeps the source trajectory in world coordinates, as defined
+by the structural settings, and animates the volume box at its per-view
+`offOrigin`. Z translation moves the volume through the rotating hardware;
+the displayed source trajectory stays circular rather than becoming an
+object-relative helix. Movement controls retain timing and speed readouts,
+including the current source position relative to the volume center.
+
+The reconstruction-volume controls use TIGRE **z, y, x** order for voxel counts,
+full physical size and center offset. Select **Confirm** to apply changes.
+For a timed helical-motion preview, enable **Use timing** and set:
+
+* **Views**: number of detector frames / source pulses to acquire.
+* **Detector readout period (ms)**: minimum time between frames.
+* **Source firing rate (Hz)**: one frame per pulse; it cannot exceed
+  `1000 / readout_period_ms`. This model assumes synchronized triggering and
+  does not discard pulses or combine exposures.
+* **Rotation period (s/turn)**: time for one complete source/detector turn.
+* **Volume z speed (mm/s)**: signed table/volume speed; positive moves along
+  world +z. This is independent of the detector readout and source firing rates.
+* **Playback speed**: animation time relative to acquisition time.
+
+In **Movement**, **Start position** and **End position** use z, y, x mm.
+Start is shared with the structural volume center. Enable **Move between start
+and end positions** to interpolate all three coordinates across the views.
+With timing enabled, z speed is derived as `(end_z - start_z) / last_view_time`;
+the z-speed input becomes read-only. At least two views are needed for different
+endpoints. Without timing, the same endpoints define the per-view movement.
+Disable the endpoint option to use the entered z speed with acquisition timing;
+the end position then displays the calculated final center.
+
+Timed mode replaces the manual scan span. In z-speed mode, starting
+at `t = 0`, frame `i` occurs at `i / firing_rate_hz`. Its source angle is
+`orbit_start + 360 * t / rotation_period_s`, and its volume center is
+`offOrigin_start + [table_speed_mm_s * t, 0, 0]`. Multiple turns are supported.
+For `N` views, the acquisition window is `N / firing_rate_hz`, while the final
+sample is at `(N - 1) / firing_rate_hz`. The summary distinguishes these values
+and shows turns, views per turn, z travel and travel per turn. The plot bounds
+cover the whole volume trajectory, and the view slider displays sample time.
+Playback may skip display frames to keep pace; all acquired views remain saved.
+
+For example, 1,000 views, a 10 ms readout, 100 Hz firing, 1 s/turn rotation and
+20 mm/s volume speed describe a 10 s window with 10 turns. The last view is at
+9.99 s, after 9.99 turns and 199.8 mm of volume travel. Use smaller detector
+arrays if the GUI's total-sample limit is exceeded.
+
+YAML retains acquisition controls, motion mode and per-view volume offsets. Surface NPZ
+archives retain numeric `acquisition_*` fields, `view_times_s`, voxel metadata
+and per-view `offOrigin`. Loaded timed archives preserve playback timing.
+This simulates rotating hardware with a translating object. The surface
+projectors and surface FDK currently require a fixed `offOrigin`; moving-volume
+exports require conversion to the object's fixed coordinate frame before
+reconstruction, and helical FDK support is not provided by this preview.
 
 Run `Python/demos/d27_DetectorGeometryGUI.py` in `recon` for a guided
 three-panel build and editable/exact geometry save/load example. Its MATLAB
@@ -16,7 +123,7 @@ detector indices. The plotter retains its animation during playback.
 For the MATLAB port, native array conventions and shared YAML interchange, see
 the [MATLAB detector builder guide](./Detector_geometry_MATLAB.md).
 
-The TIGRE Modular Detector Builder is a desktop tool for laying out equal-sized
+The TIGRE CT Simulation Builder is a desktop tool for laying out equal-sized
 detector panels, previewing their arrangement, and exporting per-view detector
 coordinates. It supports cylindrical panel arcs, arbitrary piecewise-linear
 arrangements (including U-shaped layouts), full 3D panel orientation, COR, and
@@ -24,8 +131,9 @@ a stationary detector with a linear or circular-arc source trajectory.
 
 The GUI creates a `DetectorSurfaceGeometry`-compatible archive. Its optional
 projection-remapping workflow loads measured data and writes a second archive
-for approximate `fdk_surface` reconstruction. The GUI does not create a
-reconstruction volume or test a CUDA reconstruction. For the surface model and
+for approximate `fdk_surface` reconstruction. Volume settings define metadata
+and a preview box; the GUI does not allocate voxel data or run reconstruction.
+Exported scripts perform simulation and reconstruction separately. For the surface model and
 reconstruction APIs, see [Detector-surface geometry](./Detector_surface.md).
 
 ## Start the GUI
@@ -60,7 +168,7 @@ and YAML surface references open in
 **Inspection mode**, preserving the loaded source positions, pixel coordinates,
 validity masks (including per-view changes), and available module boundaries.
 The view slider, playback, saving, and optional remapping remain available.
-Construction fields, layout/motion controls, list editors, and **Preview** are
+Construction fields, layout/motion controls, list editors, and **Confirm** are
 disabled; their retained values do not describe or modify the loaded geometry.
 
 **Return to builder** rebuilds the previous builder settings. **Load example**
@@ -81,7 +189,8 @@ without metadata, neighbouring tiles with no gap cannot be distinguished.
 Surface archives may include `sVoxel` and `offOrigin` to draw the reconstruction
 volume; otherwise no volume is drawn. Standard parameter archives use TIGRE's
 low-resolution default volume unless volume fields are supplied. The displayed
-volume must have a fixed `offOrigin`. No pickle or Python geometry files are
+volume accepts a single `offOrigin` or one per view. Nonlinear volume paths
+open read-only to preserve exact coordinates. No pickle or Python geometry files are
 executed by the loader.
 
 From Python, inspect an existing object directly:
@@ -114,9 +223,9 @@ physical panel edges and the known COR marker.
 
 ## Save and reload editable YAML settings
 
-Use **Save geometry YAML...** to save the current builder controls as a
+Use **Save YAML...** to save the current builder controls as a
 human-readable `.yaml` file. This saves the current entries, even if you have
-not pressed **Preview**, and validates that they can build a geometry.
+not pressed **Confirm**, and validates that they can build a geometry.
 **Save surface...** remains the exact numeric `.npz` export.
 
 **Load geometry...** reopens modular YAML in builder mode: layout, source
@@ -126,7 +235,7 @@ scan uses distinct views; shorter scans include both endpoints.
 
 Try the shipped [three-panel YAML example](../Python/demos/geometry_examples/three_panel.yaml).
 It uses independent panel rotations, two gap columns, and zero global COR.
-Edit its numeric lists with a text editor or use the GUI's **From list...**
+Edit its numeric lists with a text editor or use the GUI's **List...**
 controls. YAML angles are in **degrees**, unlike standard TIGRE `rotDetector`
 and `angles` arrays, which use radians.
 
@@ -139,9 +248,9 @@ The version 1 document has these fields:
 | `rotation_convention` | `Rz(gantry+z) @ Ry(y) @ Rx(x)`. |
 | `kind: modular`, `builder` | Geometry-builder parameters; x/y/z panel angles are roll/pitch/yaw in degrees. |
 | `kind: surface`, `surface_file` | Exact `.npz` companion, resolved relative to the YAML file. Opens in inspection mode. |
-| Optional `volume` | `sVoxel` and optional `offOrigin`, in TIGRE z/y/x order and millimetres. |
+| Optional `volume` | `sVoxel`, optional `nVoxel`, `offOrigin` (one or per-view z/y/x offset), and `motion_mode` (`static`, `speed`, `endpoints`). Sizes/offsets are millimetres. |
 
-In inspection mode, **Save geometry YAML...** writes a small YAML file plus a
+In inspection mode, **Save YAML...** writes a small YAML file plus a
 uniquely named `.surface-....npz` companion. It preserves exact coordinates,
 masks and module boundaries without fitting them to builder settings. Keep
 both files together when moving or sharing them. Large pixel arrays are never
@@ -176,7 +285,7 @@ For scripts, `tigre.utilities.geometry_io.load_geometry_file(path)` returns a
 1. Choose **Detector motion** and **Layout**.
 2. Enter the scan, panel, and pixel parameters described below. Hover over a
    label to display its help in the **Parameter help** box.
-3. Select **Preview**. Invalid entries are reported in a dialog; the previous
+3. Select **Confirm**. Invalid entries are reported in a dialog; the previous
    preview is cleared so it cannot be mistaken for the new geometry.
 4. Inspect the 3D detector and source path. Use the **View** slider to select a
    view, or **Play**/**Pause** to animate it.
@@ -276,10 +385,10 @@ For three panels in **Piecewise linear** layout, for example:
 | Panel z offsets (mm) | `0, 0, 0` |
 | COR (mm) | `7` |
 
-Use **From list...** beside a panel tilt or position field to open its full
+Use **List...** beside a panel tilt or position field to open its full
 list in a scrollable editor, with one value per line in panel order. A shared
 x/y tilt expands to one value per panel. **Apply** validates the count and
-finite values and copies the list back. Select **Preview** to rebuild the
+finite values and copies the list back. Select **Confirm** to rebuild the
 displayed geometry, then **Play** to animate it. **Apply** alone leaves the
 current preview unchanged. **Cancel** leaves the field unchanged. The transverse list
 in the main window determines the piecewise-linear panel count; edit that
@@ -410,7 +519,7 @@ run reconstruction.
 the idealized GCT layout: 53 panels of 1 x 64 pixels, 2.6172 mm column pitch,
 DSO 6100 mm, DSD 10600 mm (detector radius 4500 mm), and 5701 views starting
 at 156 degrees over a 228-degree scan. Gaps, x/y tilts, and COR are zero.
-Use **From list...** to inspect the 53 panel centres and z angles.
+Use **List...** to inspect the 53 panel centres and z angles.
 
 This is an idealized uniformly sampled panel model. The measured-data demo
 [`d_detector_surface_gct.py`](../Python/demos/d_detector_surface_gct.py) also
@@ -444,7 +553,7 @@ remains one global value.
 
 Load **TIGRE: circular cone-beam CT**, enter **Panel roll / x = 13**,
 **Panel pitch / y = -17**, **Panel yaw / z = 23**, and **COR = 7**, then select
-**Preview** and **Play**. The panel tilts about its centre and the rig receives
+**Confirm** and **Play**. The panel tilts about its centre and the rig receives
 the COR translation. At zero gantry angle, positive COR shifts both source and
 detector toward +y. COR does not move the reconstruction volume.
 
@@ -485,6 +594,60 @@ when reconstructing the surface object to preserve adjoining tile boundaries. Th
 it does not provide GUI editing or infer the original COR value.
 
 ## Compatibility check and reconstruction
+
+### End-to-end: GUI design, save, load and reconstruct
+
+Run these commands from the repository's `Python/` directory in the
+`recon` environment. Reconstruction requires a CUDA GPU and TIGRE's compiled
+surface extensions, including `_AxSurface`.
+
+1. Launch the builder:
+
+   ```powershell
+   conda activate recon
+   python -m tigre.utilities.detector_geometry_gui
+   ```
+
+2. Choose a detector layout and scan trajectory, enter the parameters, and
+   select **Confirm**. Inspect the source and detector using **Play** or the
+   view slider. Start with a small number of views and detector pixels for a
+   quick reconstruction trial.
+3. Select **Save surface...**, review the compatibility messages, and save
+   `my_surface.npz` in `Python/`. This stores the exact source positions,
+   detector pixel coordinates, validity mask and available module boundaries.
+   To retain editable builder controls too, use **Save YAML...** and
+   save `my_geometry.yaml`.
+4. Load the exported surface, simulate projections and reconstruct:
+
+   ```powershell
+   python demos/d_geometry_yaml_reconstruction.py --geometry my_surface.npz --output results/my_surface --iterations 100
+   ```
+
+   The same demo accepts editable YAML recipes or exact YAML surface references:
+
+   ```powershell
+   python demos/d_geometry_yaml_reconstruction.py --geometry my_geometry.yaml --output results/my_geometry --iterations 100
+   ```
+
+   Keep an exact surface YAML file together with its referenced NPZ companion.
+5. Open `results/my_surface/comparison.png` to compare the phantom,
+   reconstruction and error slices. `results.npz` contains the phantom,
+   reconstruction, simulated and predicted projections, residual history and
+   geometry arrays. `metrics.json` records errors, runtime and run settings.
+
+The demo uses `load_geometry_file(...)` to obtain the saved surface, simulates
+head-phantom measurements with `tigre.Ax_surface(...)`, then reconstructs with
+`cgls_surface(...)`. Use `--phantom ellipsoids` for a synthetic alternative or
+`--voxels 16 64 64` to change the volume sampling in z/y/x order.
+
+This is a simulated-data workflow: the demo does not load measured projections.
+It preserves the loaded detector surface but defines its own reconstruction
+volume, with size `[32, 96, 96]` mm in z/y/x order, zero origin offset, and
+default sampling `[16, 32, 32]`. Saved volume metadata is not used by this demo.
+Adjust the volume definition in the script for a different field of view or
+object position. Structural compatibility does not guarantee adequate scan
+coverage or reconstruction quality. For measured data, use the saved surface
+with matching projections as described below.
 
 For a runnable YAML-to-projection-to-reconstruction example, see
 [`d_geometry_yaml_reconstruction.py`](../Python/demos/d_geometry_yaml_reconstruction.py)
@@ -608,10 +771,10 @@ reconstruction = fast_os_sart_surface(
 ```
 
 Masked gap values are ignored by the surface algorithms. The GUI archive stores
-surface arrays and available module boundaries. Inspection exports also retain
-the supplied volume size/offset for visualization. The archive contains no
-projections or reconstruction settings, and optional volume metadata is not
-a complete reconstruction geometry.
+surface arrays, module boundaries, available voxel metadata and acquisition
+timing. It contains no projections or reconstruction results. Older archives
+may lack voxel counts; supply them before reconstructing. Moving-volume rays
+require the fixed-object conversion used by exported scripts.
 
 ## Input limits and troubleshooting
 
@@ -633,7 +796,7 @@ Other common issues:
 * **Unexpected panel orientation:** check the sign of the transverse offset
   and panel angle; positive angles rotate counterclockwise about +z.
 * **Unexpected preview or stale geometry:** edit the inputs and select
-  **Preview** again. Saving always checks the currently previewed surface.
+  **Confirm** again. Saving always checks the currently previewed surface.
 * **FDK unsupported:** use an iterative surface algorithm, or adjust the scan
   and detector geometry to satisfy `fdk_surface`'s constraints.
 * **Save/check error:** correct the reported invalid geometry and preview

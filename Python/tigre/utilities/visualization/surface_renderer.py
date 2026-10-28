@@ -53,15 +53,13 @@ def _surface_mesh(surface, view, max_rows=24, max_columns=48):
 
 
 def _volume_box(geo):
-    """Validate the fixed reconstruction volume and return world xyz bounds."""
+    """Validate volume metadata and return initial world xyz bounds."""
     size = np.asarray(geo.sVoxel, dtype=float)
     offsets = np.atleast_2d(np.asarray(geo.offOrigin, dtype=float))
     if size.shape != (3,) or not np.isfinite(size).all() or np.any(size <= 0):
         raise ValueError("sVoxel must contain three positive finite values.")
     if offsets.ndim != 2 or offsets.shape[1] != 3 or not offsets.size or not np.isfinite(offsets).all():
         raise ValueError("offOrigin must contain finite three-coordinate offsets.")
-    if not np.allclose(offsets, offsets[0]):
-        raise ValueError("Surface visualization requires a fixed volume offOrigin.")
     return offsets[0][::-1], size[::-1]
 
 
@@ -84,9 +82,14 @@ class SurfaceRenderer:
             raise ValueError("the detector surface has no valid pixels")
 
         origin, size = (np.zeros(3), np.zeros(3)) if geo is None else _volume_box(geo)
+        volume_mesh = None
+        origins = np.zeros((1, 3)) if geo is None else np.atleast_2d(geo.offOrigin)[:, ::-1]
+        if len(origins) not in (1, n_views):
+            raise ValueError("offOrigin must contain one offset or one offset per view.")
         if geo is not None:
             from .animate_geometry import calCube
-            ax.add_collection3d(art3d.Poly3DCollection(calCube(origin, size), color="c", alpha=0.2))
+            volume_mesh = art3d.Poly3DCollection(calCube(origin, size), color="c", alpha=0.2)
+            ax.add_collection3d(volume_mesh)
         if world_axes:
             from .geometry_markers import draw_world_axes
             length = (max(float(np.min(size)) / 2, 1) if geo is not None
@@ -108,6 +111,8 @@ class SurfaceRenderer:
         # Scan frame-wise to avoid copying a large acquisition into float64.
         lo = np.minimum(src.min(axis=0), np.minimum(origin - size / 2, 0))
         hi = np.maximum(src.max(axis=0), np.maximum(origin + size / 2, 0))
+        lo = np.minimum(lo, origins.min(axis=0) - size / 2)
+        hi = np.maximum(hi, origins.max(axis=0) + size / 2)
         module_count = len(_detector_runs(surface))
         for frame in range(n_views):
             valid = pix[frame][mask[frame]]
@@ -127,6 +132,8 @@ class SurfaceRenderer:
         ax.set_zlabel("Z (mm)")
 
         def update(frame):
+            if volume_mesh is not None:
+                volume_mesh.set_verts(calCube(origins[0 if len(origins) == 1 else frame], size))
             source._offsets3d = tuple(src[frame, :, None])
             source_label.set_position_3d(src[frame])
             if panel_vertices is None:
@@ -146,10 +153,12 @@ class SurfaceRenderer:
                 central_ray.set_data_3d([], [], [])
             title.set_text(f"Detector surface geometry - view {frame}/{n_views}\n"
                            f"{module_count} detector module(s), {len(valid)} valid pixels")
-            return source, source_label, mesh, lines, cloud, central_ray, title
+            artists = (source, source_label, mesh, lines, cloud, central_ray, title)
+            return artists + ((volume_mesh,) if volume_mesh is not None else ())
 
         self.surface = surface
         self.mesh = mesh
         self.source = source
+        self.volume = volume_mesh
         self.update = update
         self.update(pos)

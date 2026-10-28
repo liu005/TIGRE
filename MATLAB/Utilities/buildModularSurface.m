@@ -47,16 +47,26 @@ else
     validateattributes(s.source_radius_mm,{'numeric'},{'scalar','positive','finite'});
     validateattributes(s.source_z_mm,{'numeric'},{'scalar','finite'});
     validateattributes(s.orbit_start_deg,{'numeric'},{'scalar','finite'});
-    validateattributes(s.scan_span_deg,{'numeric'},{'scalar','positive','<=',360});
-    if s.scan_span_deg==360
-        theta=s.orbit_start_deg+(0:s.n_views-1)*360/s.n_views;
+    timed=isfield(s,'acquisition') && isstruct(s.acquisition) && ~isempty(s.acquisition);
+    if timed
+        assert(~arc,'TIGRE:timing:motion','Timing requires rotating source + detector');
+        [a,times]=ctAcquisitionTiming(s.n_views,s.acquisition);
+        theta=s.orbit_start_deg+360*times/a.rotation_period_s;
     else
-        theta=s.orbit_start_deg+linspace(0,s.scan_span_deg,s.n_views);
-        if s.n_views==1, theta=s.orbit_start_deg; end
+        validateattributes(s.scan_span_deg,{'numeric'},{'scalar','positive','<=',360});
+        if s.scan_span_deg==360
+            theta=s.orbit_start_deg+(0:s.n_views-1)*360/s.n_views;
+        else
+            theta=s.orbit_start_deg+linspace(0,s.scan_span_deg,s.n_views);
+            if s.n_views==1, theta=s.orbit_start_deg; end
+        end
     end
     source=[s.source_radius_mm*cosd(theta);s.source_radius_mm*sind(theta);repmat(s.source_z_mm,1,s.n_views)];
     orientation=theta;
     if arc, orientation(:)=s.orbit_start_deg+s.scan_span_deg/2; end
+end
+if linear && isfield(s,'acquisition') && isstruct(s.acquisition) && ~isempty(s.acquisition)
+    error('TIGRE:timing:motion','Timing requires rotating source + detector');
 end
 assert((~linear && ~arc) || s.cor_mm==0,'TIGRE:surface:COR','Stationary detectors require COR = 0');
 [u,v]=meshgrid(((0:nc-1)-(nc-1)/2)*pitch(2),((0:nr-1)-(nr-1)/2)*pitch(1));

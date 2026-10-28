@@ -20,6 +20,10 @@ if strcmp(operation,'load')
             value=document.settings.(names{k});
             if isnumeric(value), document.settings.(names{k})=double(value); end
         end
+        if isfield(document.settings,'acquisition') && isstruct(document.settings.acquisition)
+            [document.settings.acquisition,~]=ctAcquisitionTiming( ...
+                document.settings.n_views,document.settings.acquisition);
+        end
         document.surface=buildModularSurface(document.settings);
     elseif ~isfield(document,'surface') && isfield(document,'angles') && ~isempty(document.geo)
         document.surface=surfaceFromGeometry(document.geo,document.angles);

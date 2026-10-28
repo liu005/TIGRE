@@ -600,6 +600,20 @@ def test_failed_preview_clears_old_scene_and_disables_animation():
 
 def test_gui_has_help_text_for_every_input_label():
     assert set(DETECTOR_FIELD_HELP) == {
+        "Source trajectory",
+        "Voxel counts",
+        "Full size (mm)",
+        "Center offset (mm)",
+        "Start position (z, y, x mm)",
+        "End position (z, y, x mm)",
+        "Move between start and end positions",
+        "Use timing to derive orbit and z motion",
+        "Detector readout period (ms)",
+        "Source firing rate (Hz)",
+        "Rotation period (s/turn)",
+        "Volume z speed (mm/s)",
+        "Playback speed (x real time)",
+        "Views / source pulses",
         "COR (mm)",
         "Panel roll / x (degrees)",
         "Panel pitch / y (degrees)",
@@ -652,7 +666,7 @@ def test_layout_selection_updates_module_count_label_and_entry_state():
     builder._module_count_entry.configure.assert_called_with(state="normal")
 
 
-def test_detector_motion_button_toggles_state_and_refreshes_preview():
+def test_detector_motion_button_changes_controls_without_applying_them():
     builder = object.__new__(DetectorGeometryBuilder)
     builder._detector_stationary = False
     builder._update_field_states = Mock()
@@ -670,7 +684,7 @@ def test_detector_motion_button_toggles_state_and_refreshes_preview():
     assert builder._detector_stationary is True
     builder._detector_motion_button.configure.assert_called_once_with(text="Stationary")
     builder._help_text.insert.assert_any_call("end", "\n\nSelected: Stationary")
-    assert previews == [True]
+    assert previews == []
 
     builder.toggle_detector_motion()
 
@@ -679,7 +693,7 @@ def test_detector_motion_button_toggles_state_and_refreshes_preview():
     assert builder._detector_stationary is False
     assert builder._detector_motion_button.configure.call_args_list[-1] == (
         (), {"text": "Moving with source"})
-    assert len(previews) == 3
+    assert previews == []
 
 
 @pytest.mark.parametrize("shape", [(3, 4), (1, 1)])

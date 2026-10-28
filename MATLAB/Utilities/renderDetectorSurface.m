@@ -26,12 +26,16 @@ for k=1:n
     points=reshape(double(p(:,:,:,k)),[],3); valid=points(mask(:,:,k),:);
     if ~isempty(valid), lo=min(lo,min(valid,[],1)'); hi=max(hi,max(valid,[],1)'); end
 end
+volume=[]; origins=zeros(3,1);
 if ~isempty(geo)
+    origins=double(geo.offOrigin);
+    assert(size(origins,1)==3 && any(size(origins,2)==[1 n]) && all(isfinite(origins(:))), ...
+        'TIGRE:surface:volume','Volume offset must be 3 x 1 or 3 x views, finite xyz');
     origin=geo.offOrigin(:,1); extent=geo.sVoxel(:);
-    assert(all(all(abs(geo.offOrigin-origin)<1e-6)),'TIGRE:surface:volume','Volume offset must be fixed');
+    validateattributes(extent,{'numeric'},{'numel',3,'finite','positive'});
     [V,F]=animateGeometryCube(origin,extent);
-    patch(ax,'Vertices',V,'Faces',F,'FaceColor','cyan','FaceAlpha',0.15,'EdgeAlpha',0.2);
-    lo=min(lo,origin-extent/2); hi=max(hi,origin+extent/2);
+    volume=patch(ax,'Vertices',V,'Faces',F,'FaceColor','cyan','FaceAlpha',0.15,'EdgeAlpha',0.2);
+    lo=min(lo,min(origins,[],2)-extent/2); hi=max(hi,max(origins,[],2)+extent/2);
 end
 span=max(hi-lo,1); mid=(lo+hi)/2; span(3)=max(span(3),max(span(1:2))/2);
 lo=mid-span*.54; hi=mid+span*.54;
@@ -62,10 +66,14 @@ if cor~=0
     corSphere=surf(ax,sx,sy,sz,'FaceColor',[1 .5 0],'EdgeColor','none');
     corLabel=text(ax,0,0,0,sprintf('COR (%+g mm)',cor),'Color',[.9 .4 0]);
 end
-scene=struct('update',@update,'source',source,'mesh',mesh,'cloud',cloud,'axes',ax);
+scene=struct('update',@update,'source',source,'mesh',mesh,'cloud',cloud,'axes',ax,'volume',volume);
 update(1);
     function update(k)
         assert(k>=1 && k<=n && k==fix(k),'TIGRE:surface:view','Invalid view index');
+        if ~isempty(volume)
+            [vertices,~]=animateGeometryCube(origins(:,min(k,size(origins,2))),extent);
+            set(volume,'Vertices',vertices);
+        end
         points=reshape(double(p(:,:,:,k)),[],3); valid=points(mask(:,:,k),:);
         verts=zeros(0,3); faces=zeros(0,3); segments=zeros(0,3);
         for m=1:size(modules,1)
@@ -97,7 +105,9 @@ update(1);
         set(cloud,'XData',sample(:,1),'YData',sample(:,2),'ZData',sample(:,3));
         set(source,'XData',src(1,k),'YData',src(2,k),'ZData',src(3,k));
         if ~isempty(corSphere)
-            if settings.scan_span_deg==360, step=360/n;
+            if isfield(settings,'acquisition') && isstruct(settings.acquisition)
+                step=360/settings.acquisition.firing_rate_hz/settings.acquisition.rotation_period_s;
+            elseif settings.scan_span_deg==360, step=360/n;
             else, step=settings.scan_span_deg/max(n-1,1); end
             angle=settings.orbit_start_deg+(k-1)*step;
             shift=cor*[-sind(angle);cosd(angle);0];

@@ -22,7 +22,8 @@ def sample_surface():
 def test_surface_archive_preserves_views_masks_modules_and_volume(tmp_path):
     from types import SimpleNamespace
     surface = sample_surface()
-    volume = SimpleNamespace(sVoxel=np.array([20, 30, 40]), offOrigin=np.array([1, 2, 3]))
+    volume = SimpleNamespace(sVoxel=np.array([20, 30, 40]), offOrigin=np.array([1, 2, 3]),
+                             nVoxel=np.array([10, 15, 8]))
     path = tmp_path / "surface.npz"
     np.savez_compressed(path, **surface_archive_arrays(surface, volume))
     geo, loaded = load_geometry_archive(path)
@@ -31,6 +32,15 @@ def test_surface_archive_preserves_views_masks_modules_and_volume(tmp_path):
     assert loaded._module_slices == surface._module_slices
     np.testing.assert_array_equal(geo.sVoxel, volume.sVoxel)
     np.testing.assert_array_equal(geo.offOrigin, volume.offOrigin)
+    np.testing.assert_array_equal(geo.nVoxel, volume.nVoxel)
+    np.testing.assert_allclose(geo.dVoxel, [2, 2, 5])
+
+
+@pytest.mark.parametrize("counts", [[0, 2, 3], [1.5, 2, 3], [1, 2], [1, np.inf, 3]])
+def test_volume_rejects_invalid_voxel_counts(counts):
+    from tigre.utilities.geometry_io import _volume
+    with pytest.raises(ValueError):
+        _volume(dict(sVoxel=[20, 30, 40], nVoxel=counts))
 
 
 def test_standard_archive_converts_per_view_tilt_and_cor(tmp_path):
@@ -79,7 +89,12 @@ def test_inspection_controls_playback_and_return_to_builder():
         gui._fields["n_views"].set("3")
         gui._fields["rows"].set("3")
         gui._fields["columns"].set("4")
+        gui._volume_fields["offOrigin"].set("-100, 0, 0")
+        gui._volume_motion.set(True)
+        gui._volume_end.set("100, 0, 0")
         gui.update_preview()
+        np.testing.assert_allclose(gui._builder_geometry.offOrigin,
+                                   [[-100, 0, 0], [0, 0, 0], [100, 0, 0]])
         assert isinstance(gui._surface_renderer, SurfaceRenderer)
         retained = {key: value.get() for key, value in gui._fields.items()}
         surface = sample_surface()

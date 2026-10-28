@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import inspect
 import uuid
+import tempfile
 import numpy as np
 
 
@@ -23,7 +24,18 @@ def surface_archive_arrays(surface, geometry=None):
         from tigre.utilities.visualization.surface_renderer import _volume_box
         origin, size = _volume_box(geometry)
         arrays["sVoxel"] = size[::-1]
-        arrays["offOrigin"] = origin[::-1]
+        arrays["offOrigin"] = np.asarray(geometry.offOrigin, dtype=float)
+        _validate_volume_views(geometry, len(surface.source_positions_mm))
+        if hasattr(geometry, "motion_mode"):
+            arrays["volume_motion_mode"] = geometry.motion_mode
+        if hasattr(geometry, "nVoxel"):
+            arrays["nVoxel"] = _volume(dict(sVoxel=size[::-1],
+                nVoxel=geometry.nVoxel)).nVoxel
+        if hasattr(geometry, "acquisition"):
+            from .detector_geometry_gui import acquisition_timing
+            timing, times = acquisition_timing(len(surface.source_positions_mm), geometry.acquisition)
+            arrays["view_times_s"] = times
+            arrays.update({"acquisition_" + name: value for name, value in timing.items()})
     return arrays
 
 
@@ -35,6 +47,10 @@ def load_geometry_archive(path):
         keys = {"source_positions_mm", "pixel_centers_mm", "valid_mask", "module_slices",
             "sVoxel", "offOrigin", "DSO", "DSD", "nDetector", "dDetector", "angles",
             "offDetector", "rotDetector", "COR", "nVoxel", "mode"}
+        timing_names = ("readout_period_ms", "firing_rate_hz", "rotation_period_s",
+                        "table_speed_mm_s", "playback_rate")
+        keys.update("acquisition_" + name for name in timing_names)
+        keys.update(("view_times_s", "volume_motion_mode"))
         arrays = {key: archive[key] for key in archive.files if key in keys}
     if "source_positions_mm" in arrays:
         modules = arrays.get("module_slices")
@@ -50,9 +66,20 @@ def load_geometry_archive(path):
             offset = np.asarray(arrays.get("offOrigin", np.zeros(3)), dtype=float)
             if size.shape != (3,) or np.any(size <= 0) or not np.isfinite(size).all():
                 raise ValueError("sVoxel must contain three positive finite values.")
-            if offset.shape != (3,) or not np.isfinite(offset).all():
+            if offset.ndim not in (1, 2) or offset.shape[-1] != 3 or not np.isfinite(offset).all():
                 raise ValueError("offOrigin must contain three finite values.")
-            geometry = SimpleNamespace(sVoxel=size, offOrigin=offset)
+            geometry = _volume(dict(sVoxel=size, offOrigin=offset,
+                **({"nVoxel": arrays["nVoxel"]} if "nVoxel" in arrays else {}),
+                **({"motion_mode": arrays["volume_motion_mode"].item()} if "volume_motion_mode" in arrays else {})))
+            _validate_volume_views(geometry, len(surface.source_positions_mm))
+            if any("acquisition_" + name in arrays for name in timing_names):
+                from .detector_geometry_gui import acquisition_timing
+                timing = {name: arrays["acquisition_" + name].item() for name in timing_names
+                          if "acquisition_" + name in arrays}
+                geometry.acquisition, geometry.view_times_s = acquisition_timing(
+                    len(surface.source_positions_mm), timing)
+                if "view_times_s" in arrays and not np.array_equal(arrays["view_times_s"], geometry.view_times_s):
+                    raise ValueError("Saved view timestamps do not match acquisition timing.")
         return geometry, surface
     required = ("DSO", "DSD", "nDetector", "dDetector", "angles")
     if any(name not in arrays for name in required):
@@ -114,13 +141,44 @@ def _settings(values):
 def _volume(values):
     if values is None:
         return None
-    if not isinstance(values, dict) or set(values) - {"sVoxel", "offOrigin"} or "sVoxel" not in values:
+    if not isinstance(values, dict) or set(values) - {"sVoxel", "offOrigin", "nVoxel", "motion_mode"} or "sVoxel" not in values:
         raise ValueError("volume requires sVoxel and optional offOrigin, in TIGRE z/y/x order.")
     geo = SimpleNamespace(sVoxel=np.asarray(values["sVoxel"], dtype=float),
                           offOrigin=np.asarray(values.get("offOrigin", [0, 0, 0]), dtype=float))
     from .visualization.surface_renderer import _volume_box
     _volume_box(geo)
+    if "motion_mode" in values:
+        if values["motion_mode"] not in ("static", "speed", "endpoints"):
+            raise ValueError("volume motion_mode must be static, speed or endpoints.")
+        geo.motion_mode = values["motion_mode"]
+    if "nVoxel" in values:
+        counts = np.asarray(values["nVoxel"], dtype=float)
+        if (counts.shape != (3,) or not np.isfinite(counts).all()
+                or np.any(counts <= 0) or np.any(counts != np.floor(counts))
+                or np.any(counts >= np.iinfo(np.int64).max)):
+            raise ValueError("nVoxel must contain three positive integers in z/y/x order.")
+        geo.nVoxel = counts.astype(np.int64)
+        geo.dVoxel = geo.sVoxel / geo.nVoxel
     return geo
+
+
+def _validate_volume_views(geo, n_views):
+    if geo is not None and len(np.atleast_2d(geo.offOrigin)) not in (1, n_views):
+        raise ValueError("offOrigin must contain one offset or one per view.")
+
+
+def _write_yaml(path, text):
+    """Replace a recipe only after the complete new file has been written."""
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=path.name + ".", suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(text)
+        temporary.replace(path)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
 
 
 def load_geometry_file(path):
@@ -158,12 +216,21 @@ def load_geometry_file(path):
         from .detector_geometry_gui import build_modular_surface
         settings = _settings(data.get("builder"))
         surface = build_modular_surface(**settings)
+        _validate_volume_views(geo, len(surface.source_positions_mm))
+        if geo is not None and settings.get("acquisition") is not None:
+            from .detector_geometry_gui import acquisition_timing
+            geo.acquisition, geo.view_times_s = acquisition_timing(
+                settings["n_views"], settings["acquisition"])
         return GeometryDocument(geo, surface, settings)
     if kind == "surface":
         reference = data.get("surface_file")
         if not isinstance(reference, str) or Path(reference).suffix.lower() != ".npz":
             raise ValueError("surface_file must reference a numeric .npz archive.")
         stored_geo, surface = load_geometry_archive(path.parent / reference)
+        _validate_volume_views(geo, len(surface.source_positions_mm))
+        if geo is not None and hasattr(stored_geo, "acquisition"):
+            geo.acquisition = stored_geo.acquisition
+            geo.view_times_s = stored_geo.view_times_s
         return GeometryDocument(geo if geo is not None else stored_geo, surface)
     raise ValueError("Geometry YAML kind must be modular or surface.")
 
@@ -184,20 +251,33 @@ def save_geometry_yaml(path, *, settings=None, surface=None, geometry=None):
     if geometry is not None:
         from .visualization.surface_renderer import _volume_box
         origin, size = _volume_box(geometry)
-        data["volume"] = dict(sVoxel=size[::-1].tolist(), offOrigin=origin[::-1].tolist())
+        data["volume"] = dict(sVoxel=size[::-1].tolist(),
+                              offOrigin=np.asarray(geometry.offOrigin).tolist())
+        if hasattr(geometry, "nVoxel"):
+            data["volume"]["nVoxel"] = _volume(dict(
+                **data["volume"], nVoxel=geometry.nVoxel)).nVoxel.tolist()
+        if hasattr(geometry, "motion_mode"):
+            data["volume"]["motion_mode"] = _volume(dict(
+                **data["volume"], motion_mode=geometry.motion_mode)).motion_mode
     if settings is not None:
         from .detector_geometry_gui import build_modular_surface
         values = _settings(settings)
-        build_modular_surface(**values)
+        built = build_modular_surface(**values)
+        _validate_volume_views(geometry, len(built.source_positions_mm))
         data.update(kind="modular", builder=values)
     elif surface is not None:
         companion = path.with_name(path.stem + ".surface-" + uuid.uuid4().hex[:8] + ".npz")
         data.update(kind="surface", surface_file=companion.name)
         payload = surface_archive_arrays(surface, geometry)
         text = yaml.safe_dump(data, sort_keys=False)
-        np.savez_compressed(companion, **payload)
-        path.write_text(text, encoding="utf-8")
+        try:
+            np.savez_compressed(companion, **payload)
+            _write_yaml(path, text)
+        except BaseException:
+            if companion.exists():
+                companion.unlink()
+            raise
         return
     else:
         raise ValueError("Supply builder settings or an explicit detector surface.")
-    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    _write_yaml(path, yaml.safe_dump(data, sort_keys=False))

@@ -26,7 +26,13 @@ def to_mat(source, target):
                               for k, v in document.settings.items()}
     if document.geometry is not None:
         result['geo'] = dict(sVoxel=np.asarray(document.geometry.sVoxel)[::-1],
-                             offOrigin=np.atleast_2d(document.geometry.offOrigin)[0][::-1])
+                             offOrigin=np.atleast_2d(document.geometry.offOrigin)[:, ::-1].T)
+        if hasattr(document.geometry, 'nVoxel'):
+            result['geo']['nVoxel'] = document.geometry.nVoxel[::-1]
+            result['geo']['dVoxel'] = document.geometry.dVoxel[::-1]
+        for name in ('acquisition', 'motion_mode', 'view_times_s'):
+            if hasattr(document.geometry, name):
+                result['geo'][name] = getattr(document.geometry, name)
     savemat(target, result)
 
 
@@ -40,8 +46,18 @@ def from_mat(source, target):
         offsets = offsets[::-1] if offsets.ndim == 1 else offsets.T[:, ::-1]
         volume = SimpleNamespace(sVoxel=np.asarray(geo['sVoxel'])[::-1],
                                  offOrigin=offsets)
+        if 'nVoxel' in geo:
+            volume.nVoxel = np.asarray(geo['nVoxel'])[::-1]
+        for name in ('acquisition', 'motion_mode', 'view_times_s'):
+            if name in geo:
+                setattr(volume, name, geo[name])
     if isinstance(document.get('settings'), dict):
         settings = document['settings']
+        for key in ('transverse_centers_mm', 'normal_offsets_mm', 'z_offsets_mm',
+                    'panel_angles_deg', 'panel_x_angles_deg', 'panel_y_angles_deg'):
+            settings[key] = np.atleast_1d(settings[key])
+        if not isinstance(settings.get('acquisition'), dict):
+            settings['acquisition'] = None
         for key in ('n_views', 'n_modules', 'column_gap'):
             value = float(settings[key])
             if not value.is_integer():
