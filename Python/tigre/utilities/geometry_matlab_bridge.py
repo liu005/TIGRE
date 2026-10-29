@@ -30,6 +30,9 @@ def to_mat(source, target):
         if hasattr(document.geometry, 'nVoxel'):
             result['geo']['nVoxel'] = document.geometry.nVoxel[::-1]
             result['geo']['dVoxel'] = document.geometry.dVoxel[::-1]
+        if hasattr(document.geometry, 'object_angles_deg'):
+            from tigre.utilities.object_motion import object_angles
+            result['geo']['object_angles_deg'] = object_angles(document.geometry, len(surface.source_positions_mm)).copy()
         for name in ('acquisition', 'motion_mode', 'view_times_s'):
             if hasattr(document.geometry, name):
                 result['geo'][name] = getattr(document.geometry, name)
@@ -48,6 +51,8 @@ def from_mat(source, target):
                                  offOrigin=offsets)
         if 'nVoxel' in geo:
             volume.nVoxel = np.asarray(geo['nVoxel'])[::-1]
+        if 'object_angles_deg' in geo:
+            volume.object_angles_deg = np.asarray(geo['object_angles_deg'], dtype=float).reshape(-1, 3)
         for name in ('acquisition', 'motion_mode', 'view_times_s'):
             if name in geo:
                 setattr(volume, name, geo[name])
@@ -56,6 +61,10 @@ def from_mat(source, target):
         for key in ('transverse_centers_mm', 'normal_offsets_mm', 'z_offsets_mm',
                     'panel_angles_deg', 'panel_x_angles_deg', 'panel_y_angles_deg'):
             settings[key] = np.atleast_1d(settings[key])
+        if np.asarray(settings.get('hardware_angles_deg', [])).size == 0:
+            settings['hardware_angles_deg'] = None
+        else:
+            settings['hardware_angles_deg'] = np.asarray(settings['hardware_angles_deg'], dtype=float).reshape(-1, 3)
         if not isinstance(settings.get('acquisition'), dict):
             settings['acquisition'] = None
         for key in ('n_views', 'n_modules', 'column_gap'):

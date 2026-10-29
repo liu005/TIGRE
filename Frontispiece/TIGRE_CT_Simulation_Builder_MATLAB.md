@@ -1,7 +1,7 @@
 **TIGRE CT Simulation Builder — MATLAB user manual**
 
-**Manual version: 1.1**
-**Updated: 28 October 2026**
+**Manual version: 1.2**
+**Updated: 29 October 2026**
 **Software reference: TIGRE Python package 3.0.0; CT Simulation Builder checkout.**
 
 The manual version identifies this document, not a separate application release.
@@ -42,6 +42,106 @@ Play is initially disabled until an explicit Confirm succeeds. The initial
 automatic preview does not enable it. Exact loaded surfaces remain inspectable.
 Help changes with the tab; field tooltips identify controls. Closing/deleting
 the GUI removes its timer and list-editor windows.
+
+Hover over any of the three checkboxes (Rotate object, acquisition timing, or start/end movement) to show its purpose, enabled/disabled behavior and constraints in the help panel. The same explanation is also available as a tooltip.
+
+## Applications
+
+Choose geometry from the relative motion of the source, detector and object,
+rather than from the application name alone. The following setups are starting
+points; detector coverage and reconstruction suitability still need checking.
+
+### Medical CT: rotating source and detector
+
+Conventional rotating-gantry CT keeps the patient approximately stationary while
+the source and detector rotate together. Fan-beam scans can use a line detector;
+multislice CT uses several detector rows. Flat-panel cone-beam CT uses a
+2D detector panel. These are related acquisition geometries, with different
+coverage and reconstruction requirements. See the
+[DICOM CT overview](https://dicom.nema.org/medical/dicom/current/output/chtml/part17/sect_UUUU.3.2.5.html).
+
+In the builder, leave **Rotate object (fixed source and detector)** off in
+Volume. Select a **Cylindrical** source trajectory and a detector that moves
+with the source. Use one detector row for a line-detector model, several rows
+for a multirow detector, or one piecewise-linear panel for a flat panel.
+For a helical/spiral scan, add volume translation in Movement. Confirm checks
+ray intersections; it does not establish sufficient sampling or clinical image quality.
+
+### Industrial CT: rotating object
+
+Laboratory and industrial CT commonly keep the source and detector fixed and
+rotate the specimen. This is a common arrangement rather than a requirement
+for every industrial scanner. See the
+[University of Texas CT principles](https://www.ctlab.geo.utexas.edu/about-ct/essentials-of-computed-tomography/).
+
+Select **Rotate object (fixed source and detector)** in Volume. Use start/end
+z angles for a conventional turntable, or a **ZYZ angle list** for arbitrary
+object poses. The d18 preset illustrates the latter. Endpoint translation in
+Movement can be combined with rotation. Exported scripts transform the rays
+into the stationary object frame before reconstruction.
+
+### Tomosynthesis: limited-angle depth imaging
+
+Tomosynthesis reconstructs depth sections from projections over a limited
+angular range rather than a complete CT orbit. Digital breast tomosynthesis
+is one application. A common arrangement moves a source along an arc while
+keeping a flat-panel detector fixed; stationary multisource designs instead
+activate distributed emitters electronically. References 12 and 13 describe
+stationary breast tomosynthesis and its geometric calibration.
+
+In Volume, leave **Rotate object (fixed source and detector)** off. Load
+**Tomosynthesis: arc source, fixed panel** for an arc acquisition, or
+**Tomosynthesis: linear source, fixed panel** for a linear approximation.
+Use a single piecewise-linear panel to represent a flat detector. Set the
+source span or endpoints and the number of views to match the intended
+acquisition, then Confirm. A changing active source position can also
+approximate sequential emitters; arbitrary source locations require the
+explicit-surface API rather than the GUI's regularly sampled paths.
+
+Use iterative reconstruction such as CGLS for these examples. Limited angular
+coverage produces direction-dependent resolution and out-of-plane artifacts;
+passing the physical geometry check does not remove this incompleteness.
+A circular-geometry FDK check alone does not certify tomosynthesis coverage.
+The presets illustrate geometry, not a calibrated clinical acquisition.
+
+### Cargo and baggage scanning: geometry varies
+
+Security systems may use rotating CT, stationary-source CT, line scanning or
+multiple projection views while cargo travels through the scanner. For example,
+Smiths describes a [cargo system combining CT and an optional dual-view line scanner](https://www.smiths.com/news-and-insights/news/2025/smiths-detection-sets-new-standard-with-future-proof-hold-baggage-and-air-cargo-screening-solution).
+A few projection views alone do not imply complete CT coverage.
+
+Configure the actual source/detector arrangement and use Movement for conveyor
+translation along the appropriate world axis. Piecewise-linear or cylindrical
+modules can approximate detector layouts. The GCT preset is another geometry
+example, not a validated model of every cargo scanner. Spectral response,
+scatter, attenuation calibration and detection performance are outside this
+geometry builder's scope.
+
+### Stationary / multisource CT: electronically switched source positions
+
+Stationary CT can use fixed detectors and an array of fixed source spots fired
+in sequence. No tube needs to move mechanically: the *active source position*
+changes between views. See the [Manchester/Rapiscan stationary-gantry description](https://www.manchester.ac.uk/collaborate/business-engagement-knowledge-exchange/case-studies/rapiscan-and-the-university-of-manchester/).
+
+The terms *stationary CT*, *static CT*, *stationary multisource CT* and
+*multi-source stationary CT* are used for related architectures in the
+literature. “Multisource CT” alone is broader: multiple sources can also be
+mounted on rotating or semi-stationary hardware. Specify what remains fixed
+and how emitters are activated rather than treating these terms as exact
+synonyms. The source-array studies and medical static-CT system listed in
+references 9-11 provide further examples.
+Leave object rotation off. Select a fixed detector with a linear or arc source
+path to approximate sequential firing along that path. Here “moving source”
+means changing source coordinates in the geometry, and can represent successive
+physical emitters. The GUI samples these paths regularly; arbitrary discrete
+source locations require an explicit detector-surface geometry loaded for
+inspection or supplied through the API. One active source is represented per
+view; simultaneous-source superposition, independent emitter schedules and
+scanner electronics are not simulated. These layouts generally need iterative
+reconstruction; check the exported script's FDK assessment separately.
+
+The numbered [References and further reading](#references-and-further-reading) are listed at the end of this manual.
 
 # Use the Source tab
 
@@ -111,9 +211,48 @@ when confirming programmatic changes. **Confirm** applies the new box to the
 scene. The GUI stores metadata and draws a box; it does not allocate voxel
 data. YAML preserves counts and full size and derives spacing on reload.
 
+## Fixed hardware and rotating object
+
+In Volume, select **Rotate object (fixed source and detector)**.
+Hardware stays at its initial Source/Detectors pose. Rotation is about the
+volume center, and endpoint translation can be combined with it. Orbit timing
+is disabled in this mode.
+
+Choose **Start/end z angles** for inclusive interpolation in degrees. Reverse
+rotation uses a decreasing end angle; different angles need at least two views.
+Positive z rotation is counterclockwise when viewed from +z.
+
+Choose **ZYZ angle list** and paste JSON such as
+`[[0,0,0],[90,45,0],[180,90,30]]`, with Views set to 3. Each absolute object
+orientation is `[z1,y,z2]` in degrees, using `Rz(z1)*Ry(y)*Rz(z2)` as in demo
+d18. Enter one triple per view or one shared triple. **List...** opens a table
+editor. Expressions are not evaluated and list rows are not interpolated.
+
+Select **Confirm**, then **Play** to see the volume rotate. A teal Object +x
+line makes orientation visible for cubes. Physical checks account for rotated
+boxes. MAT and shared YAML saves preserve the poses, including when exchanged
+with Python. Exported reconstruction scripts transform both source and detector
+into the fixed object frame; arbitrary trajectories generally require CGLS.
+
+The **TIGRE d18: arbitrary object rotation (ZYZ)** preset uses 100 inverse
+object poses `[-z2,-y,-z1]` to reproduce d18's relative gantry trajectory.
+Select it in Example, then **Load example**, **Confirm** and **Play**. Its
+detector is downsampled to 128 by 128 over the same 409.6 mm physical size;
+volume size is 256/1.5 mm per axis. This preset requires CGLS; FDK does not
+support its arbitrary trajectory.
+
+For the d18 preset, unchecking **Rotate object (fixed source and detector)**
+keeps the object stationary and applies the inverse orientations to the source
+and detector together. Check it again to return to rotating-object mode. For
+ZYZ angles, the inverse of `[z1, y, z2]` is `[-z2, -y, -z1]`; reversing the
+order is essential. Press Confirm after switching. The equivalent hardware
+trajectory is retained by geometry saves and reconstruction export. This
+preset-specific switch preserves d18's relative geometry with its centered,
+stationary object; it does not add acquisition timing to arbitrary ZYZ paths.
 # Use the Movement tab
 
-Use **Movement** for object translation and acquisition timing. Geometry
+Use **Movement** for object translation and acquisition timing. Object rotation
+is configured in **Volume**. Geometry
 stays in the structural world frame: the source follows its configured path
 while the volume box moves. Enable **Move between start and end**
 for endpoint translation; entering two values alone does not enable motion.
@@ -440,3 +579,84 @@ See the [Python manual](./TIGRE_CT_Simulation_Builder_Python.md) and
 repository root, run `./Frontispiece/Export_Manuals.ps1`. It regenerates both
 PDFs with versioned covers, contents and wrapping tables/code. Pandoc and
 XeLaTeX are required; PDFs are ignored generated artifacts.
+
+# References and further reading
+
+References checked on 29 October 2026. The GUI setup suggestions above are
+interpretations of these acquisition principles, not vendor-validated scanner
+recipes. Manufacturer pages illustrate particular systems rather than all
+systems in that application category.
+
+1. **DICOM Standards Committee.** [Computed Tomography, PS3.17, section UUUU.3.2.5](https://dicom.nema.org/medical/dicom/current/output/chtml/part17/sect_UUUU.3.2.5.html).
+   Background on medical source/detector rotation, patient motion and acquisition
+   modes. This is explanatory material, not a reconstruction algorithm reference.
+
+2. **DICOM Standards Committee.** [Dental CT and Cone-Beam CT, PS3.17, section UUUU.3.2.6.5](https://dicom.nema.org/medical/dicom/current/output/chtml/part17/sect_uuuu.3.2.6.5.html).
+   Describes rotating source/detector gantries and the relationship between
+   dental CT and wide-cone acquisitions.
+
+3. **U.S. Food and Drug Administration.** [Dental Cone-beam Computed Tomography](https://www.fda.gov/radiation-emitting-products/medical-x-ray-imaging/dental-cone-beam-computed-tomography).
+   Accessible description of cone-beam acquisition around a patient and its
+   clinical applications. Useful context for the medical cone-beam example.
+
+4. **University of Texas High-Resolution X-ray CT Facility.** [Essentials of Computed Tomography](https://www.ctlab.geo.utexas.edu/about-ct/essentials-of-computed-tomography/).
+   Explains scanner generations and relative motion: rotating the specimen is
+   common in industrial CT, whereas medical systems commonly rotate the rig.
+
+5. **Ferrucci, M. and Ametova, E. (2021).** [Charting the course towards dimensional measurement traceability by X-ray computed tomography](https://www.nist.gov/publications/charting-course-towards-dimensional-measurement-traceability-x-ray-computed-tomography).
+   *Measurement Science and Technology*, 32. [DOI: 10.1088/1361-6501/abf058](https://doi.org/10.1088/1361-6501/abf058).
+   Explains industrial CT metrology, calibration, uncertainty and traceability.
+   These topics go beyond the builder's geometry-intersection checks.
+
+6. **Smiths Detection.** [SDX 10080 SCT product information](https://www.smithsdetection.com/products/sdx-10080-sct/).
+   Manufacturer example combining baggage/air-cargo CT with an optional
+   dual-view line scanner. Illustrates why CT and projection-only scanning
+   should be distinguished when choosing an acquisition model.
+
+7. **University of Manchester.** [Rapiscan and The University of Manchester](https://www.manchester.ac.uk/collaborate/business-engagement-knowledge-exchange/case-studies/rapiscan-and-the-university-of-manchester/).
+   Describes a stationary-gantry security scanner using fixed X-ray sources
+   fired sequentially. Supports the distinction between mechanical source
+   motion and a changing active source position.
+
+8. **Warnett, J. M. et al. (2016).** [Towards in-process x-ray CT for dimensional metrology](https://wrap.warwick.ac.uk/id/eprint/76972/).
+   *Measurement Science and Technology*, 27(3), 035401.
+   [DOI: 10.1088/0957-0233/27/3/035401](https://doi.org/10.1088/0957-0233/27/3/035401).
+   Peer-reviewed evaluation of an airport-baggage real-time tomography scanner
+   for industrial dimensional measurements. The university repository provides
+   the published paper, connecting stationary-source security CT with industrial
+   inspection and its measurement limitations.
+
+9. **Spronk, D. et al. (2021).** [Evaluation of carbon nanotube x-ray source array for stationary head computed tomography](https://pubmed.ncbi.nlm.nih.gov/33382470/).
+   *Medical Physics*, 48(3), 1089-1099.
+   [DOI: 10.1002/mp.14696](https://doi.org/10.1002/mp.14696).
+   Experimental source-array study supporting stationary head CT; relevant to
+   representing successive emitters as different source positions per view.
+
+10. **Simulation on system configuration for stationary head CT using linear carbon nanotube x-ray source arrays (2021).**
+    [Open-access paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC8526838/).
+    Investigates one-, two- and three-array stationary source configurations,
+    stationary detectors, angular coverage and iterative reconstruction. Useful
+    background for the GUI's linear-source/fixed-detector approximation and
+    the need to check coverage independently of physical ray intersections.
+
+11. **Ding, H. et al. (2026).** [Development and clinical application of a high-performance medical static computed tomography system](https://aapm.onlinelibrary.wiley.com/doi/10.1002/acm2.70456).
+    *Journal of Applied Clinical Medical Physics*, 27(1), e70456.
+    [DOI: 10.1002/acm2.70456](https://doi.org/10.1002/acm2.70456).
+    Describes a circular multisource/detector architecture with sequential
+    exposures. Its methods also include small gantry-angle shifts: the term
+    “static” in a paper title does not always mean every component stays
+    completely motionless. Its specialized reconstruction is not implemented
+    by this builder.
+
+12. **Qian, X. et al. (2012).** [High resolution stationary digital breast tomosynthesis using distributed carbon nanotube x-ray source array](https://pmc.ncbi.nlm.nih.gov/articles/PMC3321055/).
+    *Medical Physics*, 39(4), 2090-2099.
+    [DOI: 10.1118/1.3694667](https://doi.org/10.1118/1.3694667).
+    Experimental stationary breast-tomosynthesis system using electronically
+    activated source positions instead of mechanical tube motion. Provides
+    an application example linking limited-angle imaging and multisource arrays.
+
+13. **Jiang, C., Zhang, N., Gao, J. and Hu, Z. (2017).** [Geometric calibration of a stationary digital breast tomosynthesis system based on distributed carbon nanotube X-ray source arrays](https://doi.org/10.1371/journal.pone.0188367).
+    *PLOS ONE*. DOI: 10.1371/journal.pone.0188367.
+    Describes geometric calibration for distributed-source tomosynthesis.
+    Useful context for why source and detector coordinates require calibration
+    beyond entering an idealized GUI layout.

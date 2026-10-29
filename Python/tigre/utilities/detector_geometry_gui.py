@@ -171,7 +171,8 @@ DETECTOR_FIELD_HELP.update({
     "Center offset (mm)": "Initial volume center offOrigin in z, y, x mm. Shared with Start position in Movement. Source coordinates use x, y, z instead.",
     "Start position (z, y, x mm)": "Initial volume center in z, y, x mm, shared with the Volume tab's center offset. Movement starts here at the first view (t=0).",
     "End position (z, y, x mm)": "Volume center at the last acquired view, in z, y, x mm. Endpoint mode interpolates all three coordinates and requires at least two views for different endpoints. In timed speed mode this is a calculated, read-only result.",
-    "Move between start and end positions": "Enable to interpolate the volume center from Start to End over the acquired views. With timing enabled, z speed is derived from z travel divided by last-view time. Disable to use entered z speed with timing, or a stationary volume without timing.",
+    "Rotate object (fixed source and detector)": "Enable to keep source and detector fixed at their initial pose and rotate the volume about its own center. Choose inclusive start/end z angles or an absolute ZYZ angle list in degrees. Position movement can be combined with rotation. Orbit timing is disabled in this mode. Disable to use the source/detector motion configured in their tabs. Press Confirm to apply.",
+    "Move between start and end positions": "Enable to interpolate the volume center from Start to End over the acquired views. With timing enabled, z speed is derived from z travel divided by last-view time. Disable to use entered z speed with timing, or a stationary volume without timing. Different positions require at least two views. Press Confirm to apply.",
     "Use timing to derive orbit and z motion": "Enable synchronized acquisition: one frame per source pulse, with t=i/firing_rate. Requires rotating source + detector. Rotation period determines angle, and z speed or endpoints determine volume motion. Manual scan span is ignored.",
     "Detector readout period (ms)": "Minimum time between detector frames, in milliseconds. Firing rate must be at most 1000/readout_period. This model acquires one frame per pulse; it does not discard pulses or combine exposures.",
     "Source firing rate (Hz)": "Source pulses per second and acquired views per second. View i occurs at i/rate seconds. For N views, the last view is at (N-1)/rate; the acquisition window is N/rate. Rate must fit detector readout capacity.",
@@ -184,8 +185,8 @@ DETECTOR_FIELD_HELP.update({
 TAB_HELP = {
     "Source": "Set source trajectory and view sampling. Source positions use world x, y, z mm; angles are degrees about +z. Fixed-linear mode uses start/end coordinates; circular modes use radius, height and scan span. Hover or focus a field for details, then Confirm to apply.",
     "Detectors": "Choose panel layout, pixel counts, pitches, panel alignment and detector motion. Cylindrical fields define an arc; piecewise-linear lists define individual panels. List... edits per-panel values. Confirm applies changes; masked gap columns are not measured samples.",
-    "Volume": "Set voxel counts, full physical size and initial center in TIGRE z, y, x order. Voxel size is size/counts. Center offset is shared with Movement Start position. The common 3D preview shows the volume box at its per-view center.",
-    "Movement": "Configure timing and volume motion. Timing mode requires rotating hardware and one frame per pulse. Choose z-speed mode or start/end interpolation; endpoints use z, y, x mm. Play and the slider animate the volume in the same world-frame scene. Moving offOrigin is for preview; surface reconstruction requires a fixed object coordinate frame.",
+    "Volume": "Configure object rotation with fixed hardware using start/end z angles or a per-view ZYZ list in degrees (demo d18). Set voxel counts, full physical size and initial center in TIGRE z, y, x order. Voxel size is size/counts. Center offset is shared with Movement Start position. The common 3D preview shows the volume box at its per-view center.",
+    "Movement": "Object rotation is configured in Volume. Orbit timing is disabled when object rotation is selected. Configure timing and volume translation otherwise. Timing mode requires rotating hardware and one frame per pulse. Choose z-speed mode or start/end interpolation; endpoints use z, y, x mm. Play and the slider animate the volume in the same world-frame scene. Moving offOrigin is for preview; surface reconstruction requires a fixed object coordinate frame.",
 }
 
 
@@ -251,6 +252,13 @@ GUI_EXAMPLES["TIGRE: global COR offset"] = (
     "TIGRE circular cone geometry with an exaggerated +150 mm global COR for visibility; source and detector shift together. COR is not per panel.")
 
 
+GUI_EXAMPLES["TIGRE d18: arbitrary object rotation (ZYZ)"] = (
+    "Piecewise linear", False,
+    {**GUI_EXAMPLES["TIGRE: circular cone-beam CT"][2], "n_views": "100"},
+    "Demo d18 adapted to a rotating object and fixed hardware. Inverse ZYZ poses "
+    "reproduce d18's relative source/detector trajectory. The panel is downsampled "
+    "to 128 x 128 for the GUI, preserving its physical size. Use CGLS; FDK is unsupported.")
+
 # Keep the large GCT acquisition last in the example menu.
 _gct_half = np.arctan2(2.6172 * (64 / 2 - 0.5), 10600.0)
 _gct_theta = np.linspace(-_gct_half * 53, _gct_half * 53, 53)
@@ -276,7 +284,7 @@ def build_modular_surface(
         source_motion="Rotating source + detector",
         source_end_mm=(1000.0, 200.0, 0.0),
         source_start_mm=None, orbit_start_deg=0.0, scan_span_deg=360.0, panel_x_angles_deg=(0.0,),
-        panel_y_angles_deg=(0.0,), cor_mm=0.0, acquisition=None):
+        panel_y_angles_deg=(0.0,), cor_mm=0.0, acquisition=None, fixed_hardware=False, hardware_angles_deg=None):
     """Build a surface using distances in mm and angles in degrees.
 
     Panel x/y angles accept one value or one per panel, constant per scan.
@@ -292,6 +300,31 @@ def build_modular_surface(
         raise ValueError("Number of views must be a positive integer.")
     if isinstance(n_views, (bool, np.bool_)):
         raise ValueError("Number of views must be a positive integer.")
+    if fixed_hardware or hardware_angles_deg is not None:
+        if acquisition is not None:
+            raise ValueError("Object rotation uses explicit angles; disable orbit timing.")
+        rows, columns = _checked_module_shape(module_shape)
+        validate_gui_size(n_views, rows, columns,
+                          _panel_count_for_layout(layout, n_modules, transverse_centers_mm), column_gap)
+        import inspect
+        arguments = locals()
+        parameters = {key: arguments[key] for key in inspect.signature(build_modular_surface).parameters}
+        parameters.update(n_views=1, fixed_hardware=False, hardware_angles_deg=None,
+                          source_motion="Rotating source + detector")
+        initial = build_modular_surface(**parameters)
+        from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
+        source = np.repeat(initial.source_positions_mm, n_views, axis=0)
+        pixels = np.repeat(initial.pixel_centers_mm, n_views, axis=0)
+        if not fixed_hardware:
+            from types import SimpleNamespace
+            from tigre.utilities.object_motion import object_angles, rotation_zyz
+            angles = object_angles(SimpleNamespace(object_angles_deg=hardware_angles_deg), n_views)
+            for view, pose in enumerate(angles):
+                rotation = rotation_zyz(pose)
+                source[view] = source[view] @ rotation.T
+                pixels[view] = pixels[view] @ rotation.T
+        return DetectorSurfaceGeometry(source, pixels,
+            np.repeat(initial.valid_mask, n_views, axis=0), module_slices=initial._module_slices)
     rows, columns = _checked_module_shape(module_shape)
     panel_count = _panel_count_for_layout(
         layout, n_modules, transverse_centers_mm)
@@ -577,6 +610,12 @@ class DetectorGeometryBuilder:
         self._tab_font.configure(size=tab_size + 2 if tab_size > 0 else tab_size - 3, weight="bold")
         ttk.Style(self.root).configure("DetectorBuilder.TNotebook.Tab",
                                       font=self._tab_font, padding=(12, 7))
+        self._checkbox_font = tkfont.nametofont("TkDefaultFont", root=self.root).copy()
+        self._checkbox_font.configure(weight="bold")
+        ttk.Style(self.root).configure("DetectorBuilder.TCheckbutton", font=self._checkbox_font)
+        ttk.Style(self.root).configure("DetectorBuilder.Timing.TCheckbutton", font=self._checkbox_font)
+        ttk.Style(self.root).map("DetectorBuilder.Timing.TCheckbutton",
+                                 font=[("disabled", self._checkbox_font), ("!disabled", self._checkbox_font)])
         screen_width, screen_height = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         self.root.geometry(f"{min(1400, screen_width - 80)}x{min(900, screen_height - 100)}")
         self.root.minsize(min(960, screen_width - 80), min(600, screen_height - 100))
@@ -685,6 +724,7 @@ class DetectorGeometryBuilder:
             variable.trace_add("write", lambda *_args, field=name: self._sync_voxel_fields(field))
         self._volume_motion = tk.BooleanVar(value=False)
         self._volume_motion_toggle = ttk.Checkbutton(timing_controls,
+            style="DetectorBuilder.TCheckbutton",
             text="Move between start and end positions",
             variable=self._volume_motion, command=self._update_field_states)
         self._volume_motion_toggle.grid(row=8, column=0, columnspan=2, sticky="w", pady=8)
@@ -704,8 +744,42 @@ class DetectorGeometryBuilder:
             "With timing enabled, start/end positions determine speed. In timed speed mode, z speed determines the end.",
             wraplength=350).grid(row=11, column=0, columnspan=2, sticky="w", pady=8)
 
+        self._rotate_object = tk.BooleanVar(value=False)
+        self._rotate_object_toggle = ttk.Checkbutton(volume_controls,
+            style="DetectorBuilder.TCheckbutton",
+            text="Rotate object (fixed source and detector)",
+            variable=self._rotate_object, command=self._update_field_states)
+        self._rotate_object_toggle.grid(row=6, column=0, columnspan=2, sticky="w", pady=6)
+        self._bind_parameter_help(self._rotate_object_toggle, "Rotate object (fixed source and detector)")
+        self._object_angle_fields = {}
+        for row, (key, label, default) in enumerate((
+                ("object_start_angle", "Object start angle (degrees)", "0"),
+                ("object_end_angle", "Object end angle (degrees)", "360")), 7):
+            variable = tk.StringVar(value=default)
+            self._object_angle_fields[key] = variable
+            ttk.Label(volume_controls, text=label).grid(row=row, column=0, sticky="w", pady=4)
+            entry = ttk.Entry(volume_controls, textvariable=variable, width=18)
+            entry.grid(row=row, column=1, sticky="ew")
+            self._entries[key] = entry
+        self._object_angle_mode = tk.StringVar(value="Start/end z angles")
+        self._object_angle_mode_box = ttk.Combobox(volume_controls,
+            textvariable=self._object_angle_mode,
+            values=("Start/end z angles", "ZYZ angle list"), state="readonly")
+        self._object_angle_mode_box.grid(row=9, column=0, columnspan=2, sticky="ew", pady=4)
+        self._object_angle_mode_box.bind("<<ComboboxSelected>>", lambda _event: self._update_field_states())
+        self._object_angle_list = tk.StringVar(value="[[0, 0, 0], [90, 45, 0], [180, 90, 30]]")
+        ttk.Label(volume_controls, text="ZYZ list (degrees)").grid(row=10, column=0, sticky="w")
+        self._entries["object_angle_list"] = ttk.Entry(volume_controls, textvariable=self._object_angle_list)
+        self._entries["object_angle_list"].grid(row=10, column=1, sticky="ew")
+        ttk.Label(volume_controls, text="Object poses about its centre: Rz(z1) @ Ry(y) @ Rz(z2). "
+            "List: [[z1, y, z2], ...], one triple per view (or one shared triple). "
+            "Uses demo d18's ZYZ convention, in degrees. Orbit timing is disabled. "
+            "Start/end mode includes both endpoints; positive z is counterclockwise from +z.",
+            wraplength=350).grid(row=11, column=0, columnspan=2, sticky="w", pady=6)
+
         self._timing_enabled = tk.BooleanVar(value=False)
         self._timing_toggle = ttk.Checkbutton(timing_controls,
+            style="DetectorBuilder.Timing.TCheckbutton",
             text="Use timing to derive orbit and z motion",
             variable=self._timing_enabled, command=self._update_field_states)
         self._timing_toggle.grid(row=0, column=0, columnspan=2, sticky="w", pady=4)
@@ -729,6 +803,9 @@ class DetectorGeometryBuilder:
         self._timing_summary = tk.StringVar(value="One frame per pulse. Positive z speed moves the volume along world +z.")
         ttk.Label(timing_controls, textvariable=self._timing_summary,
             wraplength=350).grid(row=6, column=0, columnspan=2, sticky="w", pady=8)
+
+        ttk.Label(timing_controls, text="Object rotation is configured in Volume.",
+            wraplength=350).grid(row=14, column=0, columnspan=2, sticky="w", pady=6)
 
         self._detector_stationary = False
         self._source_trajectory = tk.StringVar(value="Cylindrical")
@@ -934,6 +1011,7 @@ class DetectorGeometryBuilder:
         self._builder_geometry = None
         self._builder_button.configure(state=self.tk.DISABLED)
         self._timing_enabled.set(False)
+        self._inverse_rig_mode = False
         self._set_volume_controls(None)
         layout, stationary, overrides, description = GUI_EXAMPLES[self._example.get()]
         self._stop_animation()
@@ -941,6 +1019,16 @@ class DetectorGeometryBuilder:
             self._fields[name].set(overrides.get(name, value))
         self._layout.set(layout)
         self._detector_stationary = stationary
+        if self._example.get() == "TIGRE d18: arbitrary object rotation (ZYZ)":
+            phase = np.linspace(0, 2 * np.pi, 100)
+            # Invert d18's gantry pose Rz(z1) Ry(y) Rz(z2):
+            # the object pose is Rz(-z2) Ry(-y) Rz(-z1).
+            angles = np.rad2deg(np.column_stack((-phase, -phase, -np.pi * np.sin(phase))))
+            self._rotate_object.set(True)
+            self._inverse_rig_mode = True
+            self._object_angle_mode.set("ZYZ angle list")
+            self._object_angle_list.set(repr(angles.tolist()))
+            self._volume_fields["sVoxel"].set("170.66666666666666, 170.66666666666666, 170.66666666666666")
         self._update_module_count_field()
         self._example_description.set(description)
         self.update_preview()
@@ -975,6 +1063,11 @@ class DetectorGeometryBuilder:
             for name, value in acquisition.items():
                 self._timing_fields[name].set(str(value))
         self._set_volume_controls(document.geometry)
+        rig_angles = settings.get("hardware_angles_deg")
+        self._inverse_rig_mode = rig_angles is not None
+        if rig_angles is not None and not self._rotate_object.get():
+            self._object_angle_mode.set("ZYZ angle list")
+            self._object_angle_list.set(repr((-np.asarray(rig_angles)[:, ::-1]).tolist()))
         for name, default in self._default_fields.items():
             value = settings.get(name, default)
             if name in ("rows", "columns"):
@@ -1166,7 +1259,7 @@ class DetectorGeometryBuilder:
         if hasattr(self, "_detector_motion_box"):
             self._detector_motion.set("Fixed Position" if self._detector_stationary else "Moving with Source")
             self._detector_motion_box.configure(state="disabled" if inspection else "readonly")
-        for name in ("_volume_motion_toggle", "_timing_toggle"):
+        for name in ("_volume_motion_toggle", "_timing_toggle", "_rotate_object_toggle"):
             if hasattr(self, name):
                 getattr(self, name).configure(state=self.tk.DISABLED if inspection else self.tk.NORMAL)
         if hasattr(self, "_layout_box"):
@@ -1175,6 +1268,8 @@ class DetectorGeometryBuilder:
                 self._detector_motion_button.configure(state=self.tk.DISABLED if inspection else self.tk.NORMAL)
             if hasattr(self, "_preview_button"):
                 self._preview_button.configure(state=self.tk.DISABLED if inspection else self.tk.NORMAL)
+        if hasattr(self, "_object_angle_mode_box"):
+            self._object_angle_mode_box.configure(state="disabled" if inspection else "readonly")
         if inspection:
             for widget in list(self._entries.values()) + list(getattr(self, "_list_buttons", {}).values()):
                 widget.configure(state=self.tk.DISABLED)
@@ -1220,6 +1315,28 @@ class DetectorGeometryBuilder:
             endpoints = self._volume_motion.get()
             self._entries["volume_end"].configure(state=self.tk.NORMAL if endpoints else self.tk.DISABLED)
             self._entries["table_speed_mm_s"].configure(state=self.tk.DISABLED if endpoints else self.tk.NORMAL)
+
+        rotating = hasattr(self, "_rotate_object") and self._rotate_object.get()
+        list_mode = hasattr(self, "_object_angle_mode") and self._object_angle_mode.get() == "ZYZ angle list"
+        for key in getattr(self, "_object_angle_fields", {}):
+            self._entries[key].configure(state=self.tk.NORMAL if rotating and not list_mode else self.tk.DISABLED)
+        if hasattr(self, "_object_angle_mode_box"):
+            self._object_angle_mode_box.configure(state="readonly" if rotating else "disabled")
+            self._entries["object_angle_list"].configure(state=self.tk.NORMAL if rotating and list_mode else self.tk.DISABLED)
+        if rotating or getattr(self, "_inverse_rig_mode", False):
+            self._timing_enabled.set(False)
+            self._timing_toggle.configure(state=self.tk.DISABLED)
+            for key in self._timing_fields:
+                self._entries[key].configure(state=self.tk.DISABLED)
+            self._source_trajectory_box.configure(state="disabled")
+            self._detector_motion_box.configure(state="disabled")
+            for key in ("source_start_mm", "source_end_mm", "scan_span_deg"):
+                self._entries[key].configure(state=self.tk.DISABLED)
+            for key in ("source_radius_mm", "source_z_mm", "orbit_start_deg"):
+                self._entries[key].configure(state=self.tk.NORMAL)
+            self._timing_summary.set("Fixed hardware; object angles define orientation about its centre (ZYZ).")
+            if not rotating:
+                self._timing_summary.set("d18: source and detector follow inverse ZYZ orientations; orbit timing is disabled.")
 
 
     def _show_panel_list(self, name, title):
@@ -1333,7 +1450,8 @@ class DetectorGeometryBuilder:
         columns = int(self._parse_numbers(values["columns"], "Module columns", integer=True))
         column_gap = int(self._parse_numbers(values["column_gap"], "Gap columns", integer=True))
         layout = self._layout.get()
-        stationary = self._detector_stationary
+        rotating_object = hasattr(self, "_rotate_object") and self._rotate_object.get()
+        stationary = False if rotating_object else self._detector_stationary
         if layout == "Cylindrical":
             n_modules = int(self._parse_numbers(
                 values["n_modules"], "Modules", integer=True))
@@ -1364,7 +1482,7 @@ class DetectorGeometryBuilder:
         orbit_start = (
             float(values["orbit_start_deg"]) if stationary != True else 0.0)
         acquisition = self._read_acquisition()
-        scan_span = float(values["scan_span_deg"]) if stationary != True and acquisition is None else 360.0
+        scan_span = float(values["scan_span_deg"]) if not rotating_object and stationary != True and acquisition is None else 360.0
         if acquisition is not None:
             if stationary:
                 raise ValueError("Timing mode requires rotating source + detector.")
@@ -1374,6 +1492,9 @@ class DetectorGeometryBuilder:
         panel_count = _panel_count_for_layout(layout, n_modules, transverse)
         validate_gui_size(n_views, rows, columns, panel_count, column_gap)
         return {
+            "fixed_hardware": rotating_object,
+            "hardware_angles_deg": (-self._rotation_pose_list(n_views)[:, ::-1]).tolist()
+                if getattr(self, "_inverse_rig_mode", False) else None,
             "source_motion": (
                 "Fixed detector, arc source" if stationary == "arc" else
                 "Fixed detector, moving source"
@@ -1406,6 +1527,8 @@ class DetectorGeometryBuilder:
     def _read_acquisition(self):
         if not hasattr(self, "_timing_enabled") or not self._timing_enabled.get():
             return None
+        if hasattr(self, "_rotate_object") and self._rotate_object.get():
+            raise ValueError("Disable orbit timing when rotating the object.")
         values = {name: float(variable.get()) for name, variable in self._timing_fields.items()
                   if name != "table_speed_mm_s"}
         values["table_speed_mm_s"] = 0.0
@@ -1489,10 +1612,48 @@ class DetectorGeometryBuilder:
         if acquisition is not None:
             volume.acquisition = timing
             volume.view_times_s = times
+        if hasattr(self, "_rotate_object") and self._rotate_object.get():
+            count = int(self._fields["n_views"].get())
+            volume.object_angles_deg = self._rotation_pose_list(count)
         return volume
+
+    def _rotation_pose_list(self, count):
+        from types import SimpleNamespace
+        from tigre.utilities.object_motion import object_angles
+        if self._object_angle_mode.get() == "ZYZ angle list":
+            import ast
+            try:
+                angles = np.asarray(ast.literal_eval(self._object_angle_list.get()), dtype=float)
+            except (ValueError, SyntaxError, TypeError) as exc:
+                raise ValueError("Enter a ZYZ list: [[z1, y, z2], ...] in degrees.") from exc
+            if angles.ndim != 2 or angles.shape[1] != 3:
+                raise ValueError("ZYZ list requires rows of three angles, in degrees.")
+            result = angles
+            object_angles(SimpleNamespace(object_angles_deg=result), count)
+        else:
+            angles = [float(v.get()) for v in self._object_angle_fields.values()]
+            if not np.isfinite(angles).all():
+                raise ValueError("Object start and end angles must be finite.")
+            if count == 1 and angles[0] != angles[1]:
+                raise ValueError("At least two views are required for different object angles.")
+            result = np.linspace(*angles, count)
+        return object_angles(SimpleNamespace(object_angles_deg=result), count).copy()
 
     def _set_volume_controls(self, geometry):
         offsets = np.atleast_2d(getattr(geometry, "offOrigin", [0, 0, 0]))
+        angles = getattr(geometry, "object_angles_deg", None)
+        if hasattr(self, "_rotate_object"):
+            self._rotate_object.set(angles is not None)
+        if angles is not None:
+            angles = np.asarray(angles)
+            linear_z = angles.ndim == 1 and np.allclose(angles, np.linspace(angles[0], angles[-1], len(angles)))
+            self._object_angle_mode.set("Start/end z angles" if linear_z else "ZYZ angle list")
+            if linear_z:
+                for variable, value in zip(self._object_angle_fields.values(), (angles[0], angles[-1])):
+                    variable.set(f"{value:.17g}")
+            else:
+                from tigre.utilities.object_motion import object_angles
+                self._object_angle_list.set(repr(object_angles(geometry, len(angles)).tolist()))
         mode = getattr(geometry, "motion_mode", None)
         self._volume_motion.set(mode == "endpoints" if mode is not None else len(offsets) > 1)
         self._volume_end.set(", ".join(f"{v:g}" for v in offsets[-1]))
@@ -1520,7 +1681,7 @@ class DetectorGeometryBuilder:
             lines = [f"Physical CT: PASS — {physical['views']} views; {physical['crossing_samples']:,} crossing samples."]
             lines.append(f"Empty views: {physical['empty_views']} (allowed; only a completely empty scan is rejected).")
             offsets = np.atleast_2d(self._builder_geometry.offOrigin)
-            moving = len(offsets) > 1 and not np.all(offsets == offsets[0])
+            moving = (len(offsets) > 1 and not np.all(offsets == offsets[0])) or hasattr(self._builder_geometry, "object_angles_deg")
             lines.append("CGLS geometry: supported" + (" after fixed-object conversion (exported script)." if moving else "."))
             if moving:
                 lines.append("FDK: not assessed after volume-motion conversion; exported script checks the resulting trajectory.")
@@ -1635,7 +1796,8 @@ class DetectorGeometryBuilder:
         from tigre.utilities.visualization.surface_renderer import SurfaceRenderer
         self._surface_renderer = SurfaceRenderer(
             axes, self.surface, geo=getattr(self, "_builder_geometry", None), world_axes=False,
-            panel_vertices=lambda frame: self._panel_vertices(parameters, frame))
+            panel_vertices=(None if parameters.get("hardware_angles_deg") is not None and not parameters.get("fixed_hardware")
+                            else lambda frame: self._panel_vertices(parameters, frame)))
         self._panel_collection = self._surface_renderer.mesh
         self._source_artist = self._surface_renderer.source
         source_path = self.surface.source_positions_mm
@@ -1741,7 +1903,7 @@ class DetectorGeometryBuilder:
         if getattr(self, "_cor_artist", None) is None:
             return
         count = len(self.surface.source_positions_mm)
-        angle = _view_angles(parameters, count)[view_index]
+        angle = _view_angles(parameters, count)[0 if parameters.get("fixed_hardware") else view_index]
         shift = parameters["cor_mm"] * np.array([-np.sin(angle), np.cos(angle), 0])
         self._cor_center = shift
         self._cor_artist.set_verts(self._cor_sphere_vertices + shift)
@@ -1776,7 +1938,7 @@ class DetectorGeometryBuilder:
         x_angles = _panel_tilts(parameters.get("panel_x_angles_deg", [0]), self._panel_count, "Panel x angles")
         y_angles = _panel_tilts(parameters.get("panel_y_angles_deg", [0]), self._panel_count, "Panel y angles")
         if parameters.get("cor_mm", 0) and parameters["source_motion"] == "Rotating source + detector":
-            gantry_angle = _view_angles(parameters, len(self.surface.source_positions_mm))[view_index]
+            gantry_angle = _view_angles(parameters, len(self.surface.source_positions_mm))[0 if parameters.get("fixed_hardware") else view_index]
         panels = []
         for index, panel_angle in enumerate(panel_angles):
             start = index * (n_columns + parameters["column_gap"])
@@ -1938,7 +2100,7 @@ class DetectorGeometryBuilder:
         )
         volume = self._inspection_geometry if getattr(self, "_inspection_mode", False) else self._builder_geometry
         offsets = np.atleast_2d(getattr(volume, "offOrigin", np.zeros(3)))
-        if len(offsets) > 1 and not np.all(offsets == offsets[0]):
+        if (len(offsets) > 1 and not np.all(offsets == offsets[0])) or hasattr(volume, "object_angles_deg"):
             summary = ("This volume moves between views. Use Export recon script to convert "
                        "source and detector coordinates to a fixed object frame for CGLS. "
                        "FDK may not support the resulting trajectory.\n\n" + summary)

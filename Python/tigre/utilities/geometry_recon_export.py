@@ -61,16 +61,11 @@ def prepare_geometry(path, voxels=None):
     if len(offsets) not in (1, len(surface.source_positions_mm)):
         raise ValueError("Volume offsets must have one entry or one per view.")
     center = offsets[0].copy()
-    if not np.all(offsets == center):
-        # Surface algorithms require a fixed object frame. Subtract each view's
-        # volume center from BOTH the source and detector; measured data stay in order.
-        shift = offsets[:, ::-1]  # TIGRE z/y/x -> world x/y/z.
-        surface = DetectorSurfaceGeometry(
-            surface.source_positions_mm - shift,
-            surface.pixel_centers_mm - shift[:, None, None, :],
-            surface.valid_mask, module_slices=getattr(surface, "_module_slices", None))
+    if not np.all(offsets == center) or hasattr(saved, "object_angles_deg"):
+        from tigre.utilities.object_motion import fixed_object_geometry
+        surface, _ = fixed_object_geometry(surface, saved)
         center = np.zeros(3)
-        print("Converted moving volume to a fixed object frame for reconstruction.")
+        print("Converted moving/rotating volume to a fixed object frame for reconstruction.")
     size = np.asarray(saved.sVoxel, dtype=float)
     geo = SimpleNamespace(nVoxel=counts, sVoxel=size, dVoxel=size / counts, offOrigin=center)
     return geo, surface

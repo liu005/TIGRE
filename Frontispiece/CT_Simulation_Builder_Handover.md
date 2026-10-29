@@ -1,13 +1,52 @@
 # TIGRE CT Simulation Builder handover
 
-Updated: 2026-10-28 (Australia/Sydney).
+Updated: 2026-10-29 (Australia/Sydney).
+
+## Python and MATLAB rotating-object acquisition
+
+Volume contains the fixed-hardware/rotating-object selector and angle controls.
+Movement contains translation/timing and points to Volume for rotation. Supports
+inclusive start/end z angles or explicit per-view ZYZ degree triples, rotating
+about the volume centre, optionally combined with endpoint translation.
+Orbit timing is disabled in this mode. `object_motion.py` shares pose validation
+and inverse frame conversion between physical checks and generated recon scripts.
+The shared renderer animates the oriented box and an Object +x marker.
+YAML volume metadata and NPZ archives retain `object_angles_deg`; builder settings
+retain `fixed_hardware`. Python readers accept old files without these keys.
+MATLAB has matching controls, a ZYZ table editor and the d18 preset. The bridge
+normalizes object poses to rows of ZYZ triples, independent of volume xyz/zyx
+conversion. `objectRotationMatrices.m` and `fixedObjectGeometry.m` share the
+native renderer/validation/reconstruction convention. MATLAB YAML reloading
+also normalizes row-vector voxel size/count metadata when populating controls.
+
+The new d18 preset uses 100 inverse poses `[-z2, -y, -z1]` to reproduce d18's
+relative gantry trajectory with fixed hardware. GUI detector sampling is 128x128
+over the original physical size. Arbitrary poses need iterative reconstruction;
+FDK compatibility remains independently checked after object-frame conversion.
+Regression coverage is in `Python/tests/test_object_rotation.py` and
+`MATLAB/Tests/test_objectRotation.m`.
+
+The d18 checkbox now switches between object poses and inverse rig poses.
+Saved builder settings retain `hardware_angles_deg`; fixed-hardware mode ignores
+these during rendering, while unchecked mode rotates both source and pixels.
+The inverse ZYZ list is `[-z2,-y,-z1]`, not component-wise negation. Explicit
+rig poses disable orbit timing. Tests compare the unchecked trajectory against
+the checked scan transformed into the fixed object frame, including YAML reload.
 
 ## Manuals and versioned PDFs
+
+Both manuals include an Applications subsection under Basic workflow, covering
+medical rotating-gantry CT, industrial rotating-object CT, cargo/baggage layouts
+and stationary CT with switched source positions. Guidance maps each application
+to GUI controls, distinguishes active-source changes from mechanical motion,
+and documents the one-active-source-per-view model and explicit-surface API
+needed for arbitrary discrete source locations. Linked background sources are
+included in the manuals; the PDF editions contain the same guidance.
 
 The Python and MATLAB manuals are reorganized in user-workflow order: launch,
 basic workflow, each of the four tabs, confirmation/animation, save/load,
 reconstruction export, examples/API reference, limitations and troubleshooting.
-Manual revision **1.1**, dated **28 October 2026**, is separate from the shared
+Manual revision **1.2**, dated **29 October 2026**, is separate from the shared
 TIGRE Python package reference **3.0.0**. Both PDFs have a dedicated cover,
 separate contents pages, numbered chapters and wrapped tables/code. Existing
 inbound section anchors and local documentation links are preserved.

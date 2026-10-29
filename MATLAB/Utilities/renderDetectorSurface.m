@@ -26,7 +26,7 @@ for k=1:n
     points=reshape(double(p(:,:,:,k)),[],3); valid=points(mask(:,:,k),:);
     if ~isempty(valid), lo=min(lo,min(valid,[],1)'); hi=max(hi,max(valid,[],1)'); end
 end
-volume=[]; origins=zeros(3,1);
+volume=[]; origins=zeros(3,1); rotations=objectRotationMatrices(geo,n); orientation=[];
 if ~isempty(geo)
     origins=double(geo.offOrigin);
     assert(size(origins,1)==3 && any(size(origins,2)==[1 n]) && all(isfinite(origins(:))), ...
@@ -35,7 +35,12 @@ if ~isempty(geo)
     validateattributes(extent,{'numeric'},{'numel',3,'finite','positive'});
     [V,F]=animateGeometryCube(origin,extent);
     volume=patch(ax,'Vertices',V,'Faces',F,'FaceColor','cyan','FaceAlpha',0.15,'EdgeAlpha',0.2);
-    lo=min(lo,min(origins,[],2)-extent/2); hi=max(hi,max(origins,[],2)+extent/2);
+    bound=extent/2;
+    if isfield(geo,'object_angles_deg')
+        bound=repmat(norm(extent)/2,3,1);
+        orientation=plot3(ax,nan,nan,nan,'Color',[0 .5 .5],'LineWidth',3,'DisplayName','Object +x');
+    end
+    lo=min(lo,min(origins,[],2)-bound); hi=max(hi,max(origins,[],2)+bound);
 end
 span=max(hi-lo,1); mid=(lo+hi)/2; span(3)=max(span(3),max(span(1:2))/2);
 lo=mid-span*.54; hi=mid+span*.54;
@@ -71,8 +76,14 @@ update(1);
     function update(k)
         assert(k>=1 && k<=n && k==fix(k),'TIGRE:surface:view','Invalid view index');
         if ~isempty(volume)
-            [vertices,~]=animateGeometryCube(origins(:,min(k,size(origins,2))),extent);
+            centre=origins(:,min(k,size(origins,2)));
+            [vertices,~]=animateGeometryCube(zeros(3,1),extent);
+            vertices=vertices*rotations(:,:,k)'+centre';
             set(volume,'Vertices',vertices);
+            if ~isempty(orientation)
+                tip=centre+rotations(:,:,k)*[extent(1)/2;0;0]; line=[centre tip];
+                set(orientation,'XData',line(1,:),'YData',line(2,:),'ZData',line(3,:));
+            end
         end
         points=reshape(double(p(:,:,:,k)),[],3); valid=points(mask(:,:,k),:);
         verts=zeros(0,3); faces=zeros(0,3); segments=zeros(0,3);
@@ -110,6 +121,7 @@ update(1);
             elseif settings.scan_span_deg==360, step=360/n;
             else, step=settings.scan_span_deg/max(n-1,1); end
             angle=settings.orbit_start_deg+(k-1)*step;
+            if isfield(settings,'fixed_hardware') && settings.fixed_hardware, angle=settings.orbit_start_deg; end
             shift=cor*[-sind(angle);cosd(angle);0];
             set(corSphere,'XData',sx+shift(1),'YData',sy+shift(2),'ZData',sz);
             set(corLabel,'Position',shift'+[radius*2 radius*2 radius*2]);

@@ -7,7 +7,7 @@ examples=detectorGeometryExamples(); settings=examples(1).settings;
 inspection=false; surface=[]; geo=[]; builderGeo=[]; scene=[]; player=[]; current=1;
 confirmed=false; lastSavedYaml=''; playbackClock=[]; playbackStart=1;
 lastPhysical=[];
-stationaryAcknowledged='';
+stationaryAcknowledged=''; inverseRigMode=false;
 builderFields=[]; builderLayout=''; builderMotion=''; listWindows=gobjects(0);
 builderMotionFields=[];
 screen=get(groot,'ScreenSize');
@@ -25,7 +25,7 @@ volumeTab=uitab(tabs,'Title','Volume'); movementTab=uitab(tabs,'Title','Movement
 if isprop(tabs,'FontSize'), tabs.FontSize=12; end
 if isprop(tabs,'FontWeight'), tabs.FontWeight='bold'; end
 sourceGrid=page(sourceTab,9); detectorGrid=page(detectorTab,17);
-volumeGrid=page(volumeTab,4); movementGrid=page(movementTab,12);
+volumeGrid=page(volumeTab,10); movementGrid=page(movementTab,13);
 help=uitextarea(left,'Editable','off','Value',{'Select a settings tab for help.'});
 checkResults=uitextarea(left,'Editable','off','Value',{'Not confirmed. Press Confirm to see check results.'});
 actions=uigridlayout(left,[1 3]); actions.Padding=[0 0 0 0];
@@ -72,6 +72,15 @@ end
 for field={'nVoxel','sVoxel','dVoxel'}
     key=field{1}; volumeEdits.(key).ValueChangedFcn=@(~,~) syncVoxels(key);
 end
+rotateObject=uicheckbox(volumeGrid,'Text','Rotate object (fixed source and detector)','ValueChangedFcn',@changeMode);
+rotateObject.Layout.Column=[1 3];
+uilabel(volumeGrid,'Text','Angle input'); objectMode=uidropdown(volumeGrid, ...
+    'Items',{'Start/end z angles','ZYZ angle list'},'ValueChangedFcn',@changeMode); uilabel(volumeGrid,'Text','');
+uilabel(volumeGrid,'Text','Start angle (degrees)'); objectStart=uieditfield(volumeGrid,'text','Value','0'); uilabel(volumeGrid,'Text','');
+uilabel(volumeGrid,'Text','End angle (degrees)'); objectEnd=uieditfield(volumeGrid,'text','Value','360'); uilabel(volumeGrid,'Text','');
+uilabel(volumeGrid,'Text','ZYZ list (degrees)'); objectList=uieditfield(volumeGrid,'text','Value','[[0,0,0],[90,45,0],[180,90,30]]');
+objectListButton=uibutton(volumeGrid,'Text','List...','ButtonPushedFcn',@editObjectAngles);
+objectHelp=uilabel(volumeGrid,'Text','ZYZ degrees; rotate about the object centre.'); objectHelp.Layout.Column=[1 3];
 timed=uicheckbox(movementGrid,'Text','Use acquisition timing','ValueChangedFcn',@changeMode); timed.Layout.Column=[1 3];
 timingNames={'readout_period_ms','firing_rate_hz','rotation_period_s','table_speed_mm_s','playback_rate'};
 timingLabels={'Readout period (ms)','Firing rate (Hz)','Rotation period (s/turn)','Volume z speed (mm/s)','Playback speed (x)'};
@@ -87,6 +96,14 @@ volumeEdits.offOrigin.ValueChangedFcn=@(src,~) setStart(src.Value);
 uilabel(movementGrid,'Text','End (x,y,z mm)'); endPosition=uieditfield(movementGrid,'text','Value','0, 0, 0'); uilabel(movementGrid,'Text','');
 motionSummary=uitextarea(movementGrid,'Editable','off','Value',{'Confirm to apply motion settings.'});
 motionSummary.Layout.Row=[10 12]; motionSummary.Layout.Column=[1 3];
+rotationNote=uilabel(movementGrid,'Text','Object rotation is configured in Volume.');
+rotationNote.Layout.Row=13; rotationNote.Layout.Column=[1 3];
+rotationHelp='Enable to keep source and detector at their initial pose and rotate the object about its centre. Choose start/end z angles or a ZYZ list in degrees. Translation can be combined; orbit timing is disabled. Disable to restore configured hardware motion. Confirm applies changes.';
+timingHelp='Enable one frame per source pulse. Readout limits firing rate; rotation period determines turns. Use signed z speed or endpoint translation. Manual scan span is ignored. Requires rotating hardware and is disabled for object rotation. Confirm applies changes.';
+endpointHelp='Enable to interpolate the object centre from Start to End over acquired views. Different positions require at least two views. With timing, endpoints determine z speed. When disabled, timed mode uses entered z speed; untimed mode stays at Start and ignores End. Confirm applies changes.';
+rotateObject.Tooltip=rotationHelp; timed.Tooltip=timingHelp; endpoints.Tooltip=endpointHelp;
+rotateObject.FontWeight='bold'; timed.FontWeight='bold'; endpoints.FontWeight='bold';
+lastHover=[]; f.WindowButtonMotionFcn=@checkboxHover;
 preview=uibutton(actions,'Text','Confirm','ButtonPushedFcn',@(~,~) confirmBuilder());
 uibutton(actions,'Text','Save YAML...','ButtonPushedFcn',@(~,~) saveFile(false));
 uibutton(actions,'Text','Save surface...','ButtonPushedFcn',@(~,~) saveFile(true));
@@ -112,6 +129,7 @@ app=struct('figure',f,'axes',ax,'preview',@confirmBuilder,'load',@(path) applyDo
 app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',motion, ...
     'preview',preview,'back',back,'play',play,'slider',slider,'preset',preset,'tabs',tabs, ...
     'trajectory',trajectory,'volume',volumeEdits,'timed',timed,'timing',timingEdits, ...
+    'rotateObject',rotateObject,'objectMode',objectMode,'objectStart',objectStart,'objectEnd',objectEnd,'objectList',objectList, ...
     'endpoints',endpoints,'start',startPosition,'end',endPosition,'export',exportButton,'help',help,'checks',checkResults);
 
     function g=page(tab,rows)
@@ -146,11 +164,25 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         switch name
             case 'Source', text='Choose Cylindrical (circular orbit about +z) or Linear (world xyz endpoints, fixed detector). Views are shared with timing. Confirm applies edits.';
             case 'Detectors', text='Choose cylindrical or piecewise-linear panels. Shape is rows/columns; pitch is row/column mm. List... edits panel alignment. COR shifts the whole rotating rig.';
-            case 'Volume', text='MATLAB volume vectors use x,y,z (Python/YAML uses z,y,x). Counts are positive integers; size is the full extent in mm. Center is shared with Movement Start.';
-            otherwise, text='One frame per pulse: t=(view-1)/firing rate. Readout limits firing rate. Rotation period sets turns. Use signed z speed or xyz endpoints. Last view is at (N-1)/rate. Confirm, then Play.';
+            case 'Volume', text='Rotate object with fixed hardware: inclusive start/end z angles or absolute ZYZ degree triples (one per view or one shared). MATLAB volume vectors use x,y,z (Python/YAML uses z,y,x). Counts are positive integers; size is the full extent in mm. Center is shared with Movement Start.';
+            otherwise, text='Object rotation is configured in Volume. Orbit timing is disabled when object rotation is selected. One frame per pulse: t=(view-1)/firing rate. Readout limits firing rate. Rotation period sets turns. Use signed z speed or xyz endpoints. Last view is at (N-1)/rate. Confirm, then Play.';
         end
         if inspection, text=[text ' Inspection mode: builder values are inactive.']; end
         help.Value={text};
+    end
+
+    function checkboxHover(~,~)
+        point=f.CurrentPoint; controls={rotateObject,timed,endpoints}; texts={rotationHelp,timingHelp,endpointHelp};
+        for k=1:numel(controls)
+            control=controls{k}; tab=ancestor(control,'uitab');
+            if ~isequal(tab,tabs.SelectedTab), continue; end
+            bounds=getpixelposition(control,true);
+            if point(1)>=bounds(1) && point(1)<=bounds(1)+bounds(3) && point(2)>=bounds(2) && point(2)<=bounds(2)+bounds(4)
+                if ~isequal(lastHover,control), help.Value={texts{k}}; lastHover=control; end
+                return;
+            end
+        end
+        if ~isempty(lastHover), lastHover=[]; updateHelp(); end
     end
 
     function populate()
@@ -160,6 +192,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         updateState();
     end
     function updateState()
+        if rotateObject.Value || inverseRigMode, timed.Value=false; end
         cylindrical=strcmp(layout.Value,'Cylindrical'); linear=strcmp(motion.Value,'Fixed detector, moving source');
         for i=1:numel(names)
             name=names{i}; enabled=~inspection;
@@ -180,6 +213,15 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         if timed.Value
             edits.scan_span_deg.Enable='off';
             timingEdits.table_speed_mm_s.Enable=onoff(~inspection && ~endpoints.Value);
+        end
+        rotating=~inspection && rotateObject.Value; listMode=strcmp(objectMode.Value,'ZYZ angle list');
+        rotateObject.Enable=onoff(~inspection); objectMode.Enable=onoff(rotating);
+        objectStart.Enable=onoff(rotating && ~listMode); objectEnd.Enable=onoff(rotating && ~listMode);
+        objectList.Enable=onoff(rotating && listMode); objectListButton.Enable=objectList.Enable;
+        if rotateObject.Value || inverseRigMode
+            timed.Enable='off'; motion.Enable='off'; trajectory.Enable='off';
+            for field={'source_start_mm','source_end_mm','scan_span_deg'}, edits.(field{1}).Enable='off'; end
+            for field={'source_radius_mm','source_z_mm','orbit_start_deg'}, edits.(field{1}).Enable=onoff(~inspection); end
         end
         preview.Enable=onoff(~inspection); back.Enable=onoff(inspection);
         if ~inspection && ~cylindrical
@@ -205,6 +247,10 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         for i=1:numel(names)
             if strcmp(edits.(names{i}).Enable,'on'), s.(names{i})=numbers(edits.(names{i}).Value); end
         end
+        s.fixed_hardware=rotateObject.Value;
+        if rotateObject.Value || inverseRigMode, s.source_motion='Rotating source + detector'; s.scan_span_deg=360; end
+        if isfield(s,'hardware_angles_deg'), s=rmfield(s,'hardware_angles_deg'); end
+        if inverseRigMode, pose=readObjectAngles(s.n_views); s.hardware_angles_deg=-pose(:,[3 2 1]); end
         if isfield(s,'acquisition'), s=rmfield(s,'acquisition'); end
         if timed.Value
             assert(strcmp(s.source_motion,'Rotating source + detector'),'TIGRE:timing:motion','Timing requires rotating source + detector');
@@ -240,6 +286,9 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
             g.offOrigin=first+(last-first)*linspace(0,1,s.n_views); g.motion_mode='endpoints';
             if s.n_views==1, g.offOrigin=first; end
         end
+        if rotateObject.Value
+            g.object_angles_deg=readObjectAngles(s.n_views);
+        end
         if timed.Value
             [g.acquisition,g.view_times_s]=ctAcquisitionTiming(s.n_views,s.acquisition);
             if ~endpoints.Value
@@ -247,6 +296,17 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
                 g.offOrigin(3,:)=first(3)+g.acquisition.table_speed_mm_s*g.view_times_s; g.motion_mode='speed';
             end
         end
+    end
+    function pose=readObjectAngles(n)
+        if strcmp(objectMode.Value,'ZYZ angle list')
+            pose=jsondecode(objectList.Value);
+        else
+            firstAngle=numbers(objectStart.Value); lastAngle=numbers(objectEnd.Value);
+            validateattributes(firstAngle,{'numeric'},{'scalar','finite'}); validateattributes(lastAngle,{'numeric'},{'scalar','finite'});
+            assert(n>1 || firstAngle==lastAngle,'TIGRE:motion:views','Different angles require at least two views');
+            pose=[linspace(firstAngle,lastAngle,n)' zeros(n,2)];
+        end
+        objectRotationMatrices(struct('object_angles_deg',pose),n);
     end
     function confirmBuilder()
         if ~resolveEndpointMotion(), return; end
@@ -333,9 +393,32 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     end
     function loadExample(~,~)
         stopPlayer(); closeEditors(); settings=examples(strcmp(preset.Value,{examples.name})).settings;
-        inspection=false; geo=[]; builderGeo=[]; timed.Value=false; endpoints.Value=false;
+        inspection=false; geo=[]; builderGeo=[]; timed.Value=false; endpoints.Value=false; rotateObject.Value=false; inverseRigMode=false;
         for k=1:numel(volumeNames), volumeEdits.(volumeNames{k}).Value=volumeDefaults{k}; end
-        setStart('0, 0, 0'); endPosition.Value='0, 0, 0'; populate(); previewBuilder();
+        setStart('0, 0, 0'); endPosition.Value='0, 0, 0';
+        if strcmp(preset.Value,'TIGRE d18: arbitrary object rotation (ZYZ)')
+            phase=linspace(0,2*pi,100)'; inverseRigMode=true; rotateObject.Value=true; objectMode.Value='ZYZ angle list';
+            objectList.Value=jsonencode(rad2deg([-phase -phase -pi*sin(phase)]));
+            volumeEdits.sVoxel.Value='170.66666666666666, 170.66666666666666, 170.66666666666666'; syncVoxels('sVoxel');
+        end
+        populate(); previewBuilder();
+    end
+    function editObjectAngles(~,~)
+        try
+            data=jsondecode(objectList.Value); objectRotationMatrices(struct('object_angles_deg',data),numbers(edits.n_views.Value));
+            w=uifigure('Name','Object orientations: ZYZ degrees','Position',[200 200 450 450]); listWindows(end+1)=w;
+            grid=uigridlayout(w,[2 2]); grid.RowHeight={'1x',30};
+            table=uitable(grid,'Data',data,'ColumnName',{'z1','y','z2'},'ColumnEditable',true(1,3)); table.Layout.Column=[1 2];
+            uibutton(grid,'Text','Apply','ButtonPushedFcn',@applyAngles);
+            uibutton(grid,'Text','Cancel','ButtonPushedFcn',@(~,~) delete(w));
+        catch ex, uialert(f,ex.message,'Invalid angle list'); end
+        function applyAngles(~,~)
+            if inspection || ~rotateObject.Value, delete(w); return; end
+            try
+                objectRotationMatrices(struct('object_angles_deg',table.Data),numbers(edits.n_views.Value));
+                objectList.Value=jsonencode(table.Data); delete(w);
+            catch ex, uialert(w,ex.message,'Invalid angle list'); end
+        end
     end
     function listEditor(name)
         try
@@ -380,7 +463,12 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         end
         if isfield(d,'settings')
             stopPlayer(); settings=d.settings; inspection=false; geo=d.geo; builderGeo=geo;
-            populateVolume(geo); populate(); previewBuilder();
+            inverseRigMode=isfield(settings,'hardware_angles_deg') && ~isempty(settings.hardware_angles_deg);
+            populateVolume(geo);
+            if inverseRigMode && ~rotateObject.Value
+                objectMode.Value='ZYZ angle list'; objectList.Value=jsonencode(-settings.hardware_angles_deg(:,[3 2 1]));
+            end
+            populate(); previewBuilder();
         else, inspect(d.surface,d.geo); end
     end
     function populateVolume(g)
@@ -390,10 +478,17 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         if timed.Value
             for field=timingNames, timingEdits.(field{1}).Value=num2str(settings.acquisition.(field{1}),12); end
         end
-        endpoints.Value=false;
+        endpoints.Value=false; rotateObject.Value=false;
         if isempty(g), return; end
+        if isfield(g,'object_angles_deg')
+            rotateObject.Value=true; objectMode.Value='ZYZ angle list'; objectList.Value=jsonencode(g.object_angles_deg);
+        end
         for field=volumeNames
-            if isfield(g,field{1}), volumeEdits.(field{1}).Value=vectorText(g.(field{1})(:,1)); end
+            if isfield(g,field{1})
+                value=g.(field{1});
+                if strcmp(field{1},'offOrigin'), value=value(:,1); else, value=value(:); end
+                volumeEdits.(field{1}).Value=vectorText(value);
+            end
         end
         setStart(volumeEdits.offOrigin.Value); endPosition.Value=vectorText(g.offOrigin(:,end));
         syncVoxels('sVoxel');
@@ -403,11 +498,13 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     function value=vectorText(values), value=regexprep(sprintf('%.12g, ',values),',\s*$',''); end
     function values=captureMotion()
         values=struct('timed',timed.Value,'endpoints',endpoints.Value,'start',startPosition.Value,'end',endPosition.Value);
+        values.inverseRigMode=inverseRigMode; values.rotateObject=rotateObject.Value; values.objectMode=objectMode.Value; values.objectStart=objectStart.Value; values.objectEnd=objectEnd.Value; values.objectList=objectList.Value;
         for field=volumeNames, values.(field{1})=volumeEdits.(field{1}).Value; end
         for field=timingNames, values.(field{1})=timingEdits.(field{1}).Value; end
     end
     function restoreMotion(values)
         timed.Value=values.timed; endpoints.Value=values.endpoints;
+        inverseRigMode=values.inverseRigMode; rotateObject.Value=values.rotateObject; objectMode.Value=values.objectMode; objectStart.Value=values.objectStart; objectEnd.Value=values.objectEnd; objectList.Value=values.objectList;
         for field=volumeNames, volumeEdits.(field{1}).Value=values.(field{1}); end
         for field=timingNames, timingEdits.(field{1}).Value=values.(field{1}); end
         setStart(values.start); endPosition.Value=values.end;

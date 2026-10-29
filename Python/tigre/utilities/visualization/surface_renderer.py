@@ -82,6 +82,8 @@ class SurfaceRenderer:
             raise ValueError("the detector surface has no valid pixels")
 
         origin, size = (np.zeros(3), np.zeros(3)) if geo is None else _volume_box(geo)
+        from ..object_motion import object_angles, rotation_zyz
+        angles = object_angles(geo, n_views)
         volume_mesh = None
         origins = np.zeros((1, 3)) if geo is None else np.atleast_2d(geo.offOrigin)[:, ::-1]
         if len(origins) not in (1, n_views):
@@ -90,6 +92,9 @@ class SurfaceRenderer:
             from .animate_geometry import calCube
             volume_mesh = art3d.Poly3DCollection(calCube(origin, size), color="c", alpha=0.2)
             ax.add_collection3d(volume_mesh)
+        orientation = None
+        if hasattr(geo, "object_angles_deg"):
+            orientation, = ax.plot([], [], [], color="teal", linewidth=3, label="Object +x")
         if world_axes:
             from .geometry_markers import draw_world_axes
             length = (max(float(np.min(size)) / 2, 1) if geo is not None
@@ -111,8 +116,11 @@ class SurfaceRenderer:
         # Scan frame-wise to avoid copying a large acquisition into float64.
         lo = np.minimum(src.min(axis=0), np.minimum(origin - size / 2, 0))
         hi = np.maximum(src.max(axis=0), np.maximum(origin + size / 2, 0))
-        lo = np.minimum(lo, origins.min(axis=0) - size / 2)
-        hi = np.maximum(hi, origins.max(axis=0) + size / 2)
+        extent = size / 2
+        if np.any(angles):
+            extent = np.full(3, np.linalg.norm(size) / 2)
+        lo = np.minimum(lo, origins.min(axis=0) - extent)
+        hi = np.maximum(hi, origins.max(axis=0) + extent)
         module_count = len(_detector_runs(surface))
         for frame in range(n_views):
             valid = pix[frame][mask[frame]]
@@ -133,7 +141,12 @@ class SurfaceRenderer:
 
         def update(frame):
             if volume_mesh is not None:
-                volume_mesh.set_verts(calCube(origins[0 if len(origins) == 1 else frame], size))
+                center = origins[0 if len(origins) == 1 else frame]
+                faces = np.asarray(calCube(np.zeros(3), size))
+                volume_mesh.set_verts(faces @ rotation_zyz(angles[frame]).T + center)
+                if orientation is not None:
+                    tip = center + rotation_zyz(angles[frame]) @ np.array([size[0] / 2, 0, 0])
+                    orientation.set_data_3d(*np.stack((center, tip)).T)
             source._offsets3d = tuple(src[frame, :, None])
             source_label.set_position_3d(src[frame])
             if panel_vertices is None:

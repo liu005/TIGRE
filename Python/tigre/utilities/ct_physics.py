@@ -31,6 +31,9 @@ def validate_transmission_geometry(surface, geometry):
     """
     if geometry is None:
         raise ValueError("Volume size and center are required to check physical CT geometry.")
+    if hasattr(geometry, "object_angles_deg"):
+        from .object_motion import fixed_object_geometry
+        surface, geometry = fixed_object_geometry(surface, geometry)
     from .visualization.surface_renderer import _volume_box
     _volume_box(geometry)
     source = np.asarray(surface.source_positions_mm)

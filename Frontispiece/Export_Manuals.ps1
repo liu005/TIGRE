@@ -9,7 +9,7 @@ foreach ($manual in @('TIGRE_CT_Simulation_Builder_Python', 'TIGRE_CT_Simulation
         '--metadata=title:TIGRE CT Simulation Builder',
         ('--metadata=subtitle:' + $edition),
         '--metadata=author:TIGRE package reference 3.0.0',
-        '--metadata=date:Manual version 1.1 - 28 October 2026',
+        '--metadata=date:Manual version 1.2 - 29 October 2026',
         ('--lua-filter=' + (Join-Path $PSScriptRoot 'pdf_support/manual-tables.lua')),
         ('--include-in-header=' + (Join-Path $PSScriptRoot 'pdf_support/manual-header.tex')),
         '-V', 'papersize=a4', '-V', 'classoption=titlepage', '-V', 'geometry:margin=20mm', '-V', 'fontsize=10pt',

@@ -31,6 +31,26 @@ assert(all(isfinite([centres(:);az(:)])),'TIGRE:surface:finite','Panel values mu
 rx=expand(s.panel_x_angles_deg,np); ry=expand(s.panel_y_angles_deg,np);
 width=np*nc+(np-1)*s.column_gap;
 assert(s.n_views*nr*width<=20000000,'TIGRE:surface:size','At most 20 million dense samples are allowed');
+fixed=isfield(s,'fixed_hardware') && s.fixed_hardware;
+hasRig=isfield(s,'hardware_angles_deg') && ~isempty(s.hardware_angles_deg);
+if fixed || hasRig
+    assert(~isfield(s,'acquisition') || isempty(s.acquisition),'TIGRE:motion:timing','Disable orbit timing for object rotation');
+    n=s.n_views; poses=[]; if hasRig, poses=s.hardware_angles_deg; s=rmfield(s,'hardware_angles_deg'); end
+    s.n_views=1; s.fixed_hardware=false; s.source_motion='Rotating source + detector';
+    surface=buildModularSurface(s);
+    surface.source_positions_mm=repmat(surface.source_positions_mm,1,n);
+    surface.pixel_centers_mm=repmat(surface.pixel_centers_mm,1,1,1,n);
+    surface.valid_mask=repmat(surface.valid_mask,1,1,n);
+    if ~fixed
+        rotations=objectRotationMatrices(struct('object_angles_deg',poses),n);
+        for k=1:n
+            r=rotations(:,:,k); surface.source_positions_mm(:,k)=r*surface.source_positions_mm(:,k);
+            pixels=reshape(double(surface.pixel_centers_mm(:,:,:,k)),[],3);
+            surface.pixel_centers_mm(:,:,:,k)=reshape(pixels*r',nr,width,3);
+        end
+    end
+    return;
+end
 validateattributes(s.cor_mm,{'numeric'},{'scalar','finite'});
 linear=strcmp(s.source_motion,'Fixed detector, moving source');
 arc=strcmp(s.source_motion,'Fixed detector, arc source');

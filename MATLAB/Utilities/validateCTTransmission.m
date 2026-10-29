@@ -2,6 +2,7 @@ function report=validateCTTransmission(surface,geo)
 %VALIDATECTTRANSMISSION Require some transmission over the entire scan.
 % Empty views/panels are allowed; source/detector pixels must remain outside.
 % This is a physical transmission check, not an FDK/completeness guarantee.
+if isfield(geo,'object_angles_deg'), [surface,geo]=fixedObjectGeometry(surface,geo); end
 src=double(surface.source_positions_mm); offsets=double(geo.offOrigin);
 half=double(geo.sVoxel(:))/2; n=size(src,2); tolerance=1e-9*max([half;1]);
 validateattributes(half,{'numeric'},{'numel',3,'positive','finite'});
