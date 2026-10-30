@@ -8,6 +8,11 @@ validateattributes(s.n_views, {'numeric'}, {'scalar','integer','positive','<=',6
 validateattributes(s.module_shape, {'numeric'}, {'numel',2,'integer','positive','<=',4096});
 validateattributes(s.column_gap, {'numeric'}, {'scalar','integer','nonnegative'});
 nr=s.module_shape(1); nc=s.module_shape(2);
+top=0; if isfield(s,'top_arm_rows'), top=s.top_arm_rows; end
+validateattributes(top,{'numeric'},{'scalar','integer','nonnegative','<',nr});
+clearance=0; if isfield(s,'arm_clearance_mm'), clearance=s.arm_clearance_mm; end
+validateattributes(clearance,{'numeric'},{'scalar','finite','nonnegative'});
+assert(clearance==0 || top>0,'TIGRE:surface:arm','Arm clearance requires top arm rows');
 pitch=s.pixel_spacing_mm(:); if isscalar(pitch), pitch=[pitch;pitch]; end
 validateattributes(pitch,{'numeric'},{'numel',2,'positive','finite'});
 validateattributes(s.detector_radius_mm,{'numeric'},{'scalar','positive','finite'});
@@ -86,11 +91,18 @@ else
     if arc, orientation(:)=s.orbit_start_deg+s.scan_span_deg/2; end
 end
 if linear && isfield(s,'acquisition') && isstruct(s.acquisition) && ~isempty(s.acquisition)
-    error('TIGRE:timing:motion','Timing requires rotating source + detector');
+    assert(isequal(start,stop),'TIGRE:timing:motion','Fixed-detector timing requires identical source endpoints');
+    ctAcquisitionTiming(s.n_views,s.acquisition);
 end
 assert((~linear && ~arc) || s.cor_mm==0,'TIGRE:surface:COR','Stationary detectors require COR = 0');
 [u,v]=meshgrid(((0:nc-1)-(nc-1)/2)*pitch(2),((0:nr-1)-(nr-1)/2)*pitch(1));
 local=[zeros(1,nr*nc);u(:)';v(:)'];
+if top>0
+    lower=nr-top; horizontal=false(nr,nc); horizontal(lower+1:end,:)=true;
+    distance=repmat(((0:top-1)'+.5)*pitch(1),1,nc);
+    local(1,horizontal(:))=distance(:)';
+    local(3,horizontal(:))=(lower-nr/2)*pitch(1);
+end
 pixels=zeros(nr,width,3,s.n_views,'single'); mask=false(nr,width,s.n_views);
 modules=zeros(np,4);
 for panel=1:np
@@ -101,6 +113,11 @@ for panel=1:np
         R=rotationZ(a+az(panel))*rotationY(ry(panel))*rotationX(rx(panel));
         center=Rz*([-s.detector_radius_mm;0;0]+centres(:,panel));
         point=R*local+center;
+        if clearance>0
+            hinge=center+R*[0;0;(nr-top-nr/2)*pitch(1)]; ray=hinge-source(:,k);
+            height=dot(ray,R(:,3)); assert(height>0,'TIGRE:surface:arm','Source must be below joint');
+            point(:,horizontal(:))=point(:,horizontal(:))+ray*(clearance/height);
+        end
         pixels(:,col,:,k)=reshape(single(point'),nr,nc,3);
         mask(:,col,k)=true;
     end
@@ -114,6 +131,14 @@ if ~linear && ~arc
 end
 surface=struct('source_positions_mm',single(source),'pixel_centers_mm',pixels, ...
     'valid_mask',mask,'module_slices',modules);
+if top>0
+    facets=zeros(2*np,4);
+    for panel=1:np
+        facets(2*panel-1,:)=[0 nr-top modules(panel,3:4)];
+        facets(2*panel,:)=[nr-top nr modules(panel,3:4)];
+    end
+    surface.module_slices=facets;
+end
 end
 function a=expand(a,n)
 a=a(:)'; if isscalar(a), a=repmat(a,1,n); end

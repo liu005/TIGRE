@@ -17,7 +17,10 @@ def reconstruction_script_text(geometry_path, script_path):
         reference = os.path.relpath(geometry_path, script_path.parent)
     except ValueError:  # Different Windows drives.
         reference = str(geometry_path)
-    return _SCRIPT.replace("__SAVED_GEOMETRY__", repr(reference))
+    from .geometry_io import load_geometry_file
+    document = load_geometry_file(geometry_path)
+    template = _DR_SCRIPT if getattr(document.geometry, "simulation_mode", "ct") == "dr" else _SCRIPT
+    return template.replace("__SAVED_GEOMETRY__", repr(reference))
 
 
 _SCRIPT = '''"""Reconstruct using geometry saved by the TIGRE GUI.
@@ -68,6 +71,8 @@ def prepare_geometry(path, voxels=None):
         print("Converted moving/rotating volume to a fixed object frame for reconstruction.")
     size = np.asarray(saved.sVoxel, dtype=float)
     geo = SimpleNamespace(nVoxel=counts, sVoxel=size, dVoxel=size / counts, offOrigin=center)
+    if hasattr(saved, "view_times_s"):
+        geo.view_times_s = np.asarray(saved.view_times_s)
     return geo, surface
 
 
@@ -128,6 +133,67 @@ def main(argv=None):
     np.savez_compressed(args.output, **results)
     print(f"Saved reconstruction: {args.output.resolve()}")
 
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+_DR_SCRIPT = '''"""Cargo DR forward simulation only; no 3D reconstruction.
+
+Run with --volume attenuation.npy (z,y,x array, linear attenuation in 1/mm),
+or use the default uniform object with --uniform-mu 0.001.
+Default simulation grid is reduced to 64x128x64; physical size is unchanged.
+Saved projections are attenuation line integrals; transmission is exp(-p).
+This monoenergetic model excludes scatter, detector response and noise.
+"""
+import argparse
+from pathlib import Path
+from types import SimpleNamespace
+import numpy as np
+import tigre
+from tigre.utilities.geometry_io import load_geometry_file
+DEFAULT_GEOMETRY = Path(__file__).resolve().parent / __SAVED_GEOMETRY__
+
+''' + _SCRIPT[_SCRIPT.index("def prepare_geometry("):_SCRIPT.index("def load_projections(")].replace(
+    "for reconstruction.", "for DR simulation.") + '''
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--geometry", type=Path, default=DEFAULT_GEOMETRY)
+    parser.add_argument("--volume", type=Path, help="3D NPY attenuation array in z,y,x; units 1/mm")
+    parser.add_argument("--uniform-mu", type=float, default=0.001)
+    parser.add_argument("--voxels", type=int, nargs=3, default=[64, 128, 64], metavar=("Z", "Y", "X"))
+    parser.add_argument("--output", type=Path, default=Path(__file__).resolve().with_suffix(".dr.npz"))
+    args = parser.parse_args(argv)
+    if args.volume:
+        attenuation = np.asarray(np.load(args.volume, allow_pickle=False), dtype=np.float32)
+        if attenuation.ndim != 3:
+            parser.error("--volume must be a 3D z,y,x array")
+        counts = attenuation.shape
+    else:
+        if not np.isfinite(args.uniform_mu) or args.uniform_mu < 0:
+            parser.error("--uniform-mu must be finite and nonnegative")
+        if min(args.voxels) < 1:
+            parser.error("--voxels must be positive")
+        counts = args.voxels
+        attenuation = np.full(counts, args.uniform_mu, dtype=np.float32)
+    if not np.isfinite(attenuation).all() or np.any(attenuation < 0):
+        parser.error("Attenuation must be finite and nonnegative (1/mm)")
+    geo, surface = prepare_geometry(args.geometry, counts)
+    from tigre.utilities.ct_physics import validate_transmission_geometry
+    validate_transmission_geometry(surface, geo)
+    projections = tigre.Ax_surface(np.ascontiguousarray(attenuation), geo, surface)
+    transmission = np.exp(-projections)
+    modules = getattr(surface, "_module_slices", None) or [(slice(0, projections.shape[1]), slice(0, projections.shape[2]))]
+    dr_image = np.concatenate([projections[:, rows, (cols.start+cols.stop-1)//2].T
+                               for rows, cols in modules], axis=0)
+    module_slices = np.array([[r.start, r.stop, c.start, c.stop] for r, c in modules])
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(args.output, projections=projections, transmission=transmission,
+                        dr_image=dr_image, module_slices=module_slices, valid_mask=surface.valid_mask,
+                        view_times_s=getattr(geo, "view_times_s", np.array([])),
+                        geometry_file=str(args.geometry.resolve()), nVoxel=geo.nVoxel, sVoxel=geo.sVoxel)
+    print(f"Saved DR projections: {args.output.resolve()} (no reconstruction)")
 
 if __name__ == "__main__":
     main()

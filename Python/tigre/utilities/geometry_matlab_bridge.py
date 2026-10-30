@@ -33,7 +33,7 @@ def to_mat(source, target):
         if hasattr(document.geometry, 'object_angles_deg'):
             from tigre.utilities.object_motion import object_angles
             result['geo']['object_angles_deg'] = object_angles(document.geometry, len(surface.source_positions_mm)).copy()
-        for name in ('acquisition', 'motion_mode', 'view_times_s'):
+        for name in ('acquisition', 'motion_mode', 'view_times_s', 'simulation_mode'):
             if hasattr(document.geometry, name):
                 result['geo'][name] = getattr(document.geometry, name)
     savemat(target, result)
@@ -53,7 +53,7 @@ def from_mat(source, target):
             volume.nVoxel = np.asarray(geo['nVoxel'])[::-1]
         if 'object_angles_deg' in geo:
             volume.object_angles_deg = np.asarray(geo['object_angles_deg'], dtype=float).reshape(-1, 3)
-        for name in ('acquisition', 'motion_mode', 'view_times_s'):
+        for name in ('acquisition', 'motion_mode', 'view_times_s', 'simulation_mode'):
             if name in geo:
                 setattr(volume, name, geo[name])
     if isinstance(document.get('settings'), dict):
@@ -76,6 +76,11 @@ def from_mat(source, target):
         if not np.equal(shape, np.floor(shape)).all():
             raise ValueError('module_shape must contain integers')
         settings['module_shape'] = shape.astype(int)
+        if 'top_arm_rows' in settings:
+            value = float(settings['top_arm_rows'])
+            if not value.is_integer():
+                raise ValueError('top_arm_rows must be an integer')
+            settings['top_arm_rows'] = int(value)
         if np.asarray(settings.get('source_start_mm', [])).size == 0:
             settings['source_start_mm'] = None
         save_geometry_yaml(target, settings=settings, geometry=volume)

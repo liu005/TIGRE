@@ -8,6 +8,15 @@ build, run `UseBlackwellBuild` first; see the
 
 ## Geometry builder and file round trips
 
+The [catalogue of all 13 GUI presets](../../Frontispiece/TIGRE_CT_Simulation_Builder_MATLAB.md#catalogue-of-gui-presets)
+explains each setup, its applications and CT/DR export limitations. Names and
+menu order match the Python GUI.
+
+The GUI includes **Sea cargo: 20-foot container (2D Digital Radiography)**:
+a fixed source, L-shaped detector and translating container. It exports
+forward-only DR simulation, not 3D reconstruction. See the
+[MATLAB DR export guide](../../Frontispiece/TIGRE_CT_Simulation_Builder_MATLAB.md#dr-simulation-export).
+
 Run `d27_DetectorGeometryGUI` to configure three panels, preview their tilt and
 COR, save an editable settings MAT file and an exact surface MAT file, and load
 both in the same GUI. It leaves the GUI in inspection mode and prints a new

@@ -1,7 +1,7 @@
 **TIGRE CT Simulation Builder — MATLAB user manual**
 
-**Manual version: 1.2**
-**Updated: 29 October 2026**
+**Manual version: 1.6**
+**Updated: 30 October 2026**
 **Software reference: TIGRE Python package 3.0.0; CT Simulation Builder checkout.**
 
 The manual version identifies this document, not a separate application release.
@@ -36,7 +36,7 @@ rows/columns/views projections, unlike Python's zyx and views/rows/columns.
 4. Read the persistent check results. If validation fails, the old scene stays active.
 5. Use **Play** or the slider to inspect motion.
 6. Save an editable YAML/MAT recipe or an exact surface archive.
-7. After a successful YAML save, export and run a sample reconstruction script.
+7. After a successful YAML save, export a CT reconstruction or DR-only simulation script as appropriate.
 
 Play is initially disabled until an explicit Confirm succeeds. The initial
 automatic preview does not enable it. Exact loaded surfaces remain inspectable.
@@ -179,6 +179,8 @@ values are shared. The controls remain synchronized.
 | Panel roll x / pitch y / yaw z | Degrees around panel axes; x/y allow a shared value, z requires one value per piecewise panel. |
 | Global COR | One scan-wide shift of source and all panels; stationary-detector modes require zero. |
 | Gap columns | Invalid dense-array columns, masked rather than measured. |
+| Top arm rows | Upper rows forming a 90-degree arm; 0 means straight; not used for the modular cargo preset. |
+| Arm clearance (mm) | Raise the arm and calculate its backward offset to align projected joint edges; used for continuous folded panels. |
 
 **List...** opens a per-panel table. Apply updates its field; Confirm rebuilds
 the scene. The transverse list sets the piecewise panel count. Keep lists in
@@ -262,7 +264,7 @@ for endpoint translation; entering two values alone does not enable motion.
 | Start (x,y,z mm) | Initial volume center, shared with Volume Start / center. |
 | End (x,y,z mm) | Final center in endpoint mode; calculated/read-only in timed speed mode. |
 | Move between start and end | Interpolate all three coordinates across views; distinct endpoints need at least two views. |
-| Use acquisition timing | Use one frame per source pulse. Requires rotating source and detector. |
+| Use acquisition timing | One frame per pulse; rotating hardware for CT, fixed hardware and endpoints for DR. |
 | Readout period (ms) | Minimum frame interval; firing rate must not exceed `1000 / readout_period_ms`. |
 | Firing rate (Hz) | Pulses and acquired views per second. Pulses are not discarded or combined. |
 | Rotation period (s/turn) | Seconds per full turn; determines turns over the acquisition. |
@@ -287,13 +289,41 @@ For a timing example, 1,000 views, 10 ms readout, 100 Hz firing, 1 s/turn,
 and 20 mm/s describe a 10-second window and 10 turns. The last sample is at
 9.99 s, after 9.99 turns and 199.8 mm travel. Timed mode replaces manual
 scan span and permits multiple turns. Fixed-arc and linear sources use
-manual sampling; timed acquisition currently requires rotating hardware.
+manual sampling when the source moves. Fixed-hardware DR supports endpoint
+acquisition timing as described below.
 
 For a simple endpoint spiral, use a circular source, 600 views, Start
 `0, 0, -200`, End `0, 0, 200`, and **enable endpoint movement**, then Confirm.
 Timing is optional for that example. Empty entry/exit views are allowed as
 long as at least one measured ray crosses the volume somewhere in the scan.
 
+## Fixed-hardware DR acquisition timing
+
+Keep conveyor movement on its physical axis; the cargo preset uses world y.
+In Movement select **Use timing for DR conveyor motion**. The GUI enables
+endpoint motion automatically and keeps it enabled while DR timing is active.
+Set Start and End in z/y/x order for Python or x/y/z for MATLAB. Motion may
+follow any straight 3D endpoint displacement; it is not restricted to z.
+
+Readout period limits the source firing rate: `rate * readout_ms <= 1000`.
+One view is acquired per pulse at `t_i=i/rate`. For N views the last view is
+at `(N-1)/rate`, and the acquisition window is `N/rate`. The endpoint velocity
+vector is `(end-start)/last_view_time`. The GUI reports its components, total
+speed and per-view displacement. Source and detector remain stationary.
+
+For the cargo defaults, 1253 views from y=-3130 to +3130 mm at 100 Hz and a
+10 ms readout period give **5 mm per view**, **500 mm/s along y**, **12.52 s**
+between first and last views and a **12.53 s** acquisition window. A slower
+firing rate changes the physical conveyor speed for the same views/endpoints;
+it does not change the 5 mm sampling step. Readout must accommodate the rate.
+
+Rotation period and Volume z speed are inactive in DR timing: no orbit is
+created and conveyor speed is derived from the complete endpoint vector.
+Source start/end must be identical and the detector fixed; moving-source DR
+timing is rejected. Arbitrary object/rig rotation timing remains unsupported.
+Press Confirm after edits, then Play; playback follows the saved frame times.
+Save YAML again before exporting DR simulation. YAML/MAT/NPZ retain timing;
+DR simulation outputs include `view_times_s` when timing is enabled.
 # Confirm, check results and animate
 
 After editing any tab, select **Confirm**. It builds a candidate from all
@@ -355,7 +385,16 @@ displayed rays. All volume offsets, voxel counts, acquisition timing and motion
 mode survive MAT/YAML interchange. Nonlinear volume paths remain read-only.
 The bridge reverses xyz/zyx and transposes every view explicitly.
 
-# Export a reconstruction example
+# Export CT reconstruction or DR simulation
+
+The export type follows the **last successfully saved YAML**. CT scans use
+**Export recon script...**. The sea-cargo DR preset uses **Export DR simulation
+script...**, with forward projection only and no 3D reconstruction. Save again
+after edits before exporting. Export writes a script; it does not run CUDA.
+The saved `volume.simulation_mode` is `dr` for the cargo preset and `ct` for
+ordinary CT setups, and is retained by YAML/MAT/NPZ interchange.
+
+## CT reconstruction export
 
 **Export recon script...** is disabled until **Save YAML...** succeeds.
 Cancelled/failed saves and native MAT saves do not unlock it. Export references
@@ -381,7 +420,213 @@ Results contain available FDK/CGLS volumes, geometry, residuals, and the
 phantom when simulated. Keep YAML and exact-surface NPZ companions together.
 Python is used for interchange only; reconstruction runs native MATLAB CUDA.
 
+## DR simulation export
+
+Load **Sea cargo: 20-foot container (2D Digital Radiography)**, adjust the
+arms/conveyor endpoints, **Confirm**, then **Save YAML...**. Select **Export DR
+simulation script...** and save `cargo_dr.m`. Edit the variables at its top:
+
+| Variable | DR simulation input |
+|---|---|
+| geometryPath | Saved YAML; update the path if files move. |
+| attenuationPath | Optional MAT file containing finite, nonnegative xyz `attenuation` in 1/mm. |
+| uniformMu | Uniform attenuation when no input file is supplied; default 0.001/mm. |
+| voxelCounts | Uniform-object xyz counts; default 64x128x64, retaining saved physical size. |
+| outputPath | Result MAT file; default `dr_results.mat`. |
+
+Run the exported script with native TIGRE surface CUDA MEX files available.
+An input attenuation array determines voxel counts. The smaller default grid
+avoids allocating the full 306-million-voxel cargo volume.
+
+Output `projections` contains attenuation line integrals in rows/columns/views;
+`transmission` is `exp(-projections)`, the normalized primary-beam intensity.
+`dr_image` concatenates one central-column row strip from every module in
+module order; `module_slices` records the boundaries and `valid_mask` identifies
+measured samples. This is a sampled DR view, not a uniformly
+resampled conveyor mosaic or a reconstructed 3D volume. The arms have different
+ray directions/magnification, and 1253 views over 6.26 m provide 5 mm conveyor steps. Detector-direction
+resolution still depends on magnification. Calibration, resampling, scatter, spectra and noise require
+separate treatment. The exported DR script contains no FDK or CGLS calls.
+
 # Examples and presets
+
+## Catalogue of GUI presets
+
+The Example menu contains the following 13 presets, in this order, in both
+Python and MATLAB. Choose a name and select **Load example** to replace the
+current controls and build its preview. Press **Confirm** before playback.
+Presets are editable starting points, not calibrated or validated commercial
+scanner models. Export uses the last saved YAML, so save after making changes.
+
+### Circular CT: curved modular detector
+
+**What it is:** A full circular source-detector orbit with eight flat modules
+arranged along a cylindrical arc. Physical separation and masked array gaps
+illustrate a modular curved detector rather than one continuous flat panel.
+
+**Used for:** Learning circular CT geometry, inspecting module boundaries and
+ray coverage, and exploring how curved detector layouts differ from flat ones.
+
+**Reconstruction:** CT export supports surface iterative reconstruction. FDK
+requires the separate geometry and scan-coverage checks; gaps do not become
+measured data merely because the preview looks continuous.
+
+### Short scan: curved detector
+
+**What it is:** A 240-degree orbit with a narrower 40-degree detector arc.
+The source and curved modular detector rotate together.
+
+**Used for:** Exploring short-scan geometry and comparing reduced angular
+coverage with the full circular preset. The required scan range depends on
+fan angle; a partial orbit is not automatically a sufficient short scan.
+
+**Reconstruction:** Use CT export and review the FDK compatibility/coverage
+assessment. Iterative methods can use the original surface, but cannot create
+information absent from incomplete sampling.
+
+### TIGRE: circular cone-beam CT
+
+**What it is:** The standard low-resolution TIGRE cone-beam arrangement: one
+128x128 flat panel, 3.2 mm detector pitch, DSO 1000 mm, DSD 1536 mm, and 50
+views around a full circle.
+
+**Used for:** A simple baseline for learning source/detector/volume settings,
+comparing standard and explicit-surface geometry, and testing save/export.
+
+**Reconstruction:** The natural starting point for FDK and CGLS examples.
+The small number of default views is for demonstration; it does not establish
+adequate sampling or application-quality reconstructed images.
+
+### Three tilted panels
+
+**What it is:** Three 256x256-pixel panels with transverse offsets, independent
+panel angles and a small normal displacement. The rig follows a circular scan.
+
+**Used for:** Inspecting faceted detector assembly, physical gaps, panel joins
+and the effects of module position/orientation on measured rays.
+
+**Reconstruction:** Surface iterative reconstruction is the general option.
+Read the FDK compatibility report before applying a circular FDK method or
+attempting supported data remapping; panel tilt is already in the coordinates.
+
+### Staggered panels
+
+**What it is:** Three panels whose centres are offset in z as well as across
+the detector, producing a staggered, non-extruded detector surface.
+
+**Used for:** Studying detector assemblies with modules at different heights
+and seeing why a single regular detector grid may not describe their geometry.
+
+**Reconstruction:** Prefer surface iterative reconstruction. Vertical staggering
+is not automatically compatible with the circular surface FDK assumptions;
+check compatibility and do not infer complete coverage from the panel count.
+
+### Tomosynthesis: arc source, fixed panel
+
+**What it is:** A source tracing a 60-degree circular arc from -30 to +30
+degrees across 61 views, while one flat panel remains stationary.
+
+**Used for:** Limited-angle depth imaging and tomosynthesis geometry studies.
+It also approximates sequential source positions on an arc with fixed detectors.
+
+**Reconstruction:** Use iterative methods such as CGLS for depth-section studies.
+Limited-angle sampling causes direction-dependent resolution and out-of-plane
+artifacts; this is not the rotating source-detector geometry required by FDK.
+
+### Tomosynthesis: linear source, fixed panel
+
+**What it is:** A source moving from world y=-500 to +500 mm in 41 views at
+fixed x and z, in front of a stationary 512-column flat panel.
+
+**Used for:** Linear tomosynthesis and experiments with linearly distributed
+source spots. Source-coordinate changes may represent electronic source
+switching rather than literal mechanical travel.
+
+**Reconstruction:** Use surface iterative reconstruction. The linear trajectory
+and limited angular range do not form a conventional circular FDK scan.
+
+### Tomosynthesis: three fixed panels, linear source
+
+**What it is:** Three fixed, tilted panels with different transverse/normal
+positions. The source travels on a straight 3D line, including a height change.
+
+**Used for:** Exploring multi-panel limited-angle systems, noncoplanar source
+motion, and the combined effects of detector joins and source position.
+
+**Reconstruction:** Use surface iterative reconstruction and assess limited-angle
+artifacts. This is a geometry experiment, not a calibrated clinical protocol
+or a complete circular CT acquisition.
+
+### 3D detector tilt: x, y, z
+
+**What it is:** A circular scan with one panel tilted about all three local
+axes: x=20, y=15 and z=10 degrees. The tilts remain constant during the scan.
+
+**Used for:** Understanding roll/pitch/yaw, checking local versus world frames,
+and studying geometric misalignment or deliberately tilted detector designs.
+
+**Reconstruction:** Use surface iterative reconstruction. Do not apply the tilt
+a second time to exported coordinates; standard FDK assumptions may not hold.
+
+### TIGRE: global COR offset
+
+**What it is:** The circular cone-beam setup with an exaggerated +150 mm
+global centre-of-rotation correction, shifting source and detector together.
+The orange COR marker shows the actual per-view displacement.
+
+**Used for:** Understanding TIGRE's COR convention, its sign and units, and
+how a global rig correction differs from individual panel misalignment.
+
+**Reconstruction:** CT export retains the corrected coordinates. Review the
+compatibility and coverage results; the large offset is chosen for visibility,
+not as a recommended calibration value or a clinical scan configuration.
+
+### TIGRE d18: arbitrary object rotation (ZYZ)
+
+**What it is:** One hundred ZYZ object poses adapted from demo d18. By default
+the object rotates with fixed hardware. Turning object rotation off applies
+the inverse orientations to the source-detector rig instead. The GUI uses a
+128x128 detector while preserving the demo's physical panel size.
+
+**Used for:** Arbitrary-axis industrial CT studies, understanding object-frame
+versus rig-frame descriptions, and checking Euler-angle order and inversion.
+
+**Reconstruction:** Use CGLS through fixed-object frame conversion. Its general
+3D trajectory is outside FDK's supported circular geometry. The checkbox switch
+preserves the centred preset's relative geometry; save after switching modes.
+
+### Sea cargo: 20-foot container (2D Digital Radiography)
+
+**What it is:** A fixed source at DSO 4230 mm, a translating 20-foot container,
+and a source-facing L-shaped detector: 18 vertical-arm and 10 horizontal-arm
+modules, each 36x4 pixels at 5x5 mm pitch. The horizontal support has a 300 mm
+lift relative to its unlifted layout. Projected seams are aligned, with a
+half-module lower air margin and one full upper air module.
+
+**Used for:** Simulating conveyor cargo DR, testing piecewise-linear detector
+modules, projected coverage and air margins, and generating attenuation and
+normalized transmission images from a known 3D attenuation volume.
+
+**Export:** DR forward simulation only, with no FDK/CGLS or 3D reconstruction.
+The 1253-view conveyor movement supplies the length scan at 5 mm steps. The sampled DR image
+contains all modules, but is not a calibrated uniformly resampled mosaic.
+Detailed geometry, data dimensions and export instructions follow below.
+
+### GCT: 53-panel circular scan
+
+**What it is:** An idealized large circular acquisition with 53 one-row,
+64-column panels and 5701 views over 228 degrees. It uses a long-distance,
+large-radius scanner geometry and remains the final menu entry.
+
+**Used for:** Inspecting a many-module fan detector and reproducing the nominal
+GCT acquisition layout before applying measured-data-specific corrections.
+Reduce Views for initial interactive inspection because the dense geometry
+alone occupies about 240 MiB.
+
+**Reconstruction:** Use appropriate slice/fan-beam or surface methods after
+checking geometry and data. A one-row detector does not provide a complete
+3D cone-beam volume acquisition. This preset is idealized: detector corrections,
+measurement calibration and sufficient sampling must be assessed separately.
 
 Run `d27_DetectorGeometryGUI` for the guided three-panel build/save/load
 workflow. It writes fresh temporary native MAT recipes and exact archives,
@@ -398,6 +643,92 @@ memory-constrained use; loading an example builds it immediately.
 animate geometry and run native CUDA surface reconstruction. They require the
 surface MEX build. For language differences, see the
 [demo comparison](./Demo_language_comparison.md).
+
+## Sea-cargo digital radiography example
+
+Choose **Sea cargo: 20-foot container (2D Digital Radiography)**, select
+**Load example**, **Confirm** and **Play**. This refines plot 5 of the legacy
+TIGRE_MOD `Python/tests/test_animate_geometry.py` into a source-facing modular
+L-shaped detector. The external checkout is not needed to run the preset.
+
+| Setting | Value |
+|---|---|
+| Vertical arm | 18 modules, with centres on a vertical support line. |
+| Horizontal arm | 10 modules; centre support raised 300 mm, now at world z about 2169.48 mm. |
+| Each module | 36 rows x 4 columns; 5 x 5 mm pitch; 180 x 20 mm physical size. |
+| Module orientation | Its centre normal points directly toward the fixed source. |
+| Arm joint | About 319.95 mm vertical edge separation after the support lift; source-ray alignment retained. |
+| Source distance | DSO 4230 mm, reduced 10% from 4700 mm; source fixed while the detector arms are fitted for coverage. |
+| Container motion | 1253 views; world y from -3130 to +3130 mm; x=0, z=100 mm. |
+| Conveyor sampling | 6260 mm travel / 1252 intervals = 5 mm; 100 mm air at each end of the 6060 mm cargo. |
+| Physical container | 2590 mm high, 6060 mm long, 2440 mm wide. |
+| Purpose | 2D DR forward simulation only; no 3D reconstruction coverage. |
+
+Tilting modules to face the source changes their projected coverage. The preset
+therefore uses 18+10 complete modules rather than dividing the previous arm
+lengths by 180 mm. Module positions are solved so each upper edge and the next
+lower edge lie on the same ray plane through the source. Full modules slightly
+extend the former arm envelope. At the arm joint, the horizontal module's near
+edge is now about 319.95 mm above and farther back than the vertical arm's
+upper edge. The horizontal module-centre support has moved exactly 300 mm up;
+its backward position and module tilts are refitted to retain the joint ray.
+The added vertical top module is retained; source position, container
+trajectory and lower/upper air margins are unchanged.
+Neighbouring edges have no projected seam gap or overlap in the scanning
+direction over their common transverse coverage. Physical gaps may remain,
+and finite outer side edges can have different projected widths.
+
+The detector is fitted to the full container x-z silhouette at DSO 4230 mm.
+The vertical arm is lowered so that the centre ray of its lowest module grazes
+the limiting lower corner: its first 18 pixel rows (half a module, 90 mm of
+detector length) are air-only. The vertical arm now includes one additional module at its top, giving 18
+modules while leaving the lowest module and its half-module air margin fixed.
+The horizontal arm is refitted to the new upper joint, retaining its 300 mm
+lift relative to the unlifted layout.
+The horizontal arm extends to cover the upper corner, followed by one complete
+air-only module, giving 10 modules on that arm. Tests cover the full fan-angle
+interval and all seams; CUDA forward simulation confirms both air margins over
+all 1253 views. Conveyor movement supplies the length scan. This fan-coverage
+check is not a claim of complete instantaneous 3D coverage by the narrow strip.
+In Detectors, the piecewise-linear lists contain all 28 module centres and
+pitch angles. Module rows/columns are **36/4**, pixel pitches are **5/5 mm**,
+and **Gap columns** is 0. The saved array packs modules along the column
+axis: Python projections are **1253x36x112**, MATLAB projections **36x112x1253**.
+The 28 module boundaries are retained in `module_slices`.
+
+**Top arm rows** and **Arm clearance (mm)** are 0 for this modular preset;
+those fields fold a single continuous panel. The modular joint clearance is
+encoded by the panel centres and orientations instead. The layout generators
+`cargo_module_layout()` (Python) and `cargoModuleLayout()` (MATLAB) default to
+a 20 mm base joint clearance and a 300 mm horizontal-support lift. The final
+physical edge separation is about 319.95 mm because the source-facing tilt is
+also refitted. Position and angle lists are calculated together when
+the preset loads. Manual list edits do not automatically re-aim modules or
+restore projected seam alignment; Confirm's physical checks do not certify it.
+
+The source is at `[4230*cos(13 deg), 0, -4230*sin(13 deg)]` in world xyz.
+DSO is reduced from 4700 to 4230 mm (10%). The source stays fixed while
+the vertical arm is lowered and the horizontal arm is extended for coverage.
+The final module coordinates define their individual source-to-detector
+distances; these change when the arm positions are refitted.
+Equal source start/end
+coordinates keep it stationary. Endpoint container motion is enabled; timing is initially off and can be
+enabled with **Use timing for DR conveyor motion**. Object rotation stays off. The saved voxel grid remains 518/1212/488 in
+Python z/y/x, or 488/1212/518 in MATLAB xyz, at 5 mm voxel size.
+
+After saving YAML, **Export DR simulation script...** exports forward
+projection only. It contains no FDK/CGLS calls. The full cargo grid has about
+306 million voxels; the exported uniform-object example defaults to a smaller
+64x128x64 grid while preserving physical size. See [DR simulation export](#dr-simulation-export)
+for attenuation inputs and commands.
+
+The DR image samples one central column per module and concatenates all 36-row
+module strips in detector order: **1008x1253** for this preset. It contains both
+arms. `module_slices` is saved with the per-view projections and transmission.
+The first 18 output rows are the lower air margin; the last 36 rows are the
+upper air module. This is a sampled detector-coordinate DR image, not a uniformly resampled
+conveyor mosaic. Magnification, nonuniform angular/pixel spacing, conveyor
+sampling, calibration, scatter, spectra and noise need separate treatment.
 
 # Animation and programmatic construction
 
@@ -566,6 +897,8 @@ dimensions and volume-axis conversions. Native CUDA checks are available in `tes
 
 Additional builder checks:
 
+* `test_seaCargoPreset`: modular DR coverage, air margins, conveyor timing and DR-only export.
+* `test_objectRotation`: arbitrary ZYZ poses, d18 switching and saved geometry.
 * `test_ctTransmission`: partially empty scans and hardware positions.
 * `test_ctSimulationBuilder`: linked voxel fields, timing, endpoints and YAML/export.
 * `test_ctReconstructionExport`: native CUDA exported scripts.

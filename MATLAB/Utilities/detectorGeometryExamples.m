@@ -271,4 +271,18 @@ base.n_views=100; base.fixed_hardware=true;
 entry=struct('name','TIGRE d18: arbitrary object rotation (ZYZ)','settings',base);
 examples=[examples(1:end-1) entry examples(end)];
 
+base=examples(strcmp({examples.name},'TIGRE: circular cone-beam CT')).settings;
+base.source_motion='Fixed detector, moving source'; base.n_views=1253;
+base.module_shape=[36 4]; base.pixel_spacing_mm=[5 5]; base.column_gap=0;
+base.top_arm_rows=0; base.arm_clearance_mm=0;
+base.source_start_mm=[4230*cosd(13) 0 -4230*sind(13)]; base.source_end_mm=base.source_start_mm;
+[centres,angles]=cargoModuleLayout();
+base.detector_radius_mm=-centres(1,1);
+base.normal_offsets_mm=centres(:,1)'+base.detector_radius_mm;
+base.transverse_centers_mm=zeros(1,size(centres,1)); base.z_offsets_mm=centres(:,3)';
+base.panel_x_angles_deg=0; base.panel_y_angles_deg=angles';
+base.panel_angles_deg=zeros(1,size(centres,1)); base.cor_mm=0;
+entry=struct('name','Sea cargo: 20-foot container (2D Digital Radiography)','settings',base);
+examples=[examples(1:end-1) entry examples(end)];
+
 end

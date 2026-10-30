@@ -4,6 +4,7 @@ examples=detectorGeometryExamples();
 assert(strcmp(examples(end).name,'GCT: 53-panel circular scan'));
 for i=1:numel(examples)
     s=examples(i).settings; s.n_views=3; s.module_shape=[3 4];
+    if isfield(s,'top_arm_rows'), s.top_arm_rows=0; end
     surface=buildModularSurface(s);
     assert(size(surface.source_positions_mm,2)==3);
     assert(all(isfinite(surface.pixel_centers_mm(:))));

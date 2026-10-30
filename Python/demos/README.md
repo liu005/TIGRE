@@ -51,5 +51,13 @@ See the
 [MATLAB demo index](../../MATLAB/Demos/README.md) and
 [Python GUI manual](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md).
 
+Its [catalogue of all 13 GUI presets](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md#catalogue-of-gui-presets)
+explains each geometry, its intended application and CT/DR export limitations.
+
+The GUI's **Sea cargo: 20-foot container (2D Digital Radiography)** preset
+simulates conveyor DR with a fixed source and L-shaped detector. Its exported
+script performs forward projection only; see the manual's
+[DR simulation export](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md#dr-simulation-export).
+
 The [validation guide](../../Frontispiece/Validation.md) lists current test
 commands, plotting-angle regressions, scanner fixtures and hardware limits.

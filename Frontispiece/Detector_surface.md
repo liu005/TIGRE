@@ -6,6 +6,20 @@ FDK, visualization and YAML/MAT/NPZ interchange. Matching head-phantom examples
 are demo 25 (smooth cylinder) and demo 26 (tilted modular panels); see the
 [demo comparison](Demo_language_comparison.md).
 
+The CT Simulation Builder also includes **Sea cargo: 20-foot container
+(2D Digital Radiography)** in Python and MATLAB. Its fixed source and
+L-shaped detector acquire conveyor DR projections; this is not a 3D CT scan.
+The upper arm can have physical clearance while its joint edge remains aligned
+with the vertical arm in source projection. After saving its YAML,
+**Export DR simulation script...** produces forward projection only. See the
+[Python DR export guide](./TIGRE_CT_Simulation_Builder_Python.md#dr-simulation-export)
+or [MATLAB DR export guide](./TIGRE_CT_Simulation_Builder_MATLAB.md#dr-simulation-export)
+for attenuation inputs, output arrays and sampling limitations.
+
+The complete preset catalogues in the [Python manual](./TIGRE_CT_Simulation_Builder_Python.md#catalogue-of-gui-presets)
+and [MATLAB manual](./TIGRE_CT_Simulation_Builder_MATLAB.md#catalogue-of-gui-presets)
+describe all 13 GUI examples, their uses and reconstruction/DR constraints.
+
 TIGRE's standard geometry describes a flat detector. The *detector-surface* model
 describes every measured pixel by its physical position, so curved arrays, modules
 with gaps, nonuniform column spacing and U-shaped arrays can be used directly,

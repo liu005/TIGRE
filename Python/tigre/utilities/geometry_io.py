@@ -28,6 +28,8 @@ def surface_archive_arrays(surface, geometry=None):
         _validate_volume_views(geometry, len(surface.source_positions_mm))
         if hasattr(geometry, "object_angles_deg"):
             arrays["object_angles_deg"] = np.asarray(geometry.object_angles_deg)
+        if hasattr(geometry, "simulation_mode"):
+            arrays["simulation_mode"] = geometry.simulation_mode
         if hasattr(geometry, "motion_mode"):
             arrays["volume_motion_mode"] = geometry.motion_mode
         if hasattr(geometry, "nVoxel"):
@@ -52,7 +54,7 @@ def load_geometry_archive(path):
         timing_names = ("readout_period_ms", "firing_rate_hz", "rotation_period_s",
                         "table_speed_mm_s", "playback_rate")
         keys.update("acquisition_" + name for name in timing_names)
-        keys.update(("view_times_s", "volume_motion_mode", "object_angles_deg"))
+        keys.update(("view_times_s", "volume_motion_mode", "object_angles_deg", "simulation_mode"))
         arrays = {key: archive[key] for key in archive.files if key in keys}
     if "source_positions_mm" in arrays:
         modules = arrays.get("module_slices")
@@ -72,6 +74,7 @@ def load_geometry_archive(path):
                 raise ValueError("offOrigin must contain three finite values.")
             geometry = _volume(dict(sVoxel=size, offOrigin=offset,
                 **({"nVoxel": arrays["nVoxel"]} if "nVoxel" in arrays else {}),
+                **({"simulation_mode": arrays["simulation_mode"].item()} if "simulation_mode" in arrays else {}),
                 **({"object_angles_deg": arrays["object_angles_deg"]} if "object_angles_deg" in arrays else {}),
                 **({"motion_mode": arrays["volume_motion_mode"].item()} if "volume_motion_mode" in arrays else {})))
             _validate_volume_views(geometry, len(surface.source_positions_mm))
@@ -144,7 +147,7 @@ def _settings(values):
 def _volume(values):
     if values is None:
         return None
-    if not isinstance(values, dict) or set(values) - {"sVoxel", "offOrigin", "nVoxel", "motion_mode", "object_angles_deg"} or "sVoxel" not in values:
+    if not isinstance(values, dict) or set(values) - {"sVoxel", "offOrigin", "nVoxel", "motion_mode", "object_angles_deg", "simulation_mode"} or "sVoxel" not in values:
         raise ValueError("volume requires sVoxel and optional offOrigin, in TIGRE z/y/x order.")
     geo = SimpleNamespace(sVoxel=np.asarray(values["sVoxel"], dtype=float),
                           offOrigin=np.asarray(values.get("offOrigin", [0, 0, 0]), dtype=float))
@@ -154,6 +157,10 @@ def _volume(values):
         geo.object_angles_deg = np.atleast_1d(np.asarray(values["object_angles_deg"], dtype=float))
         from .object_motion import object_angles
         object_angles(geo, len(geo.object_angles_deg))
+    if "simulation_mode" in values:
+        if values["simulation_mode"] not in ("ct", "dr"):
+            raise ValueError("simulation_mode must be ct or dr.")
+        geo.simulation_mode = values["simulation_mode"]
     if "motion_mode" in values:
         if values["motion_mode"] not in ("static", "speed", "endpoints"):
             raise ValueError("volume motion_mode must be static, speed or endpoints.")
@@ -263,6 +270,8 @@ def save_geometry_yaml(path, *, settings=None, surface=None, geometry=None):
         origin, size = _volume_box(geometry)
         data["volume"] = dict(sVoxel=size[::-1].tolist(),
                               offOrigin=np.asarray(geometry.offOrigin).tolist())
+        if hasattr(geometry, "simulation_mode"):
+            data["volume"]["simulation_mode"] = geometry.simulation_mode
         if hasattr(geometry, "object_angles_deg"):
             data["volume"]["object_angles_deg"] = np.asarray(geometry.object_angles_deg).tolist()
         if hasattr(geometry, "nVoxel"):

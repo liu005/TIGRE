@@ -1,6 +1,89 @@
 # TIGRE CT Simulation Builder handover
 
-Updated: 2026-10-29 (Australia/Sydney).
+Updated: 2026-10-30 (Australia/Sydney).
+
+## Fixed-hardware DR timing
+
+DR mode now enables acquisition timing without hardware rotation. Endpoint
+motion is forced on while DR timing is active; its full xyz/zyx vector defines
+constant conveyor velocity. Rotation period/z-speed widgets are disabled and
+ignored. Fixed detector and identical source endpoints are required. The
+existing five-field acquisition schema is retained: rotation_period_s=1 is an
+unused compatibility value; table_speed_mm_s is the z component, while the full
+velocity is derived from saved offsets and view times. Frame timing, playback,
+YAML/MAT/NPZ interchange and exported DR view_times_s are supported.
+
+At 1253 views, 100 Hz, 10 ms readout and 6260 mm y travel, the step is 5 mm,
+velocity [0,500,0] mm/s, last sample 12.52 s and window 12.53 s. Tests verify
+unchanged source/pixel coordinates, any-axis endpoints, invalid rates/source
+motion, YAML reload and timing output. Existing CT timing tests still pass.
+Manual/PDF revision is now 1.6.
+
+Final validation on 30 October 2026: 99 affected Python tests passed with no
+skips. Six MATLAB R2020a suites passed: seaCargoPreset, ctSimulationBuilder,
+objectRotation, ctTransmission, detectorGeometryGUI and GUI usability.
+The exported Python DR script ran on CUDA with 1253 timed views and an 8x12x6
+uniform attenuation volume: finite outputs, lower/upper air margins and all
+frame timestamps verified (last view 12.52 s). This validates the software
+workflow, not clinical/cargo detection performance or scanner calibration.
+
+## Complete GUI preset catalogue
+
+Manual revision 1.6 includes all 13 GUI presets in menu order under Examples
+and presets / Catalogue of GUI presets. Each entry explains geometry, intended
+uses and reconstruction/export limitations. The d18 frame switch, current
+18+10 module cargo DR arrangement and one-row GCT limitations are explicit.
+PDF contents now include third-level headings so readers can find each preset.
+Both demo indexes and the detector-surface reference link to these catalogues.
+
+## Sea-cargo modular DR preset
+
+The preset now uses 1253 endpoint-inclusive views over y=-3130 to +3130 mm:
+1252 intervals at exactly 5 mm, with 100 mm air before and after the 6060 mm cargo.
+
+DSO now defaults to 4230 mm (10% below 4700). Both layout helpers accept an
+optional DSO. Container motion stays fixed. The detector supports are refitted
+to the transverse silhouette and air margins at that DSO; individual module
+DSDs can change when fitting the arms. Source-facing normals and projected
+seam alignment are recomputed together.
+
+The shared preset **Sea cargo: 20-foot container (2D Digital Radiography)**
+now uses 18 vertical-arm and 10 horizontal-arm source-facing modules. Each has
+36x4 pixels at 5x5 mm pitch (180x20 mm). `cargo_detector.py` and
+`cargoModuleLayout.m` solve adjacent module edge-ray alignment while keeping
+centres on vertical/horizontal support lines. The horizontal near edge is
+about 319.95 mm above and rearward of the vertical arm's upper edge on the same source
+ray. There are no projected scanning-direction seam gaps/overlaps over common
+transverse width. Whole modules slightly extend the old support envelope.
+
+The preset stores ordinary piecewise-linear centre/tilt lists; it needs no
+external checkout or special projector. Top arm rows and Arm clearance fields
+are zero because those bend continuous panels; the modular joint clearance and 300 mm horizontal-support lift are
+encoded in the lists. Manual edits do not automatically re-aim modules.
+Equal linear-source endpoints keep the legacy converted source position fixed.
+Container dimensions, 5 mm voxel grid and 1253-view 6260 mm y motion are unchanged.
+The vertical arm is lowered, placing its lowest module centre ray on the
+limiting lower corner: the first 18 rows form a half-module air margin.
+One extra module is now added at the vertical top (18 total), without moving
+the lowest module. The horizontal support is refitted at z=2169.48 mm, with
+the same 300 mm relative lift and source-ray joint alignment.
+The horizontal arm extends through the upper limiting corner, plus a full
+air-only module. Current packing is Python 1253x36x112, MATLAB 36x112x1253,
+with 28 module slices.
+
+The volume retains `simulation_mode: dr` across YAML/NPZ/MAT, selecting forward-
+only DR export with no FDK/CGLS. The output `dr_image` now samples a central
+column from every module and concatenates them in module order (1008x1253).
+Both DR exporters save module metadata with projections/transmission. The
+result is not a calibrated uniformly resampled conveyor image.
+
+Tests check every module normal/pitch, every adjacent edge ray, the exact 300 mm support lift and projected joint
+clearance, volume motion, YAML/NPZ interchange and all-module DR assembly.
+Coverage tests exercise 4097 transverse fan directions including box corners
+and seam boundaries. CUDA confirms the lower 18 rows and upper 36 rows are
+air-only in every view. Conveyor movement provides the longitudinal scan.
+Python's exported modular DR script passed a CUDA smoke at 8x12x6 voxels;
+MATLAB CPU geometry/export tests passed. Manuals/PDFs are revision 1.6.
 
 ## Python and MATLAB rotating-object acquisition
 
@@ -46,7 +129,7 @@ included in the manuals; the PDF editions contain the same guidance.
 The Python and MATLAB manuals are reorganized in user-workflow order: launch,
 basic workflow, each of the four tabs, confirmation/animation, save/load,
 reconstruction export, examples/API reference, limitations and troubleshooting.
-Manual revision **1.2**, dated **29 October 2026**, is separate from the shared
+Manual revision **1.6**, dated **30 October 2026**, is separate from the shared
 TIGRE Python package reference **3.0.0**. Both PDFs have a dedicated cover,
 separate contents pages, numbered chapters and wrapped tables/code. Existing
 inbound section anchors and local documentation links are preserved.

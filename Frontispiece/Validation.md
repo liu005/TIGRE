@@ -7,6 +7,29 @@ demos 23/25/26/27 also select the checkout when launched directly from an IDE.
 
 ## Python regression checks
 
+For the CT Simulation Builder's current CT/DR workflows, run from `Python/`:
+
+```powershell
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
+conda run -n recon --no-capture-output python -m pytest `
+  tests/test_sea_cargo_preset.py tests/test_acquisition_timing.py `
+  tests/test_endpoint_motion_guard.py tests/test_object_rotation.py `
+  tests/test_voxel_field_sync.py tests/test_ct_physics.py `
+  tests/test_geometry_yaml.py tests/test_geometry_recon_export.py `
+  tests/test_geometry_matlab_bridge.py tests/test_detector_geometry_examples.py -q -rs
+```
+
+The cargo check verifies the 18+10 source-facing modules, every projected
+joint, transverse fan coverage, half-module lower/full-module upper air margins,
+1253 views at 5 mm conveyor steps, 100 mm end margins, DR-only export and
+timing. At 100 Hz its last sample is 12.52 s and y velocity is 500 mm/s;
+source/detector coordinates stay fixed. Arbitrary-axis endpoints, excessive
+firing rates and moving-source DR timing are also checked. CUDA forward runs
+are a separate smoke check; CPU tests mock the GPU call in exported scripts.
+
+If a batch skips a Tk test because a later interpreter cannot initialize,
+rerun that test in a fresh process. A skipped GUI test is not a pass.
+
 ```powershell
 $env:PYTHONPATH = Join-Path $PWD 'Python'
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
@@ -33,6 +56,29 @@ and the dual-energy MAT-import/VM/FDK/OS-SART path. Synthetic dual-energy inputs
 exercise software plumbing, not scanner calibration accuracy.
 
 ## MATLAB checks
+
+CPU builder checks, including DR timing and retained CT behavior:
+
+```matlab
+addpath(genpath('MATLAB'));
+test_seaCargoPreset;
+test_ctSimulationBuilder;
+test_objectRotation;
+test_ctTransmission;
+test_detectorGeometryGUI;
+test_detectorGeometryGUI_usability;
+```
+
+These require MATLAB desktop/UI support and the Python `recon` bridge for
+YAML interchange. They do not require native CUDA reconstruction MEX files.
+
+Final builder validation, 30 October 2026: the targeted Python command above
+passed 99 tests without skips, and all six MATLAB builder suites passed on
+R2020a. A separate real CUDA run of the exported timed cargo DR script used
+1253 views and an 8x12x6 uniform attenuation grid. Projection/transmission
+outputs were finite, both specified air margins remained clear, and the saved
+time vector ended at 12.52 s. These are workflow/geometry checks, not scanner
+calibration or detection-performance certification.
 
 For the local custom toolchain, build/activate the isolated native MEX files as
 described in the [build guide](MATLAB_Blackwell_build.md), then:

@@ -131,6 +131,8 @@ DETECTOR_FIELD_HELP = {
         "Number of absent data columns inserted between neighboring panels. "
         "These samples are masked in the returned surface."
     ),
+    "Arm clearance (mm)": "Raise the horizontal arm by this distance along the panel row direction and shift it away from the source so the two joint-edge lines coincide in source projection over their common width. Physical pixel pitch is preserved. Zero gives a touching joint. Requires a source below the joint.",
+    "Top arm rows": "Fold this many upper pixel rows into a 90-degree arm along the panel's local +x direction (toward the source for an untilted panel). Remaining rows stay vertical. The hinge lies at their shared pixel edge; pixel count and pitch are preserved. Set 0 for a straight panel. The modular cargo preset uses separate panels, so this field stays zero.",
     "Modules (cylindrical)": (
         "Number of equal-sized panels distributed along the cylindrical arc. "
         "Used only for the Cylindrical layout."
@@ -173,7 +175,7 @@ DETECTOR_FIELD_HELP.update({
     "End position (z, y, x mm)": "Volume center at the last acquired view, in z, y, x mm. Endpoint mode interpolates all three coordinates and requires at least two views for different endpoints. In timed speed mode this is a calculated, read-only result.",
     "Rotate object (fixed source and detector)": "Enable to keep source and detector fixed at their initial pose and rotate the volume about its own center. Choose inclusive start/end z angles or an absolute ZYZ angle list in degrees. Position movement can be combined with rotation. Orbit timing is disabled in this mode. Disable to use the source/detector motion configured in their tabs. Press Confirm to apply.",
     "Move between start and end positions": "Enable to interpolate the volume center from Start to End over the acquired views. With timing enabled, z speed is derived from z travel divided by last-view time. Disable to use entered z speed with timing, or a stationary volume without timing. Different positions require at least two views. Press Confirm to apply.",
-    "Use timing to derive orbit and z motion": "Enable synchronized acquisition: one frame per source pulse, with t=i/firing_rate. Requires rotating source + detector. Rotation period determines angle, and z speed or endpoints determine volume motion. Manual scan span is ignored.",
+    "Use timing to derive orbit and z motion": "Enable synchronized acquisition: one frame per source pulse, with t=i/firing_rate. CT requires rotating source + detector; rotation period sets angle. DR requires fixed hardware and endpoint conveyor motion along any axis; rotation period and z-speed controls are unused. Speed comes from endpoints and last-view time.",
     "Detector readout period (ms)": "Minimum time between detector frames, in milliseconds. Firing rate must be at most 1000/readout_period. This model acquires one frame per pulse; it does not discard pulses or combine exposures.",
     "Source firing rate (Hz)": "Source pulses per second and acquired views per second. View i occurs at i/rate seconds. For N views, the last view is at (N-1)/rate; the acquisition window is N/rate. Rate must fit detector readout capacity.",
     "Rotation period (s/turn)": "Positive time for one full source/detector turn. Angle at time t is orbit_start + 360*t/period. Views per turn equal firing_rate*period; timed scans may include multiple turns.",
@@ -186,7 +188,7 @@ TAB_HELP = {
     "Source": "Set source trajectory and view sampling. Source positions use world x, y, z mm; angles are degrees about +z. Fixed-linear mode uses start/end coordinates; circular modes use radius, height and scan span. Hover or focus a field for details, then Confirm to apply.",
     "Detectors": "Choose panel layout, pixel counts, pitches, panel alignment and detector motion. Cylindrical fields define an arc; piecewise-linear lists define individual panels. List... edits per-panel values. Confirm applies changes; masked gap columns are not measured samples.",
     "Volume": "Configure object rotation with fixed hardware using start/end z angles or a per-view ZYZ list in degrees (demo d18). Set voxel counts, full physical size and initial center in TIGRE z, y, x order. Voxel size is size/counts. Center offset is shared with Movement Start position. The common 3D preview shows the volume box at its per-view center.",
-    "Movement": "Object rotation is configured in Volume. Orbit timing is disabled when object rotation is selected. Configure timing and volume translation otherwise. Timing mode requires rotating hardware and one frame per pulse. Choose z-speed mode or start/end interpolation; endpoints use z, y, x mm. Play and the slider animate the volume in the same world-frame scene. Moving offOrigin is for preview; surface reconstruction requires a fixed object coordinate frame.",
+    "Movement": "Object rotation is configured in Volume. Orbit timing is disabled when object rotation is selected. Configure timing and volume translation otherwise. Timing uses one frame per pulse. CT requires rotating hardware; DR uses fixed hardware and endpoint motion along any axis. Choose z-speed mode or start/end interpolation; endpoints use z, y, x mm. Play and the slider animate the volume in the same world-frame scene. Moving offOrigin is for preview; surface reconstruction requires a fixed object coordinate frame.",
 }
 
 
@@ -259,6 +261,31 @@ GUI_EXAMPLES["TIGRE d18: arbitrary object rotation (ZYZ)"] = (
     "reproduce d18's relative source/detector trajectory. The panel is downsampled "
     "to 128 x 128 for the GUI, preserving its physical size. Use CGLS; FDK is unsupported.")
 
+# Refine the plot-5 support arms into source-facing DR modules.
+from tigre.utilities.cargo_detector import cargo_module_layout
+_cargo_centres, _cargo_angles, _cargo_vertical, _cargo_horizontal = cargo_module_layout()
+_cargo_radius = -_cargo_centres[0, 0]
+_cargo_source = [4230 * np.cos(np.deg2rad(13)), 0, -4230 * np.sin(np.deg2rad(13))]
+GUI_EXAMPLES["Sea cargo: 20-foot container (2D Digital Radiography)"] = (
+    "Piecewise linear", True,
+    {"n_views": "1253", "rows": "36", "columns": "4",
+     "row_pitch_mm": "5", "column_pitch_mm": "5", "column_gap": "0",
+     "top_arm_rows": "0", "arm_clearance_mm": "0",
+     "source_start_mm": ", ".join(f"{v:.17g}" for v in _cargo_source),
+     "source_end_mm": ", ".join(f"{v:.17g}" for v in _cargo_source),
+     "detector_radius_mm": f"{_cargo_radius:.17g}",
+     "transverse_centers_mm": ", ".join("0" for _ in _cargo_angles),
+     "normal_offsets_mm": ", ".join(f"{v:.17g}" for v in _cargo_centres[:, 0] + _cargo_radius),
+     "z_offsets_mm": ", ".join(f"{v:.17g}" for v in _cargo_centres[:, 2]),
+     "panel_angles_deg": ", ".join("0" for _ in _cargo_angles),
+     "panel_x_angles_deg": "0",
+     "panel_y_angles_deg": ", ".join(f"{v:.17g}" for v in _cargo_angles), "cor_mm": "0"},
+    f"Cargo DR: {_cargo_vertical} vertical-arm and {_cargo_horizontal} horizontal-arm source-facing "
+    "36 x 4 modules, 5 mm pitch. Horizontal support raised 300 mm; joint edges align "
+    "in source projection. Full transverse coverage, 18 lower air rows and one upper air module. "
+    "Container travels 6260 mm along y in 1253 views (5 mm steps, 100 mm air before/after); DR simulation only.")
+
+
 # Keep the large GCT acquisition last in the example menu.
 _gct_half = np.arctan2(2.6172 * (64 / 2 - 0.5), 10600.0)
 _gct_theta = np.linspace(-_gct_half * 53, _gct_half * 53, 53)
@@ -284,7 +311,8 @@ def build_modular_surface(
         source_motion="Rotating source + detector",
         source_end_mm=(1000.0, 200.0, 0.0),
         source_start_mm=None, orbit_start_deg=0.0, scan_span_deg=360.0, panel_x_angles_deg=(0.0,),
-        panel_y_angles_deg=(0.0,), cor_mm=0.0, acquisition=None, fixed_hardware=False, hardware_angles_deg=None):
+        panel_y_angles_deg=(0.0,), cor_mm=0.0, acquisition=None, fixed_hardware=False, hardware_angles_deg=None,
+        top_arm_rows=0, arm_clearance_mm=0.0):
     """Build a surface using distances in mm and angles in degrees.
 
     Panel x/y angles accept one value or one per panel, constant per scan.
@@ -326,12 +354,17 @@ def build_modular_surface(
         return DetectorSurfaceGeometry(source, pixels,
             np.repeat(initial.valid_mask, n_views, axis=0), module_slices=initial._module_slices)
     rows, columns = _checked_module_shape(module_shape)
+    if (isinstance(top_arm_rows, (bool, np.bool_)) or not isinstance(top_arm_rows, (int, np.integer))
+            or not 0 <= top_arm_rows < rows):
+        raise ValueError("Top arm rows must be an integer from 0 to module rows minus one.")
     panel_count = _panel_count_for_layout(
         layout, n_modules, transverse_centers_mm)
     validate_gui_size(n_views, rows, columns, panel_count, column_gap)
     if acquisition is not None:
-        if source_motion != "Rotating source + detector":
-            raise ValueError("Timed helical acquisition requires rotating source + detector.")
+        stationary_timing = (source_motion == "Fixed detector, moving source" and source_start_mm is not None
+                             and np.array_equal(np.asarray(source_start_mm), np.asarray(source_end_mm)))
+        if source_motion != "Rotating source + detector" and not stationary_timing:
+            raise ValueError("Timing requires rotating hardware or an identical fixed-source start/end position.")
         acquisition_timing(n_views, acquisition)
     if source_motion in ("Rotating source + detector", "Fixed detector, arc source"):
         if not np.isfinite(source_radius_mm) or source_radius_mm <= 0:
@@ -435,6 +468,32 @@ def build_modular_surface(
                                        x_angles[index], y_angles[index])
             center = grid[view].mean(axis=(0, 1), dtype=np.float64)
             grid[view] = (grid[view] - center) @ base @ rotation.T + center
+
+    if not np.isfinite(arm_clearance_mm) or arm_clearance_mm < 0 or (arm_clearance_mm and not top_arm_rows):
+        raise ValueError("Arm clearance must be finite and nonnegative, with top arm rows enabled.")
+    if top_arm_rows:
+        lower = rows - top_arm_rows
+        pitch = float(np.atleast_1d(pixel_spacing_mm)[0])
+        facets = []
+        for panel in range(panel_count):
+            start = panel * (columns + column_gap)
+            grid = detector.pixel_centers_mm[:, :, start:start + columns]
+            for view, azimuth in enumerate(azimuths):
+                rotation = _panel_rotation(azimuth + z_angles[panel], x_angles[panel], y_angles[panel])
+                hinge = grid[view, lower - 1].astype(float) + rotation[:, 2] * pitch / 2
+                distance = (np.arange(top_arm_rows) + .5) * pitch
+                grid[view, lower:] = hinge[None, :, :] + distance[:, None, None] * rotation[:, 0]
+                if arm_clearance_mm:
+                    edge = hinge.mean(axis=0)
+                    ray = edge - detector.source_positions_mm[view]
+                    height = float(ray @ rotation[:, 2])
+                    if height <= 0:
+                        raise ValueError("Arm clearance requires the source below the joint in the panel frame.")
+                    grid[view, lower:] += ray * (arm_clearance_mm / height)
+
+            facets.extend([(slice(0, lower), slice(start, start + columns)),
+                           (slice(lower, rows), slice(start, start + columns))])
+        detector._module_slices = facets
 
     cor_mm = float(cor_mm)
     if not np.isfinite(cor_mm):
@@ -850,6 +909,8 @@ class DetectorGeometryBuilder:
             ("Panel roll / x (degrees)", "panel_x_angles_deg", "0"),
             ("Panel pitch / y (degrees)", "panel_y_angles_deg", "0"),
             ("Module rows", "rows", "64"),
+            ("Top arm rows", "top_arm_rows", "0"),
+            ("Arm clearance (mm)", "arm_clearance_mm", "0"),
             ("Module columns", "columns", "32"),
             ("Row pitch (mm)", "row_pitch_mm", "1"),
             ("Column pitch (mm)", "column_pitch_mm", "1"),
@@ -1019,6 +1080,11 @@ class DetectorGeometryBuilder:
             self._fields[name].set(overrides.get(name, value))
         self._layout.set(layout)
         self._detector_stationary = stationary
+        if self._example.get() == "Sea cargo: 20-foot container (2D Digital Radiography)":
+            from types import SimpleNamespace
+            self._set_volume_controls(SimpleNamespace(
+                nVoxel=np.array([518, 1212, 488]), sVoxel=np.array([2590., 6060., 2440.]),
+                offOrigin=np.array([[100., -3130., 0.], [100., 3130., 0.]]), motion_mode="endpoints", simulation_mode="dr"))
         if self._example.get() == "TIGRE d18: arbitrary object rotation (ZYZ)":
             phase = np.linspace(0, 2 * np.pi, 100)
             # Invert d18's gantry pose Rz(z1) Ry(y) Rz(z2):
@@ -1114,6 +1180,7 @@ class DetectorGeometryBuilder:
                 surface=self.surface if inspection else None,
                 geometry=volume)
             self._last_saved_yaml = Path(path).resolve()
+            self._export_recon_button.configure(text="Export DR simulation script..." if getattr(volume, "simulation_mode", "ct") == "dr" else "Export recon script...")
             self._export_recon_button.configure(state=self.tk.NORMAL)
             self._status.set(f"Saved geometry YAML: {path}")
         except (ValueError, TypeError, OSError, ImportError, MemoryError) as exc:
@@ -1125,16 +1192,17 @@ class DetectorGeometryBuilder:
         from tigre.utilities.geometry_recon_export import reconstruction_script_text
         if self._last_saved_yaml is None:
             return
+        dr_only = self._export_recon_button.cget("text").startswith("Export DR")
         path = filedialog.asksaveasfilename(parent=self.root,
-            title=f"Export recon script for {self._last_saved_yaml.name}",
-            initialfile=self._last_saved_yaml.stem + "_recon.py", defaultextension=".py",
+            title=f"Export {'DR simulation' if dr_only else 'reconstruction'} script for {self._last_saved_yaml.name}",
+            initialfile=self._last_saved_yaml.stem + ("_dr.py" if dr_only else "_recon.py"), defaultextension=".py",
             filetypes=(("Python script", "*.py"),))
         if not path:
             return
         try:
             text = reconstruction_script_text(self._last_saved_yaml, path)
             Path(path).write_text(text, encoding="utf-8")
-            self._status.set(f"Exported recon script using {self._last_saved_yaml.name}: {path}")
+            self._status.set(f"Exported {'DR simulation' if dr_only else 'reconstruction'} script using {self._last_saved_yaml.name}: {path}")
         except (ValueError, OSError) as exc:
             messagebox.showerror("Cannot export recon script", str(exc), parent=self.root)
 
@@ -1302,6 +1370,11 @@ class DetectorGeometryBuilder:
             self._entries[name].configure(
                 state=self.tk.NORMAL if active else self.tk.DISABLED)
         timed = hasattr(self, "_timing_enabled") and self._timing_enabled.get()
+        dr = getattr(self, "_simulation_mode", "ct") == "dr"
+        self._timing_toggle.configure(text="Use timing for DR conveyor motion" if dr else "Use timing to derive orbit and z motion")
+        if dr and timed:
+            self._volume_motion.set(True)
+            self._volume_motion_toggle.configure(state=self.tk.DISABLED)
         for name in getattr(self, "_timing_fields", {}):
             self._entries[name].configure(state=self.tk.NORMAL if timed else self.tk.DISABLED)
         if not timed and hasattr(self, "_timing_summary"):
@@ -1315,6 +1388,9 @@ class DetectorGeometryBuilder:
             endpoints = self._volume_motion.get()
             self._entries["volume_end"].configure(state=self.tk.NORMAL if endpoints else self.tk.DISABLED)
             self._entries["table_speed_mm_s"].configure(state=self.tk.DISABLED if endpoints else self.tk.NORMAL)
+            if dr:
+                self._entries["rotation_period_s"].configure(state=self.tk.DISABLED)
+                self._entries["table_speed_mm_s"].configure(state=self.tk.DISABLED)
 
         rotating = hasattr(self, "_rotate_object") and self._rotate_object.get()
         list_mode = hasattr(self, "_object_angle_mode") and self._object_angle_mode.get() == "ZYZ angle list"
@@ -1484,10 +1560,14 @@ class DetectorGeometryBuilder:
         acquisition = self._read_acquisition()
         scan_span = float(values["scan_span_deg"]) if not rotating_object and stationary != True and acquisition is None else 360.0
         if acquisition is not None:
-            if stationary:
-                raise ValueError("Timing mode requires rotating source + detector.")
+            if getattr(self, "_simulation_mode", "ct") == "dr":
+                if stationary is not True or not np.array_equal(source_start, source_end):
+                    raise ValueError("DR timing requires a fixed detector and identical source start/end positions.")
+            elif stationary:
+                raise ValueError("CT timing requires rotating source + detector.")
             timing, times = acquisition_timing(n_views, acquisition)
-            scan_span = 360 * n_views / timing["firing_rate_hz"] / timing["rotation_period_s"]
+            if getattr(self, "_simulation_mode", "ct") != "dr":
+                scan_span = 360 * n_views / timing["firing_rate_hz"] / timing["rotation_period_s"]
         _checked_module_shape((rows, columns))
         panel_count = _panel_count_for_layout(layout, n_modules, transverse)
         validate_gui_size(n_views, rows, columns, panel_count, column_gap)
@@ -1511,6 +1591,8 @@ class DetectorGeometryBuilder:
             "orbit_start_deg": orbit_start,
             "scan_span_deg": scan_span,
             "module_shape": (rows, columns),
+            "top_arm_rows": int(self._parse_numbers(values.get("top_arm_rows", "0"), "Top arm rows", integer=True)),
+            "arm_clearance_mm": float(values.get("arm_clearance_mm", "0")),
             "pixel_spacing_mm": (
                 float(values["row_pitch_mm"]), float(values["column_pitch_mm"])),
             "detector_radius_mm": float(values["detector_radius_mm"]),
@@ -1529,8 +1611,13 @@ class DetectorGeometryBuilder:
             return None
         if hasattr(self, "_rotate_object") and self._rotate_object.get():
             raise ValueError("Disable orbit timing when rotating the object.")
+        dr = getattr(self, "_simulation_mode", "ct") == "dr"
+        if dr and not self._volume_motion.get():
+            raise ValueError("DR timing requires start/end conveyor movement.")
         values = {name: float(variable.get()) for name, variable in self._timing_fields.items()
-                  if name != "table_speed_mm_s"}
+                  if name != "table_speed_mm_s" and not (dr and name == "rotation_period_s")}
+        if dr:
+            values["rotation_period_s"] = 1.0  # Unused compatibility field; no hardware rotation.
         values["table_speed_mm_s"] = 0.0
         if hasattr(self, "_volume_motion") and self._volume_motion.get():
             count = int(self._parse_numbers(self._fields["n_views"].get(), "Views", integer=True))
@@ -1607,6 +1694,7 @@ class DetectorGeometryBuilder:
                 raise ValueError("At least two views are required to move between different positions.")
             values["offOrigin"] = np.linspace(start, end, count)
         volume = _volume(values)
+        volume.simulation_mode = getattr(self, "_simulation_mode", "ct")
         volume.motion_mode = ("endpoints" if hasattr(self, "_volume_motion") and self._volume_motion.get() else
                               "speed" if acquisition is not None else "static")
         if acquisition is not None:
@@ -1640,6 +1728,7 @@ class DetectorGeometryBuilder:
         return object_angles(SimpleNamespace(object_angles_deg=result), count).copy()
 
     def _set_volume_controls(self, geometry):
+        self._simulation_mode = getattr(geometry, "simulation_mode", "ct")
         offsets = np.atleast_2d(getattr(geometry, "offOrigin", [0, 0, 0]))
         angles = getattr(geometry, "object_angles_deg", None)
         if hasattr(self, "_rotate_object"):
@@ -1692,6 +1781,8 @@ class DetectorGeometryBuilder:
                                                      else "NOT SUPPORTED. " + report["fdk_message"]))
                 except Exception as exc:
                     lines.append(f"FDK check unavailable: {type(exc).__name__}: {exc}")
+            if getattr(self._builder_geometry, "simulation_mode", "ct") == "dr":
+                lines = lines[:2] + ["DR simulation only: no angular CT coverage. Export performs forward projection only."]
             lines.append("Geometry checks only; CUDA execution, sampling completeness and mechanical clearance are not certified.")
             self._set_validation_results("\n".join(lines))
             self._status.set("Confirmed. Physical CT checks passed; see Confirmation checks for algorithm details.")
@@ -1779,6 +1870,8 @@ class DetectorGeometryBuilder:
                 f"views/turn: {timing['firing_rate_hz'] * timing['rotation_period_s']:.6g}; "
                 f"z travel to last view: {timing['table_speed_mm_s'] * times[-1]:.6g} mm; "
                 f"travel per turn: {timing['table_speed_mm_s'] * timing['rotation_period_s']:.6g} mm.")
+            if getattr(volume, "simulation_mode", "ct") == "dr":
+                self._timing_summary.set(self._dr_timing_text(volume))
         else:
             self._timing_summary.set(
                 "Timing disabled; endpoint movement ON: Start and End define volume motion."
@@ -1796,7 +1889,7 @@ class DetectorGeometryBuilder:
         from tigre.utilities.visualization.surface_renderer import SurfaceRenderer
         self._surface_renderer = SurfaceRenderer(
             axes, self.surface, geo=getattr(self, "_builder_geometry", None), world_axes=False,
-            panel_vertices=(None if parameters.get("hardware_angles_deg") is not None and not parameters.get("fixed_hardware")
+            panel_vertices=(None if parameters.get("top_arm_rows", 0) or (parameters.get("hardware_angles_deg") is not None and not parameters.get("fixed_hardware"))
                             else lambda frame: self._panel_vertices(parameters, frame)))
         self._panel_collection = self._surface_renderer.mesh
         self._source_artist = self._surface_renderer.source
@@ -1856,6 +1949,8 @@ class DetectorGeometryBuilder:
                 f"Volume z speed: {timing['table_speed_mm_s']:g} mm/s; "
                 f"travel/turn: {timing['table_speed_mm_s'] * timing['rotation_period_s']:g} mm; "
                 f"turns to last view: {times[-1] / timing['rotation_period_s']:.6g}.")
+            if getattr(geometry, "simulation_mode", "ct") == "dr":
+                self._motion_summary.set(self._dr_timing_text(geometry))
             if len(times) > 1:
                 source = np.asarray(self.surface.source_positions_mm)
                 relative = self._motion_positions
@@ -1865,6 +1960,18 @@ class DetectorGeometryBuilder:
                     for points in (source, centers, relative)])
         else:
             self._motion_summary.set("Enable acquisition timing to display physical speeds and scan duration.")
+
+    @staticmethod
+    def _dr_timing_text(geometry):
+        offsets = np.atleast_2d(geometry.offOrigin)
+        times = np.asarray(geometry.view_times_s)
+        velocity = (offsets[-1]-offsets[0])/times[-1] if times[-1] > 0 else np.zeros(3)
+        step = offsets[1]-offsets[0] if len(offsets) > 1 else np.zeros(3)
+        vector = lambda values: ", ".join(f"{v:.6g}" for v in values)
+        a = geometry.acquisition
+        return (f"DR fixed hardware; last view {times[-1]:.6g} s; window {len(times)/a['firing_rate_hz']:.6g} s.\n"
+                f"Velocity (z, y, x): {vector(velocity)} mm/s; speed {np.linalg.norm(velocity):.6g} mm/s.\n"
+                f"Step (z, y, x): {vector(step)} mm; one frame per pulse.")
 
     def _add_coordinate_markers(self, parameters):
         """Show the world origin and the actual per-view global COR shift."""

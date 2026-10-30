@@ -7,7 +7,7 @@ examples=detectorGeometryExamples(); settings=examples(1).settings;
 inspection=false; surface=[]; geo=[]; builderGeo=[]; scene=[]; player=[]; current=1;
 confirmed=false; lastSavedYaml=''; playbackClock=[]; playbackStart=1;
 lastPhysical=[];
-stationaryAcknowledged=''; inverseRigMode=false;
+stationaryAcknowledged=''; inverseRigMode=false; simulationMode='ct';
 builderFields=[]; builderLayout=''; builderMotion=''; listWindows=gobjects(0);
 builderMotionFields=[];
 screen=get(groot,'ScreenSize');
@@ -35,13 +35,13 @@ names={'n_views','source_radius_mm','source_z_mm','orbit_start_deg','scan_span_d
     'source_start_mm','source_end_mm','cor_mm','module_shape','pixel_spacing_mm', ...
     'detector_radius_mm','column_gap','n_modules','angular_span_deg', ...
     'transverse_centers_mm','normal_offsets_mm','z_offsets_mm', ...
-    'panel_x_angles_deg','panel_y_angles_deg','panel_angles_deg'};
+    'panel_x_angles_deg','panel_y_angles_deg','panel_angles_deg','top_arm_rows','arm_clearance_mm'};
 labels={'Views','Source radius (mm)','Source height (mm)','Orbit start (degrees)','Scan span (degrees)', ...
     'Source start (x,y,z mm)','Source end (x,y,z mm)','Global COR (mm)', ...
     'Module shape (rows,columns)','Pixel pitch (row,column mm)','Detector radius (mm)', ...
     'Gap columns','Modules (cylindrical)','Arc span (degrees)','Panel transverse offsets (mm)', ...
     'Panel normal offsets (mm)','Panel z offsets (mm)','Panel roll / x (degrees)', ...
-    'Panel pitch / y (degrees)','Panel yaw / z (degrees)'};
+    'Panel pitch / y (degrees)','Panel yaw / z (degrees)','Top arm rows','Arm clearance (mm)'};
 uilabel(examplesGrid,'Text','Example'); preset=uidropdown(examplesGrid,'Items',{examples.name});
 uibutton(examplesGrid,'Text','Load example','ButtonPushedFcn',@loadExample);
 uilabel(sourceGrid,'Text','Source trajectory'); trajectory=uidropdown(sourceGrid, ...
@@ -99,7 +99,7 @@ motionSummary.Layout.Row=[10 12]; motionSummary.Layout.Column=[1 3];
 rotationNote=uilabel(movementGrid,'Text','Object rotation is configured in Volume.');
 rotationNote.Layout.Row=13; rotationNote.Layout.Column=[1 3];
 rotationHelp='Enable to keep source and detector at their initial pose and rotate the object about its centre. Choose start/end z angles or a ZYZ list in degrees. Translation can be combined; orbit timing is disabled. Disable to restore configured hardware motion. Confirm applies changes.';
-timingHelp='Enable one frame per source pulse. Readout limits firing rate; rotation period determines turns. Use signed z speed or endpoint translation. Manual scan span is ignored. Requires rotating hardware and is disabled for object rotation. Confirm applies changes.';
+timingHelp='Enable one frame per source pulse; readout limits firing rate. CT rotates hardware and supports z speed or endpoints. DR keeps hardware fixed and derives any-axis conveyor velocity from endpoints; rotation period and z speed are unused. Disabled for object rotation. Confirm applies changes.';
 endpointHelp='Enable to interpolate the object centre from Start to End over acquired views. Different positions require at least two views. With timing, endpoints determine z speed. When disabled, timed mode uses entered z speed; untimed mode stays at Start and ignores End. Confirm applies changes.';
 rotateObject.Tooltip=rotationHelp; timed.Tooltip=timingHelp; endpoints.Tooltip=endpointHelp;
 rotateObject.FontWeight='bold'; timed.FontWeight='bold'; endpoints.FontWeight='bold';
@@ -165,7 +165,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
             case 'Source', text='Choose Cylindrical (circular orbit about +z) or Linear (world xyz endpoints, fixed detector). Views are shared with timing. Confirm applies edits.';
             case 'Detectors', text='Choose cylindrical or piecewise-linear panels. Shape is rows/columns; pitch is row/column mm. List... edits panel alignment. COR shifts the whole rotating rig.';
             case 'Volume', text='Rotate object with fixed hardware: inclusive start/end z angles or absolute ZYZ degree triples (one per view or one shared). MATLAB volume vectors use x,y,z (Python/YAML uses z,y,x). Counts are positive integers; size is the full extent in mm. Center is shared with Movement Start.';
-            otherwise, text='Object rotation is configured in Volume. Orbit timing is disabled when object rotation is selected. One frame per pulse: t=(view-1)/firing rate. Readout limits firing rate. Rotation period sets turns. Use signed z speed or xyz endpoints. Last view is at (N-1)/rate. Confirm, then Play.';
+            otherwise, text='Object rotation is configured in Volume. Orbit timing is disabled when object rotation is selected. CT rotates hardware; DR keeps hardware fixed with any-axis endpoint conveyor motion. One frame per pulse: t=(view-1)/firing rate. Readout limits firing rate. Rotation period sets turns. Use signed z speed or xyz endpoints. Last view is at (N-1)/rate. Confirm, then Play.';
         end
         if inspection, text=[text ' Inspection mode: builder values are inactive.']; end
         help.Value={text};
@@ -186,6 +186,8 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     end
 
     function populate()
+        if ~isfield(settings,'top_arm_rows'), settings.top_arm_rows=0; end
+        if ~isfield(settings,'arm_clearance_mm'), settings.arm_clearance_mm=0; end
         layout.Value=settings.layout; motion.Value=settings.source_motion;
         for i=1:numel(names), edits.(names{i}).Value=strtrim(sprintf('%.12g, ',settings.(names{i}))); ...
                 edits.(names{i}).Value=regexprep(edits.(names{i}).Value,',\s*$',''); end
@@ -193,6 +195,9 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     end
     function updateState()
         if rotateObject.Value || inverseRigMode, timed.Value=false; end
+        dr=strcmp(simulationMode,'dr');
+        if dr && timed.Value, endpoints.Value=true; end
+        timed.Text='Use acquisition timing'; if dr, timed.Text='Use timing for DR conveyor motion'; end
         cylindrical=strcmp(layout.Value,'Cylindrical'); linear=strcmp(motion.Value,'Fixed detector, moving source');
         for i=1:numel(names)
             name=names{i}; enabled=~inspection;
@@ -213,6 +218,10 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         if timed.Value
             edits.scan_span_deg.Enable='off';
             timingEdits.table_speed_mm_s.Enable=onoff(~inspection && ~endpoints.Value);
+            if dr
+                timingEdits.rotation_period_s.Enable='off'; timingEdits.table_speed_mm_s.Enable='off';
+                endpoints.Enable='off';
+            end
         end
         rotating=~inspection && rotateObject.Value; listMode=strcmp(objectMode.Value,'ZYZ angle list');
         rotateObject.Enable=onoff(~inspection); objectMode.Enable=onoff(rotating);
@@ -253,15 +262,22 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         if inverseRigMode, pose=readObjectAngles(s.n_views); s.hardware_angles_deg=-pose(:,[3 2 1]); end
         if isfield(s,'acquisition'), s=rmfield(s,'acquisition'); end
         if timed.Value
-            assert(strcmp(s.source_motion,'Rotating source + detector'),'TIGRE:timing:motion','Timing requires rotating source + detector');
+            if strcmp(simulationMode,'dr')
+                assert(strcmp(s.source_motion,'Fixed detector, moving source') && isequal(s.source_start_mm,s.source_end_mm), ...
+                    'TIGRE:timing:motion','DR timing requires a fixed source and detector');
+            else
+                assert(strcmp(s.source_motion,'Rotating source + detector'),'TIGRE:timing:motion','CT timing requires rotating source + detector');
+            end
             s.acquisition=readTiming(s.n_views);
-            s.scan_span_deg=360*s.n_views/s.acquisition.firing_rate_hz/s.acquisition.rotation_period_s;
+            if ~strcmp(simulationMode,'dr'), s.scan_span_deg=360*s.n_views/s.acquisition.firing_rate_hz/s.acquisition.rotation_period_s; end
         end
     end
     function a=readTiming(n)
-        a=struct();
+        a=struct(); dr=strcmp(simulationMode,'dr');
+        assert(~dr || endpoints.Value,'TIGRE:timing:endpoints','DR timing requires endpoint conveyor movement');
         for field=timingNames
-            if strcmp(field{1},'table_speed_mm_s') && endpoints.Value, a.(field{1})=0;
+            if dr && strcmp(field{1},'rotation_period_s'), a.rotation_period_s=1;
+            elseif strcmp(field{1},'table_speed_mm_s') && endpoints.Value, a.(field{1})=0;
             else, a.(field{1})=numbers(timingEdits.(field{1}).Value); end
         end
         [a,times]=ctAcquisitionTiming(n,a);
@@ -278,7 +294,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         validateattributes(g.sVoxel,{'numeric'},{'numel',3,'positive','finite'});
         validateattributes(g.offOrigin,{'numeric'},{'numel',3,'finite'});
         validateattributes(g.dVoxel,{'numeric'},{'numel',3,'positive','finite'});
-        g.dVoxel=g.sVoxel./g.nVoxel; g.motion_mode='static';
+        g.dVoxel=g.sVoxel./g.nVoxel; g.motion_mode='static'; g.simulation_mode=simulationMode;
         first=g.offOrigin;
         if endpoints.Value
             last=numbers(endPosition.Value)'; validateattributes(last,{'numeric'},{'numel',3,'finite'});
@@ -317,6 +333,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
                 'CGLS geometry: supported; moving volumes require the exported script''s fixed-object conversion.', ...
                 'FDK: separate circular trajectory/detector/scan-coverage requirements; exported script checks these.', ...
                 'Geometry checks only; CUDA execution, sampling completeness and clearance are not certified.'};
+            if strcmp(simulationMode,'dr'), lines=[lines(1:2) {'DR simulation only: forward projection; no 3D reconstruction coverage.'}]; end
             checkResults.Value=lines; status.Text='Confirmed. Physical checks passed; see check results.';
         end
     end
@@ -350,6 +367,16 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
                 endPosition.Value=vectorText(geo.offOrigin(:,end));
                 motionSummary.Value={sprintf('Last view: %.6g s; turns: %.6g; z speed: %.6g mm/s', ...
                     geo.view_times_s(end),geo.view_times_s(end)/geo.acquisition.rotation_period_s,geo.acquisition.table_speed_mm_s)};
+                if strcmp(simulationMode,'dr')
+                    velocity=zeros(3,1); step=zeros(3,1);
+                    if numel(geo.view_times_s)>1
+                        velocity=(geo.offOrigin(:,end)-geo.offOrigin(:,1))/geo.view_times_s(end);
+                        step=geo.offOrigin(:,2)-geo.offOrigin(:,1);
+                    end
+                    motionSummary.Value={sprintf('DR fixed hardware; last view %.6g s; window %.6g s.',geo.view_times_s(end),s.n_views/geo.acquisition.firing_rate_hz), ...
+                        sprintf('Velocity xyz: %s mm/s; speed %.6g mm/s.',vectorText(velocity),norm(velocity)), ...
+                        sprintf('Step xyz: %s mm; one frame per pulse.',vectorText(step))};
+                end
             end
             status.Text='Confirm applies all tabs. Play animates the confirmed geometry.';
         catch ex
@@ -393,9 +420,16 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     end
     function loadExample(~,~)
         stopPlayer(); closeEditors(); settings=examples(strcmp(preset.Value,{examples.name})).settings;
-        inspection=false; geo=[]; builderGeo=[]; timed.Value=false; endpoints.Value=false; rotateObject.Value=false; inverseRigMode=false;
+        inspection=false; geo=[]; builderGeo=[]; timed.Value=false; endpoints.Value=false; rotateObject.Value=false; inverseRigMode=false; simulationMode='ct';
         for k=1:numel(volumeNames), volumeEdits.(volumeNames{k}).Value=volumeDefaults{k}; end
         setStart('0, 0, 0'); endPosition.Value='0, 0, 0';
+        if strcmp(preset.Value,'Sea cargo: 20-foot container (2D Digital Radiography)')
+            simulationMode='dr';
+            volumeEdits.nVoxel.Value='488, 1212, 518';
+            volumeEdits.sVoxel.Value='2440, 6060, 2590'; syncVoxels('sVoxel');
+            setStart('0, -3130, 100'); endPosition.Value='0, 3130, 100'; endpoints.Value=true;
+            motionSummary.Value={'Fixed hardware; container translates 6260 mm along world y in 1253 views (5 mm step; 100 mm air before/after). Transmission imaging, not complete CT angular coverage.'};
+        end
         if strcmp(preset.Value,'TIGRE d18: arbitrary object rotation (ZYZ)')
             phase=linspace(0,2*pi,100)'; inverseRigMode=true; rotateObject.Value=true; objectMode.Value='ZYZ angle list';
             objectList.Value=jsonencode(rad2deg([-phase -phase -pi*sin(phase)]));
@@ -472,6 +506,7 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         else, inspect(d.surface,d.geo); end
     end
     function populateVolume(g)
+        simulationMode='ct'; if ~isempty(g) && isfield(g,'simulation_mode'), simulationMode=g.simulation_mode; end
         for k=1:numel(volumeNames), volumeEdits.(volumeNames{k}).Value=volumeDefaults{k}; end
         setStart(volumeEdits.offOrigin.Value); endPosition.Value=startPosition.Value;
         timed.Value=isfield(settings,'acquisition') && isstruct(settings.acquisition) && ~isempty(settings.acquisition);
@@ -498,13 +533,13 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
     function value=vectorText(values), value=regexprep(sprintf('%.12g, ',values),',\s*$',''); end
     function values=captureMotion()
         values=struct('timed',timed.Value,'endpoints',endpoints.Value,'start',startPosition.Value,'end',endPosition.Value);
-        values.inverseRigMode=inverseRigMode; values.rotateObject=rotateObject.Value; values.objectMode=objectMode.Value; values.objectStart=objectStart.Value; values.objectEnd=objectEnd.Value; values.objectList=objectList.Value;
+        values.simulationMode=simulationMode; values.inverseRigMode=inverseRigMode; values.rotateObject=rotateObject.Value; values.objectMode=objectMode.Value; values.objectStart=objectStart.Value; values.objectEnd=objectEnd.Value; values.objectList=objectList.Value;
         for field=volumeNames, values.(field{1})=volumeEdits.(field{1}).Value; end
         for field=timingNames, values.(field{1})=timingEdits.(field{1}).Value; end
     end
     function restoreMotion(values)
         timed.Value=values.timed; endpoints.Value=values.endpoints;
-        inverseRigMode=values.inverseRigMode; rotateObject.Value=values.rotateObject; objectMode.Value=values.objectMode; objectStart.Value=values.objectStart; objectEnd.Value=values.objectEnd; objectList.Value=values.objectList;
+        simulationMode=values.simulationMode; inverseRigMode=values.inverseRigMode; rotateObject.Value=values.rotateObject; objectMode.Value=values.objectMode; objectStart.Value=values.objectStart; objectEnd.Value=values.objectEnd; objectList.Value=values.objectList;
         for field=volumeNames, volumeEdits.(field{1}).Value=values.(field{1}); end
         for field=timingNames, timingEdits.(field{1}).Value=values.(field{1}); end
         setStart(values.start); endPosition.Value=values.end;
@@ -547,12 +582,16 @@ app.controls=struct('fields',edits,'lists',listButtons,'layout',layout,'motion',
         end
         geometryFile('save',path,d); [~,~,extension]=fileparts(path);
         if any(strcmpi(extension,{'.yaml','.yml'})), lastSavedYaml=path; exportButton.Enable='on'; end
+        if isfield(d.geo,'simulation_mode') && strcmp(d.geo.simulation_mode,'dr'), exportButton.Text='Export DR simulation script...';
+        else, exportButton.Text='Export recon script...'; end
         status.Text=['Saved geometry: ' path];
     end
     function exportScript()
         if isempty(lastSavedYaml), return; end
         [~,name]=fileparts(lastSavedYaml);
-        [name,folder]=uiputfile('*.m','Export recon script',[name '_recon.m']); if isequal(name,0), return; end
+        suffix='_recon.m'; title='Export reconstruction script';
+        if contains(exportButton.Text,'DR'), suffix='_dr.m'; title='Export DR simulation script'; end
+        [name,folder]=uiputfile('*.m',title,[name suffix]); if isequal(name,0), return; end
         try
             exportToPath(fullfile(folder,name));
             status.Text=['Exported script using last saved YAML: ' lastSavedYaml];
