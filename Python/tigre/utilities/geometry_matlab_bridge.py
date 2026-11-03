@@ -83,6 +83,9 @@ def from_mat(source, target):
             settings['top_arm_rows'] = int(value)
         if np.asarray(settings.get('source_start_mm', [])).size == 0:
             settings['source_start_mm'] = None
+        for key in ('source_waypoints_mm', 'source_segment_views'):
+            if np.asarray(settings.get(key, [])).size == 0:
+                settings[key] = None
         save_geometry_yaml(target, settings=settings, geometry=volume)
     else:
         # Read unsqueezed arrays: singleton rows/views carry physical meaning.

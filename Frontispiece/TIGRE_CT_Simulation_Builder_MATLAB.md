@@ -1,7 +1,7 @@
 **TIGRE CT Simulation Builder — MATLAB user manual**
 
-**Manual version: 1.6**
-**Updated: 30 October 2026**
+**Manual version: 1.7**
+**Updated: 3 November 2026**
 **Software reference: TIGRE Python package 3.0.0; CT Simulation Builder checkout.**
 
 The manual version identifies this document, not a separate application release.
@@ -452,8 +452,14 @@ separate treatment. The exported DR script contains no FDK or CGLS calls.
 
 ## Catalogue of GUI presets
 
-The Example menu contains the following 13 presets, in this order, in both
-Python and MATLAB. Choose a name and select **Load example** to replace the
+The MATLAB Example menu contains the following 13 presets, in this order.
+Python additionally supports a piecewise linear source preset with joined
+segments and per-segment view counts; this mode is not implemented in the
+MATLAB builder. Exact surfaces exported from Python retain their per-view
+source coordinates. See the [Python instructions](TIGRE_CT_Simulation_Builder_Python.md#piecewise-linear-source-movement)
+to create and save such a geometry.
+
+Choose a name and select **Load example** to replace the
 current controls and build its preview. Press **Confirm** before playback.
 Presets are editable starting points, not calibrated or validated commercial
 scanner models. Export uses the last saved YAML, so save after making changes.

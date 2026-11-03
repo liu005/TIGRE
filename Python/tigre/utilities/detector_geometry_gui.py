@@ -61,8 +61,8 @@ DETECTOR_FIELD_HELP = {
     "Detector motion": (
         "Choose Moving with Source to rotate the detector with a cylindrical source orbit, "
         "or Fixed Position to keep it stationary. Fixed Position uses the selected "
-        "Linear source trajectory or Cylindrical source arc. Moving with Source "
-        "switches a Linear source to Cylindrical. Confirm applies changes. "
+        "Linear or Piecewise linear source trajectory, or Cylindrical source arc. Moving with Source "
+        "switches either linear source mode to Cylindrical. Confirm applies changes. "
         "Confirm rejects sources/detectors inside the volume and scans with no "
         "ray crossing the volume anywhere. Empty views and panels are allowed. "
         "Use iterative reconstruction for limited-angle scans."
@@ -167,7 +167,9 @@ DETECTOR_FIELD_HELP = {
 
 DETECTOR_FIELD_HELP.update({
     "Voxel size (z, y, x mm)": "Positive physical voxel spacing in z, y, x mm. Full size = voxel counts * voxel size. Editing voxel size or counts updates full size; editing full size updates voxel size while keeping counts fixed.",
-    "Source trajectory": "Cylindrical follows a circular orbit about world +z using radius, height, start angle and scan span. Linear samples the world x, y, z start/end line and requires a fixed detector. Selecting Cylindrical after Linear keeps the detector fixed for an arc source; use Detector motion to rotate it with the source. Confirm applies the selection.",
+    "Source trajectory": "Cylindrical follows a circular orbit about world +z. Linear samples start/end coordinates. Piecewise linear joins consecutive waypoint pairs with a view count for each segment, counting shared junctions once. Both linear modes require a fixed detector. Selecting Moving with Source switches to Cylindrical. Confirm applies the selection.",
+    "Source waypoints (x, y, z mm)": "Ordered world coordinates, for example [[1000, -200, 0], [1000, 0, 0], [800, 200, 0]]. At least three triples define two joined straight segments. The detector stays in the pose defined by the first waypoint. Press Confirm to apply.",
+    "Views per source segment": "One integer of at least 2 for each consecutive waypoint pair, including both endpoints. Shared junctions are acquired once: 31, 30 gives 60 total views. Samples are uniformly spaced within each segment. Total Views is derived on Confirm. Orbit timing must be disabled.",
     "Voxel counts": "Three positive integer counts in TIGRE z, y, x order. Changing counts preserves voxel size and updates full physical size. Full size = counts * voxel size. Confirm applies changes; the preview allocates no voxel array.",
     "Full size (mm)": "Full positive physical extent along z, y, x in mm (not half-widths). Editing this field preserves voxel counts and updates voxel size = full size / counts. The box is centered at the center offset.",
     "Center offset (mm)": "Initial volume center offOrigin in z, y, x mm. Shared with Start position in Movement. Source coordinates use x, y, z instead.",
@@ -185,7 +187,7 @@ DETECTOR_FIELD_HELP.update({
 })
 
 TAB_HELP = {
-    "Source": "Set source trajectory and view sampling. Source positions use world x, y, z mm; angles are degrees about +z. Fixed-linear mode uses start/end coordinates; circular modes use radius, height and scan span. Hover or focus a field for details, then Confirm to apply.",
+    "Source": "Set source trajectory and view sampling. Source positions use world x, y, z mm; angles are degrees about +z. Linear uses start/end coordinates; Piecewise linear joins waypoint pairs with per-segment view counts and a fixed detector. Circular modes use radius, height and scan span. Confirm applies changes.",
     "Detectors": "Choose panel layout, pixel counts, pitches, panel alignment and detector motion. Cylindrical fields define an arc; piecewise-linear lists define individual panels. List... edits per-panel values. Confirm applies changes; masked gap columns are not measured samples.",
     "Volume": "Configure object rotation with fixed hardware using start/end z angles or a per-view ZYZ list in degrees (demo d18). Set voxel counts, full physical size and initial center in TIGRE z, y, x order. Voxel size is size/counts. Center offset is shared with Movement Start position. The common 3D preview shows the volume box at its per-view center.",
     "Movement": "Object rotation is configured in Volume. Orbit timing is disabled when object rotation is selected. Configure timing and volume translation otherwise. Timing uses one frame per pulse. CT requires rotating hardware; DR uses fixed hardware and endpoint motion along any axis. Choose z-speed mode or start/end interpolation; endpoints use z, y, x mm. Play and the slider animate the volume in the same world-frame scene. Moving offOrigin is for preview; surface reconstruction requires a fixed object coordinate frame.",
@@ -228,6 +230,13 @@ GUI_EXAMPLES = {
          "source_start_mm": "1000, -500, 0", "source_end_mm": "1000, 500, 0",
          "column_gap": "0", "n_views": "41"},
         "A source translates 1000 mm, from y = -500 to +500 mm, past a fixed 512 x 256 mm flat panel. Play shows the limited-angle trajectory; use iterative reconstruction."),
+    "Tomosynthesis: piecewise linear source": ("Piecewise linear", True,
+        {"rows": "64", "columns": "128", "column_gap": "0",
+         "transverse_centers_mm": "0", "normal_offsets_mm": "0",
+         "panel_angles_deg": "0", "z_offsets_mm": "0",
+         "source_waypoints_mm": "[[1000, -300, 0], [1000, 0, 0], [800, 300, 100]]",
+         "source_segment_views": "21, 21", "n_views": "41"},
+        "Two joined straight source segments and one fixed panel; 41 views with the junction acquired once. Edit waypoints and segment view counts, then Confirm. Use surface iterative reconstruction."),
     "Tomosynthesis: three fixed panels, linear source": ("Piecewise linear", True,
         {"rows": "256", "columns": "256", "column_gap": "2",
          "transverse_centers_mm": "-256, 0, 256",
@@ -303,6 +312,22 @@ GUI_EXAMPLES["GCT: 53-panel circular scan"] = (
     "GCT idealized 53-panel arc, 5701 views over 228 degrees. Large geometry (~240 MiB arrays); measured-data pixel corrections are not included.")
 
 
+def _piecewise_source_positions(waypoints, segment_views):
+    """Sample joined straight segments, retaining each shared junction once."""
+    points = np.asarray(waypoints, dtype=float)
+    counts = np.asarray(segment_views)
+    if points.ndim != 2 or points.shape[1] != 3 or len(points) < 3 or not np.isfinite(points).all():
+        raise ValueError("Source waypoints require at least three finite x, y, z triples.")
+    if (counts.shape != (len(points) - 1,) or counts.dtype.kind not in "iu"
+            or np.any(counts < 2)):
+        raise ValueError("Enter one integer view count of at least 2 for each source segment.")
+    total = sum(int(count) - 1 for count in counts) + 1
+    if total > MAX_GUI_VIEWS:
+        raise ValueError(f"Piecewise source exceeds the {MAX_GUI_VIEWS} view limit.")
+    return np.concatenate([np.linspace(start, end, int(count))[0 if index == 0 else 1:]
+        for index, (start, end, count) in enumerate(zip(points[:-1], points[1:], counts))])
+
+
 def build_modular_surface(
         layout, n_views, source_radius_mm, source_z_mm, module_shape,
         pixel_spacing_mm, detector_radius_mm, column_gap, n_modules,
@@ -312,7 +337,8 @@ def build_modular_surface(
         source_end_mm=(1000.0, 200.0, 0.0),
         source_start_mm=None, orbit_start_deg=0.0, scan_span_deg=360.0, panel_x_angles_deg=(0.0,),
         panel_y_angles_deg=(0.0,), cor_mm=0.0, acquisition=None, fixed_hardware=False, hardware_angles_deg=None,
-        top_arm_rows=0, arm_clearance_mm=0.0):
+        top_arm_rows=0, arm_clearance_mm=0.0,
+        source_waypoints_mm=None, source_segment_views=None):
     """Build a surface using distances in mm and angles in degrees.
 
     Panel x/y angles accept one value or one per panel, constant per scan.
@@ -323,11 +349,23 @@ def build_modular_surface(
     use panel position offsets and tilts for individual panel alignment.
     Returned coordinates include these corrections; do not apply them again.
     Fixed panels face the initial linear-source position or the arc midpoint.
+    source_waypoints_mm and source_segment_views join two or more linear
+    segments on the same fixed detector, counting each shared junction once.
     """
     if not isinstance(n_views, (int, np.integer)) or n_views < 1:
         raise ValueError("Number of views must be a positive integer.")
     if isinstance(n_views, (bool, np.bool_)):
         raise ValueError("Number of views must be a positive integer.")
+    piecewise_source = None
+    if source_waypoints_mm is not None or source_segment_views is not None:
+        if source_motion != "Fixed detector, moving source" or fixed_hardware or hardware_angles_deg is not None:
+            raise ValueError("Piecewise source movement requires a fixed detector and moving source.")
+        if acquisition is not None:
+            raise ValueError("Piecewise source movement uses segment views; disable orbit timing.")
+        piecewise_source = _piecewise_source_positions(source_waypoints_mm, source_segment_views)
+        if len(piecewise_source) != n_views:
+            raise ValueError("Views must equal the sum of segment views minus shared junctions.")
+        source_start_mm, source_end_mm = piecewise_source[0], piecewise_source[-1]
     if fixed_hardware or hardware_angles_deg is not None:
         if acquisition is not None:
             raise ValueError("Object rotation uses explicit angles; disable orbit timing.")
@@ -508,6 +546,12 @@ def build_modular_surface(
         detector.pixel_centers_mm += shift[:, None, None, :]
 
     if source_motion == "Fixed detector, moving source":
+        if piecewise_source is not None:
+            from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
+            return DetectorSurfaceGeometry(piecewise_source,
+                np.broadcast_to(detector.pixel_centers_mm, (n_views,) + detector.pixel_centers_mm.shape[1:]).copy(),
+                np.broadcast_to(detector.valid_mask, (n_views,) + detector.valid_mask.shape[1:]).copy(),
+                module_slices=detector._module_slices)
         fixed = linear_source_surface(
             detector.pixel_centers_mm[0],
             source_start,
@@ -870,7 +914,7 @@ class DetectorGeometryBuilder:
         self._source_trajectory = tk.StringVar(value="Cylindrical")
         self._add_help_label(source_controls, "Source trajectory").grid(row=0, column=0, sticky="w", pady=2)
         self._source_trajectory_box = ttk.Combobox(source_controls,
-            textvariable=self._source_trajectory, values=("Cylindrical", "Linear"),
+            textvariable=self._source_trajectory, values=("Cylindrical", "Linear", "Piecewise linear"),
             state="readonly", width=16)
         self._source_trajectory_box.grid(row=0, column=1, sticky="ew", pady=2)
         self._source_trajectory_box.bind("<<ComboboxSelected>>", self._on_source_trajectory_changed)
@@ -905,6 +949,8 @@ class DetectorGeometryBuilder:
             ("Source height (mm)", "source_z_mm", "0"),
             ("Source start (x, y, z mm)", "source_start_mm", "1000, 0, 0"),
             ("Source end (x, y, z mm)", "source_end_mm", "1000, 200, 0"),
+            ("Source waypoints (x, y, z mm)", "source_waypoints_mm", "[[1000, -200, 0], [1000, 0, 0], [800, 200, 0]]"),
+            ("Views per source segment", "source_segment_views", "31, 30"),
             ("COR (mm)", "cor_mm", "0"),
             ("Panel roll / x (degrees)", "panel_x_angles_deg", "0"),
             ("Panel pitch / y (degrees)", "panel_y_angles_deg", "0"),
@@ -925,7 +971,7 @@ class DetectorGeometryBuilder:
         )
         source_fields = {
             "n_views", "orbit_start_deg", "scan_span_deg", "source_radius_mm",
-            "source_z_mm", "source_start_mm", "source_end_mm",
+            "source_z_mm", "source_start_mm", "source_end_mm", "source_waypoints_mm", "source_segment_views",
         }
         self._panel_count_display = tk.StringVar(value="")
         self._list_buttons = {}
@@ -946,7 +992,7 @@ class DetectorGeometryBuilder:
                 row=row, column=0, sticky="w", pady=2)
             variable = tk.StringVar(value=default)
             self._fields[name] = variable
-            entry = ttk.Entry(parent, textvariable=variable, width=16)
+            entry = ttk.Entry(parent, textvariable=variable, width=42 if name == "source_waypoints_mm" else 16)
             self._entries[name] = entry
             self._bind_parameter_help(entry, label)
             entry.grid(row=row, column=1, sticky="ew", pady=2)
@@ -1080,6 +1126,8 @@ class DetectorGeometryBuilder:
             self._fields[name].set(overrides.get(name, value))
         self._layout.set(layout)
         self._detector_stationary = stationary
+        self._source_trajectory.set("Piecewise linear" if "source_waypoints_mm" in overrides
+                                    else "Linear" if stationary is True else "Cylindrical")
         if self._example.get() == "Sea cargo: 20-foot container (2D Digital Radiography)":
             from types import SimpleNamespace
             self._set_volume_controls(SimpleNamespace(
@@ -1143,7 +1191,9 @@ class DetectorGeometryBuilder:
                 value = spacing[0 if name == "row_pitch_mm" or len(spacing) == 1 else 1]
             if value is None:
                 value = default
-            if isinstance(value, (list, tuple, np.ndarray)):
+            if name == "source_waypoints_mm" and isinstance(value, (list, tuple, np.ndarray)):
+                value = repr(np.asarray(value).tolist())
+            elif isinstance(value, (list, tuple, np.ndarray)):
                 value = ", ".join(str(item) for item in value)
             self._fields[name].set(str(value))
         self._layout.set(settings["layout"])
@@ -1152,6 +1202,8 @@ class DetectorGeometryBuilder:
             "Fixed detector, moving source": True,
             "Fixed detector, arc source": "arc",
         }[settings["source_motion"]]
+        self._source_trajectory.set("Piecewise linear" if settings.get("source_waypoints_mm") is not None
+                                    else "Linear" if self._detector_stationary is True else "Cylindrical")
         self._builder_button.configure(state=self.tk.DISABLED)
         self._update_module_count_field()
         self._example_description.set(f"Loaded editable settings: {Path(path).name}")
@@ -1322,7 +1374,10 @@ class DetectorGeometryBuilder:
         """Layout controls panel shape; motion controls source trajectory fields."""
         inspection = getattr(self, "_inspection_mode", False)
         if hasattr(self, "_source_trajectory_box"):
-            self._source_trajectory.set("Linear" if self._detector_stationary is True else "Cylindrical")
+            if self._detector_stationary is not True:
+                self._source_trajectory.set("Cylindrical")
+            elif self._source_trajectory.get() != "Piecewise linear":
+                self._source_trajectory.set("Linear")
             self._source_trajectory_box.configure(state="disabled" if inspection else "readonly")
         if hasattr(self, "_detector_motion_box"):
             self._detector_motion.set("Fixed Position" if self._detector_stationary else "Moving with Source")
@@ -1347,6 +1402,7 @@ class DetectorGeometryBuilder:
             widget.configure(state=self.tk.NORMAL)
         cylindrical = self._layout.get() == "Cylindrical"
         linear_source = self._detector_stationary is True
+        piecewise_source = linear_source and self._source_trajectory.get() == "Piecewise linear"
         enabled = {
             "cor_mm": True,
             "n_modules": cylindrical,
@@ -1355,8 +1411,11 @@ class DetectorGeometryBuilder:
             "normal_offsets_mm": not cylindrical,
             "panel_angles_deg": not cylindrical,
             "z_offsets_mm": not cylindrical,
-            "source_start_mm": linear_source,
-            "source_end_mm": linear_source,
+            "source_start_mm": linear_source and not piecewise_source,
+            "source_end_mm": linear_source and not piecewise_source,
+            "source_waypoints_mm": piecewise_source,
+            "source_segment_views": piecewise_source,
+            "n_views": not piecewise_source,
             "source_radius_mm": not linear_source,
             "source_z_mm": not linear_source,
             "orbit_start_deg": not linear_source,
@@ -1369,6 +1428,8 @@ class DetectorGeometryBuilder:
         for name, active in enabled.items():
             self._entries[name].configure(
                 state=self.tk.NORMAL if active else self.tk.DISABLED)
+        if "movement_views" in self._entries:
+            self._entries["movement_views"].configure(state=self.tk.DISABLED if piecewise_source else self.tk.NORMAL)
         timed = hasattr(self, "_timing_enabled") and self._timing_enabled.get()
         dr = getattr(self, "_simulation_mode", "ct") == "dr"
         self._timing_toggle.configure(text="Use timing for DR conveyor motion" if dr else "Use timing to derive orbit and z motion")
@@ -1464,7 +1525,7 @@ class DetectorGeometryBuilder:
 
     def _on_source_trajectory_changed(self, event=None):
         """Use supported source/detector combinations; Confirm rebuilds the scene."""
-        if self._source_trajectory.get() == "Linear":
+        if self._source_trajectory.get() in ("Linear", "Piecewise linear"):
             self._detector_stationary = True
         elif self._detector_stationary is True:
             self._detector_stationary = "arc"
@@ -1475,7 +1536,7 @@ class DetectorGeometryBuilder:
         if self._detector_motion.get() == "Moving with Source":
             self._detector_stationary = False
         else:
-            self._detector_stationary = True if self._source_trajectory.get() == "Linear" else "arc"
+            self._detector_stationary = True if self._source_trajectory.get() in ("Linear", "Piecewise linear") else "arc"
         self._update_field_states()
         self._set_help("Detector motion")
 
@@ -1521,13 +1582,26 @@ class DetectorGeometryBuilder:
 
     def _read_parameters(self):
         values = {name: variable.get().strip() for name, variable in self._fields.items()}
-        n_views = int(self._parse_numbers(values["n_views"], "Views", integer=True))
         rows = int(self._parse_numbers(values["rows"], "Module rows", integer=True))
         columns = int(self._parse_numbers(values["columns"], "Module columns", integer=True))
         column_gap = int(self._parse_numbers(values["column_gap"], "Gap columns", integer=True))
         layout = self._layout.get()
         rotating_object = hasattr(self, "_rotate_object") and self._rotate_object.get()
         stationary = False if rotating_object else self._detector_stationary
+        waypoints, segment_views = None, None
+        if stationary is True and hasattr(self, "_source_trajectory") and self._source_trajectory.get() == "Piecewise linear":
+            import ast
+            try:
+                waypoints = ast.literal_eval(values["source_waypoints_mm"])
+            except (ValueError, SyntaxError) as exc:
+                raise ValueError("Source waypoints must be a list of x, y, z triples.") from exc
+            segment_views = np.atleast_1d(self._parse_numbers(
+                values["source_segment_views"], "Views per source segment", integer=True)).tolist()
+            positions = _piecewise_source_positions(waypoints, segment_views)
+            n_views = len(positions)
+            self._fields["n_views"].set(str(n_views))
+        else:
+            n_views = int(self._parse_numbers(values["n_views"], "Views", integer=True))
         if layout == "Cylindrical":
             n_modules = int(self._parse_numbers(
                 values["n_modules"], "Modules", integer=True))
@@ -1542,7 +1616,9 @@ class DetectorGeometryBuilder:
             normal = self._parse_numbers(values["normal_offsets_mm"], "Panel normal offsets")
             panel_angles = self._parse_numbers(values["panel_angles_deg"], "Panel angles")
             z_offsets = self._parse_numbers(values["z_offsets_mm"], "Panel z offsets")
-        if stationary is True:
+        if waypoints is not None:
+            source_start, source_end = positions[0].tolist(), positions[-1].tolist()
+        elif stationary is True:
             source_start = self._parse_numbers(
                 values["source_start_mm"], "Source start position")
             source_end = self._parse_numbers(values["source_end_mm"], "Source end position")
@@ -1588,6 +1664,8 @@ class DetectorGeometryBuilder:
             "source_z_mm": source_height,
             "source_start_mm": source_start,
             "source_end_mm": source_end,
+            "source_waypoints_mm": waypoints,
+            "source_segment_views": segment_views,
             "orbit_start_deg": orbit_start,
             "scan_span_deg": scan_span,
             "module_shape": (rows, columns),

@@ -28,6 +28,7 @@
 # --------------------------------------------------------------------------
 #
 import tigre
+import numpy as np
 from tigre.utilities import sample_loader
 from tigre.utilities import sl3d
 

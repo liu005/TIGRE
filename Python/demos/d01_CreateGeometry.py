@@ -129,4 +129,4 @@ geo = tigre.geometry(
 
 #%% Plot your geometry
 geo = tigre.geometry_default()  # Default cone beam geometry
-tigre.plot_geometry(geo, angle=-np.pi / 6)
+tigre.plot_geometry(geo, angles=np.array([-np.pi / 6]))

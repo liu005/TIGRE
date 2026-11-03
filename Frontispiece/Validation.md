@@ -1,11 +1,45 @@
 # Validation of the detector and demo workflows
 
-Use the project's `recon` Conda environment for Python commands. From the
+Use the project's `recon-new` Conda environment for current Python validation;
+older validation commands below retain the original `recon` environment. From the
 repository root, set `PYTHONPATH` to the checkout's `Python` folder. An older
 installed TIGRE copy may not contain the new modules. Scanner demo 21 and new
 demos 23/25/26/27 also select the checkout when launched directly from an IDE.
 
 ## Python regression checks
+
+For the Python piecewise linear source feature, use `recon-new` and run from
+the repository root with pytest available:
+
+```powershell
+$env:PYTHONPATH = Join-Path $PWD 'Python'
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = '1'
+conda run -n recon-new python -m pytest `
+  Python/tests/test_piecewise_source_gui.py Python/tests/test_gui_parameter_help.py `
+  Python/tests/test_geometry_yaml.py Python/tests/test_detector_geometry_examples.py `
+  Python/tests/test_geometry_recon_export.py Python/tests/test_acquisition_timing.py -q -rs
+```
+
+This set covers 82 checks, including actual Tk workflows and CUDA surface
+projection/reconstruction of a bent source path. The native test also compares
+the combined projection stack with two separate linear-source scans sharing
+the same fixed detector. Segment junctions are acquired once. Recipes, exact
+archives and exported reconstruction geometry preserve the complete path.
+MATLAB's builder does not yet implement this editable mode.
+
+The final expanded check on 3 November 2026 passed 122 tests with no skips,
+including MATLAB bridge round trips, object rotation, endpoint guards, voxel
+synchronization, cargo DR and CT transmission checks. Empty optional waypoint
+fields are normalized from MATLAB arrays back to absent settings so existing
+non-piecewise recipes remain compatible. The run log is
+`.codex-results/piecewise_source_commit_final.log`.
+
+The local `recon-new` environment has no pytest installation; the recorded run
+uses a workspace-local copy of pytest and its dependencies, with a custom
+workspace `tmp_path` fixture because sandbox temporary-directory permissions
+prevent normal pytest fixtures. Numerical libraries and CUDA extensions are
+loaded from `recon-new`. The previous demo runs in `recon` and `recon-new` are
+recorded in [the 3 November report](Demo_validation_2026-11-03.md).
 
 For the CT Simulation Builder's current CT/DR workflows, run from `Python/`:
 

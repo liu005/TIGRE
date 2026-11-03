@@ -18,7 +18,11 @@ for attenuation inputs, output arrays and sampling limitations.
 
 The complete preset catalogues in the [Python manual](./TIGRE_CT_Simulation_Builder_Python.md#catalogue-of-gui-presets)
 and [MATLAB manual](./TIGRE_CT_Simulation_Builder_MATLAB.md#catalogue-of-gui-presets)
-describe all 13 GUI examples, their uses and reconstruction/DR constraints.
+describe the GUI examples, their uses and reconstruction/DR constraints.
+Python has 14 presets, including a [piecewise linear source path](./TIGRE_CT_Simulation_Builder_Python.md#piecewise-linear-source-movement);
+MATLAB has the original 13. The Python mode joins straight source segments
+on one fixed detector, retains shared junctions once, and saves both editable
+waypoint recipes and exact per-view geometry for iterative reconstruction.
 
 TIGRE's standard geometry describes a flat detector. The *detector-surface* model
 describes every measured pixel by its physical position, so curved arrays, modules

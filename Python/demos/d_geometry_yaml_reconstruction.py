@@ -85,7 +85,7 @@ def run(geometry_path, output, iterations=100, phantom="head", voxels=(16, 32, 3
     output.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(output / "results.npz", phantom=truth,
         reconstruction=reconstruction, projections=projections, predicted_projections=predicted,
-        residuals=np.r_[initial_residual, residuals], nVoxel=geo.nVoxel, dVoxel=geo.dVoxel,
+        residuals=np.r_[initial_residual, residuals], dVoxel=geo.dVoxel,
         **surface_archive_arrays(surface, geo))
     (output / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     import matplotlib

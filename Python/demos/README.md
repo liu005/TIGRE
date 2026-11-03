@@ -51,7 +51,7 @@ See the
 [MATLAB demo index](../../MATLAB/Demos/README.md) and
 [Python GUI manual](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md).
 
-Its [catalogue of all 13 GUI presets](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md#catalogue-of-gui-presets)
+Its [catalogue of GUI presets](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md#catalogue-of-gui-presets)
 explains each geometry, its intended application and CT/DR export limitations.
 
 The GUI's **Sea cargo: 20-foot container (2D Digital Radiography)** preset

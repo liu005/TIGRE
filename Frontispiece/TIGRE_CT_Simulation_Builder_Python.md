@@ -1,7 +1,7 @@
 **TIGRE CT Simulation Builder — Python user manual**
 
-**Manual version: 1.6**
-**Updated: 30 October 2026**
+**Manual version: 1.7**
+**Updated: 3 November 2026**
 **Software reference: TIGRE Python package 3.0.0; CT Simulation Builder checkout.**
 
 The manual version identifies this document, not a separate application release.
@@ -10,7 +10,7 @@ The PDF edition includes a cover page, contents, and wrapping tables/code.
 # Start the GUI
 
 Install TIGRE's Python requirements, including Tkinter and Matplotlib, and
-use the project's `recon` conda environment (`conda activate recon`). From the repository's
+use the project's `recon-new` conda environment (`conda activate recon-new`). From the repository's
 `Python/` directory, launch the module:
 
 ```console
@@ -26,7 +26,7 @@ python tigre/utilities/detector_geometry_gui.py
 On Windows PowerShell, for example:
 
 ```powershell
-conda activate recon
+conda activate recon-new
 Set-Location D:\works\software\TIGRE_work\Python
 python -m tigre.utilities.detector_geometry_gui
 ```
@@ -173,7 +173,8 @@ The numbered [References and further reading](#references-and-further-reading) a
 # Use the Source tab
 
 Choose **Source trajectory: Cylindrical** for a circular orbit about +z,
-or **Linear** for world x/y/z endpoints. Cylindrical source motion is
+**Linear** for world x/y/z endpoints, or **Piecewise linear** for joined straight
+segments through world-coordinate waypoints. Cylindrical source motion is
 independent of cylindrical detector layout. Linear selects a fixed detector;
 switching back to Cylindrical retains the fixed detector and uses an arc
 source. Choose Moving with Source in Detectors for a rotating rig.
@@ -204,6 +205,35 @@ placed at the starting angle.
 both source and detector receive the per-view shift
 `COR * (-sin(angle), cos(angle), 0)`. It defaults to zero and stays enabled in every example. Stationary detectors
 require COR = 0; a nonzero value produces a validation error.
+
+## Piecewise linear source movement
+
+Choose **Source trajectory: Piecewise linear** to join two or more straight
+source movements into one acquisition with a fixed detector. The
+**Tomosynthesis: piecewise linear source** example provides a starting point.
+
+1. Enter **Source waypoints (x, y, z mm)** as an ordered list, for example
+   `[[1000, -300, 0], [1000, 0, 0], [800, 300, 100]]`.
+2. Enter **Views per source segment**, for example `21, 21`. Each count includes
+   its segment's two endpoints. A shared junction is acquired once, so this
+   example has `21 + 21 - 1 = 41` total views.
+3. Configure the fixed detector panels and volume, then press **Confirm**.
+   **Views** is derived from the segment counts. Use Play or the slider to inspect
+   the source moving through the junction.
+
+The detector pose is established from the first waypoint and held fixed for
+every segment, including its tilts, gaps and mask. This combines source paths
+on the same detector; it does not merge two independently positioned detectors.
+Samples are uniformly spaced within each segment. Segment lengths and view
+counts may differ; these counts do not specify motion speed or exposure timing.
+Disable orbit timing and use COR = 0. Source start/end and circular-orbit fields
+are ignored while this mode is selected.
+
+Save geometry YAML preserves the editable waypoints and counts. Exact YAML/NPZ
+exports preserve every sampled source position and detector pixel. The exported
+reconstruction script uses this combined acquisition; use surface iterative
+methods such as CGLS. A bent source path does not supply a circular FDK orbit
+or guarantee complete angular coverage.
 
 ## Stationary detector and moving source
 
@@ -806,8 +836,9 @@ short scan.
 
 ## Catalogue of GUI presets
 
-The Example menu contains the following 13 presets, in this order, in both
-Python and MATLAB. Choose a name and select **Load example** to replace the
+The Python Example menu contains the following 14 presets, in this order.
+MATLAB has the original 13; the piecewise linear source preset is currently
+Python-only. Choose a name and select **Load example** to replace the
 current controls and build its preview. Press **Confirm** before playback.
 Presets are editable starting points, not calibrated or validated commercial
 scanner models. Export uses the last saved YAML, so save after making changes.
@@ -898,6 +929,19 @@ switching rather than literal mechanical travel.
 
 **Reconstruction:** Use surface iterative reconstruction. The linear trajectory
 and limited angular range do not form a conventional circular FDK scan.
+
+### Tomosynthesis: piecewise linear source
+
+**What it is:** Two straight source segments through `(1000, -300, 0)`,
+`(1000, 0, 0)` and `(800, 300, 100)` mm with one fixed panel. Each segment
+has 21 views; the shared junction is counted once, giving 41 total views.
+
+**Used for:** Exploring bent source travel or joined linear source arrays.
+Edit the waypoints and segment counts to define additional straight segments.
+
+**Reconstruction:** Use surface iterative reconstruction. The detector pose
+stays fixed throughout; limited angular coverage can leave reconstruction
+artifacts. See [piecewise linear movement](#piecewise-linear-source-movement).
 
 ### Tomosynthesis: three fixed panels, linear source
 

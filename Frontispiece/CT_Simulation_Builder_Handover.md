@@ -1,6 +1,33 @@
 # TIGRE CT Simulation Builder handover
 
-Updated: 2026-10-30 (Australia/Sydney).
+Updated: 2026-11-03 (Australia/Sydney).
+
+## Piecewise linear source paths (Python)
+
+Manual/PDF revision 1.7 documents the new Source trajectory option and the
+14th Python preset, **Tomosynthesis: piecewise linear source**. MATLAB retains
+13 presets and does not yet provide an editable piecewise source mode.
+
+Define at least three world xyz waypoints and one view count (at least two)
+per segment. Sampling includes segment endpoints but acquires shared junctions
+once: two 21-view segments produce 41 views. The first waypoint establishes
+the fixed detector pose; later segments preserve its pixel coordinates, panel
+tilts, masked gaps and module boundaries. Views is derived on Confirm.
+Orbit timing and nonzero COR are unsupported for this mode. This joins source
+paths on a common detector rather than merging independently positioned rigs.
+
+YAML recipes retain waypoints and counts; exact YAML/NPZ preserves sampled
+coordinates. Preview, inspection/return-to-builder and reconstruction export
+use the combined acquisition. Surface CGLS is supported; this is not a circular
+FDK trajectory. Tests exercise invalid recipes, multiple segments, shared
+junction sampling, GUI transitions, archives, exported geometry, native CUDA
+projection equivalence to two linear scans and CGLS data consistency.
+
+Validation uses `recon-new`. Pytest is supplied locally for this environment;
+no environment packages were changed. See [validation commands](Validation.md)
+and the [demo run report](Demo_validation_2026-11-03.md).
+The final expanded run passed 122 checks without skips, including native CUDA,
+MAT bridge round trips, existing rotation and cargo DR workflows.
 
 ## Fixed-hardware DR timing
 
