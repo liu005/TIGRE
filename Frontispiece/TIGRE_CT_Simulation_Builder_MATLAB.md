@@ -456,7 +456,12 @@ The MATLAB Example menu contains the following 13 presets, in this order.
 Python additionally supports a piecewise linear source preset with joined
 segments and per-segment view counts; this mode is not implemented in the
 MATLAB builder. Exact surfaces exported from Python retain their per-view
-source coordinates. See the [Python instructions](TIGRE_CT_Simulation_Builder_Python.md#piecewise-linear-source-movement)
+source coordinates. Loading a Python piecewise recipe through `geometryFile`
+uses its exported exact surface and opens inspection mode, with builder
+controls disabled. A native MAT recipe containing piecewise settings without
+exact surface coordinates is rejected. Direct `buildModularSurface` calls
+also reject this unsupported editable path rather than replacing it with a
+straight line. See the [Python instructions](TIGRE_CT_Simulation_Builder_Python.md#piecewise-linear-source-movement)
 to create and save such a geometry.
 
 Choose a name and select **Load example** to replace the

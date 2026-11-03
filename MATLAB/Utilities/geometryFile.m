@@ -13,6 +13,16 @@ if strcmp(operation,'load')
     end
     if ~isfield(document,'geo'), document.geo=[]; end
     if isfield(document,'settings')
+        piecewise=(isfield(document.settings,'source_waypoints_mm') && ~isempty(document.settings.source_waypoints_mm)) ...
+            || (isfield(document.settings,'source_segment_views') && ~isempty(document.settings.source_segment_views));
+        if piecewise
+            assert(isfield(document,'surface'),'TIGRE:geometryFile:piecewise', ...
+                'Piecewise source recipes require an exact surface exported by Python.');
+            % The native builder cannot edit this path; preserve the supplied
+            % rays and open the GUI in exact inspection mode instead.
+            document=rmfield(document,'settings');
+            return;
+        end
         % SciPy preserves YAML integer scalars as int64. MATLAB geometry
         % arithmetic (including linspace) expects floating-point settings.
         names=fieldnames(document.settings);

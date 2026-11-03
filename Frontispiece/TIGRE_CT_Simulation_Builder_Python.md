@@ -235,6 +235,11 @@ reconstruction script uses this combined acquisition; use surface iterative
 methods such as CGLS. A bent source path does not supply a circular FDK orbit
 or guarantee complete angular coverage.
 
+MATLAB can inspect the exported exact geometry through `geometryFile`; its
+builder does not edit piecewise source paths. Importing a Python recipe uses
+the exact coordinates supplied by the bridge. A MATLAB-only recipe without
+those coordinates is rejected rather than rebuilt as a straight path.
+
 ## Stationary detector and moving source
 
 Set **Detector motion** to **Fixed Position** and Source trajectory to **Linear** to hold the panels fixed while the

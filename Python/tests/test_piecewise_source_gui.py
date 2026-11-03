@@ -91,12 +91,18 @@ def test_recipe_exact_and_export_preserve_piecewise_path(tmp_path):
     np.testing.assert_array_equal(actual.source_positions_mm, expected.source_positions_mm)
 
 
-def test_piecewise_recipe_matlab_bridge_round_trip(tmp_path):
+@pytest.mark.parametrize("matlab_counts", [False, True])
+def test_piecewise_recipe_matlab_bridge_round_trip(tmp_path, matlab_counts):
     from tigre.utilities.geometry_matlab_bridge import to_mat, from_mat
     recipe, mat, restored = (tmp_path / name for name in ("recipe.yaml", "recipe.mat", "restored.yaml"))
     parameters = settings()
     save_geometry_yaml(recipe, settings=parameters)
     to_mat(recipe, mat)
+    if matlab_counts:
+        from scipy.io import loadmat, savemat
+        document = loadmat(mat, simplify_cells=True)
+        document["settings"]["source_segment_views"] = np.array([3., 4.])
+        savemat(mat, {key: value for key, value in document.items() if not key.startswith("__")})
     from_mat(mat, restored)
     expected, actual = load_geometry_file(recipe), load_geometry_file(restored)
     np.testing.assert_array_equal(actual.settings["source_waypoints_mm"], parameters["source_waypoints_mm"])

@@ -4,6 +4,9 @@ function surface = buildModularSurface(s)
 % valid_mask: rows x cols x views. Coordinates are world x/y/z, in mm.
 % module_slices: zero-based half-open [rowStart rowStop colStart colStop].
 % Settings use Python/YAML names and degrees; panel rotation is Rz*Ry*Rx.
+assert(~(isfield(s,'source_waypoints_mm') && ~isempty(s.source_waypoints_mm)) ...
+    && ~(isfield(s,'source_segment_views') && ~isempty(s.source_segment_views)), ...
+    'TIGRE:surface:piecewise','Piecewise source paths require exact geometry exported by Python; use geometryFile to load it.');
 validateattributes(s.n_views, {'numeric'}, {'scalar','integer','positive','<=',6000});
 validateattributes(s.module_shape, {'numeric'}, {'numel',2,'integer','positive','<=',4096});
 validateattributes(s.column_gap, {'numeric'}, {'scalar','integer','nonnegative'});

@@ -86,6 +86,12 @@ def from_mat(source, target):
         for key in ('source_waypoints_mm', 'source_segment_views'):
             if np.asarray(settings.get(key, [])).size == 0:
                 settings[key] = None
+        if settings['source_segment_views'] is not None:
+            counts = np.atleast_1d(np.asarray(settings['source_segment_views'], dtype=float))
+            if (not np.isfinite(counts).all() or np.any(counts != np.floor(counts))
+                    or np.any(counts < 2) or np.any(counts > 6000)):
+                raise ValueError('source_segment_views must contain integers from 2 to 6000')
+            settings['source_segment_views'] = counts.astype(np.int64)
         save_geometry_yaml(target, settings=settings, geometry=volume)
     else:
         # Read unsqueezed arrays: singleton rows/views carry physical meaning.

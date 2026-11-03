@@ -601,6 +601,9 @@ def test_failed_preview_clears_old_scene_and_disables_animation():
 def test_gui_has_help_text_for_every_input_label():
     assert set(DETECTOR_FIELD_HELP) == {
         "Source trajectory",
+        "Source waypoints (x, y, z mm)",
+        "Views per source segment",
+        "Rotate object (fixed source and detector)",
         "Voxel counts",
         "Voxel size (z, y, x mm)",
         "Full size (mm)",
@@ -628,6 +631,8 @@ def test_gui_has_help_text_for_every_input_label():
         "Source start (x, y, z mm)",
         "Source end (x, y, z mm)",
         "Module rows",
+        "Top arm rows",
+        "Arm clearance (mm)",
         "Module columns",
         "Row pitch (mm)",
         "Column pitch (mm)",
@@ -758,16 +763,22 @@ def test_gui_disabled_fields_and_list_buttons(layout, motion):
     builder.tk = type("TkConstants", (), {"NORMAL": "normal", "DISABLED": "disabled"})
     builder._layout = Mock(get=Mock(return_value=layout))
     builder._detector_stationary = motion
+    builder._source_trajectory = Mock(get=Mock(return_value="Linear"))
+    builder._timing_toggle = Mock()
+    builder._timing_enabled = Mock(get=Mock(return_value=False))
+    builder._volume_motion = Mock(get=Mock(return_value=False))
     names = ["cor_mm", "n_modules", "angular_span_deg", "transverse_centers_mm",
         "normal_offsets_mm", "panel_angles_deg", "z_offsets_mm", "source_start_mm",
         "source_end_mm", "source_radius_mm", "source_z_mm", "orbit_start_deg",
-        "scan_span_deg", "panel_x_angles_deg", "panel_y_angles_deg"]
+        "scan_span_deg", "panel_x_angles_deg", "panel_y_angles_deg", "n_views",
+        "source_waypoints_mm", "source_segment_views"]
     builder._entries = {name: Mock() for name in names}
     builder._list_buttons = {name: Mock() for name in names if name.startswith("panel_") or name.endswith("offsets_mm")}
     builder._update_field_states()
     enabled = {"cor_mm": True, "n_modules": layout == "Cylindrical",
         "angular_span_deg": layout == "Cylindrical", "panel_x_angles_deg": True,
-        "panel_y_angles_deg": True}
+        "panel_y_angles_deg": True, "n_views": True,
+        "source_waypoints_mm": False, "source_segment_views": False}
     for name in names:
         if name not in enabled:
             enabled[name] = (motion is True if name in ("source_start_mm", "source_end_mm")

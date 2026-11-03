@@ -2,6 +2,17 @@
 
 Updated: 2026-11-03 (Australia/Sydney).
 
+## Final audit
+
+The [project audit](Project_audit_2026-11-03.md) records 451 passing Python
+tests and 25 passing MATLAB suites. It also closes whole-suite collection
+gaps, protects MATLAB imports from silently replacing piecewise source paths,
+normalizes MATLAB segment counts and improves missing-phantom errors.
+Dependency consistency and all 98 checked local documentation links pass.
+External scanner data, measured GCT and optional PyTorch remain outside the
+verified set. Audit changes do not implement an editable MATLAB piecewise
+source builder; exact imports open inspection mode.
+
 ## Piecewise linear source paths (Python)
 
 Manual/PDF revision 1.7 documents the new Source trajectory option and the

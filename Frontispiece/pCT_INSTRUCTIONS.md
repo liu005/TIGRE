@@ -1,8 +1,8 @@
 # pCT extension
 
-## Introduction  
+## Introduction
 
-Cuda code and Matlab top layer to create optimized proton radiographies based on the method of [Collins-Fekete](https://doi.org/10.1088/0031-9155/61/23/8232). 
+Cuda code and Matlab top layer to create optimized proton radiographies based on the method of [Collins-Fekete](https://doi.org/10.1088/0031-9155/61/23/8232).
 The radiographies obtained from the code extension are intended to be used as pre-processing step before using the reconstruction algorithms implemented in TIGRE to do a full pCT reconstruction.
 However, the the code could be also used as stand-alone tool for optimized proton radiographies only.
 
@@ -10,11 +10,11 @@ However, the the code could be also used as stand-alone tool for optimized proto
 
 ### Start up procedure
 
-To use the pCT extension within the TIGRE framework, the CUDA source files have to be compiled. 
+To use the pCT extension within the TIGRE framework, the CUDA source files have to be compiled.
 Starting from the MATLAB folder within the TIGRE framework, run the following script:
 
-``` 
-CompilePCT 
+```
+CompilePCT
 ```
 
 You will be asked to enter a pixel length and/or a intercepts vector size. In case X/Y pixel lengths are not the same, enter the smaller one. If you want to stick to the default values, simply hit enter. The code will give you feedback on how many protons were rejected during the calculation of the radiographies due to the intercepts vector size.
@@ -29,14 +29,14 @@ The simulation data has to contain the following parameters
 | water equivalent path length      | WEPL    | mm |
 | entry position (x,y) component   | posIn   | mm |
 | exit position (x,y) component | posOut | mm |
-| entry direction (x,y) component   |   dirIn| mm , dz = 1!| 
+| entry direction (x,y) component   |   dirIn| mm , dz = 1!|
 | exit direction (x,y) component   | dirOut| mm, dz = 1!|
 
 All inputs have to share the same unit of length, which is mm. Be aware that dz has to be 1 in all cases.
 
-### Main method 
+### Main method
 To ensure that the method delivers reasonable results, particles with large angular and energetic deviations have to be cut from the dataset (3 sigma cuts) beforehand.
-The main method for generating the improved radiographies is called by, 
+The main method for generating the improved radiographies is called by,
 
 ```matlab
 proj = pCTCubicSpline_mex(posIn, posOut, dirIn, dirOut, Wepl, eIn, geo);
@@ -56,11 +56,13 @@ __eIn__ is a single value containing the initial beam energy (in MeV). Other par
 | geo.hull | array of convex hull parameters [a, b, alpha, h] | mm | single |
 
 If parameter __h__ of the HULL_PARAMS is set to zero, to calculation will be performed without a convex hull. Otherwise, the hull follows the equation (x cos(alpha)-z sin(alpha))²/a² + (x sin(alpha)+z cos(alpha))²/b² = 1 for y in [-h/2, h/2]. The ellipse can be rotated around the y-axis by the angle alpha.
-Please click ![here](pct_cuda_toolbox.pdf "pCT toolbox geometry") to find a sketch displaying the definition of the geometry parameters used within the code extension. The origin is located in the center of the phantom.
-Furthermore, a sketch displaying the definition of the detector parameters used within the code extension can be found ![here](pct_cuda_toolbox2.pdf "pCT toolbox detector parameters").
+The origin is located in the center of the phantom. Historical supplemental
+sketches named `pct_cuda_toolbox.pdf` (geometry) and `pct_cuda_toolbox2.pdf`
+(detector parameters) are not bundled in this checkout; use the parameter
+definitions above when configuring the extension.
 
 ### Testing data
-A demo script calculating one optimized radiography was prepared for the parallel geometry. To check if the code runs properly on your system run the script pRad_demo.m in MATLAB/Demos. 
+A demo script calculating one optimized radiography was prepared for the parallel geometry. To check if the code runs properly on your system run the script pRad_demo.m in MATLAB/Demos.
 
 ## Debugging notes
 

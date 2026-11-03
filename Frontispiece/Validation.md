@@ -8,6 +8,10 @@ demos 23/25/26/27 also select the checkout when launched directly from an IDE.
 
 ## Python regression checks
 
+The [final 3 November project audit](Project_audit_2026-11-03.md) records
+451 passing Python tests, 25 passing MATLAB suites, dependency checks,
+documentation checks, fixed issues and remaining external-data limitations.
+
 For the Python piecewise linear source feature, use `recon-new` and run from
 the repository root with pytest available:
 
@@ -20,7 +24,7 @@ conda run -n recon-new python -m pytest `
   Python/tests/test_geometry_recon_export.py Python/tests/test_acquisition_timing.py -q -rs
 ```
 
-This set covers 82 checks, including actual Tk workflows and CUDA surface
+This set covers 83 checks, including actual Tk workflows and CUDA surface
 projection/reconstruction of a bent source path. The native test also compares
 the combined projection stack with two separate linear-source scans sharing
 the same fixed detector. Segment junctions are acquired once. Recipes, exact

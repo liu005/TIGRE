@@ -1,5 +1,8 @@
 [tool.black]
 line-length = 100
 
+[tool.pytest.ini_options]
+markers = ["gpu: requires the compiled CUDA extensions and a compatible GPU"]
+
 [build-system]
 requires = ["setuptools", "wheel", "Cython", "numpy"]

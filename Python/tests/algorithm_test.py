@@ -6,7 +6,7 @@ import traceback
 import numpy as np
 import tigre
 from matplotlib import pyplot as plt
-from tigre.demos.Test_data.data_loader import load_head_phantom
+from tigre.utilities.sample_loader import load_head_phantom
 from tigre.utilities.Measure_Quality import Measure_Quality
 
 
