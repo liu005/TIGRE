@@ -5,30 +5,11 @@ from __future__ import print_function
 import copy
 
 import numpy as np
-import cupy as cp
 from tigre.utilities.Atb import Atb
 from tigre.utilities.filtering import filtering, fdk_weight_filter_chunked
 from tigre.utilities.redundancy_weighting import redundancy_weighting, zeropadding, zeropad_geometry
 from scipy.spatial.transform import Rotation
 import gc
-
-class device_manager:
-    """
-    Context manager, either CPU or nVidia GPU
-    """
-    def __init__(self, arr):
-        try:
-            self.device = arr.device
-        except AttributeError:
-            self.device = "cpu"
-            
-    def __enter__(self):
-        return self.device
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        pass
-    
-
 
 def FDK(proj, geo, angles, **kwargs):
     """
@@ -52,6 +33,10 @@ def FDK(proj, geo, angles, **kwargs):
 
     :param verbose: bool
     Feedback print statements for algorithm progress
+
+    :param filter_backend: str
+    Pre-weighting/FFT backend: "numpy" (default) or optional "cupy".
+    Backprojection still uses TIGRE's native CUDA implementation.
 
     :param kwargs: dict
     keyword arguments
@@ -135,11 +120,11 @@ def FDK(proj, geo, angles, **kwargs):
     # intensity weight -> per-view-scaled ramp filter, streamed in angle
     # chunks so the device never holds more than the (possibly resident)
     # input stack plus one chunk. Returns the host float32 stack for Atb.
-    with device_manager(proj):
-        proj_filt = fdk_weight_filter_chunked(
-            proj, geo, angles, pad_left=pad_left, pad_right=pad_right,
-            wang=wang, dbeta=dbeta, legacy_scale=legacy_scale,
-            redundancy_factor=redundancy_factor, verbose=verbose)
+    proj_filt = fdk_weight_filter_chunked(
+        proj, geo, angles, pad_left=pad_left, pad_right=pad_right,
+        wang=wang, dbeta=dbeta, legacy_scale=legacy_scale,
+        redundancy_factor=redundancy_factor, verbose=verbose,
+        backend=kwargs.get("filter_backend", "numpy"))
 
     # clean up gpu memory and reset before running Atb()
     del proj
@@ -163,7 +148,8 @@ def fbp(proj, geo, angles, **kwargs):  # noqa: D103
     verbose = kwargs["verbose"] if "verbose" in kwargs else False
     gpuids = kwargs["gpuids"] if "gpuids" in kwargs else None
     proj_filt = filtering(copy.deepcopy(proj), geox,
-                          angles, parker=False, verbose=verbose)
+                          angles, parker=False, verbose=verbose,
+                          backend=kwargs.get("filter_backend", "numpy"))
     if not isinstance(geo.DSO, np.ndarray):
         return Atb(proj_filt, geo, angles, gpuids=gpuids)* geo.DSO / geo.DSD
     else:

@@ -2,22 +2,9 @@ from __future__ import division
 from __future__ import print_function
 from tigre.utilities.parkerweight import parkerweight
 import numpy as np
-import cupy as cp
+from tigre.utilities._array_backend import get_backend
 
 import warnings
-
-class device_manager:
-    def __init__(self, arr):
-        try:
-            self.device = arr.device
-        except AttributeError:
-            self.device = "cpu"
-            
-    def __enter__(self):
-        return self.device
-    
-    def __exit__(self, exc_type, exc_value, traceback):
-        pass
 
 def per_view_dbeta(angles, dbeta=None):
     """Per-view angular quadrature weight dbeta_i, shape (n,) float64 (host).
@@ -104,14 +91,10 @@ def per_view_scale(geo, angles, dbeta=None, redundancy_factor=None):
 
 # TODO: Fix parker
 def filtering(proj, geo, angles, parker, verbose=False, dbeta=None, legacy_scale=False,
-              redundancy_factor=None):
-    xp = cp.get_array_module(proj)
-    if xp.__name__ == "cupy":
-        from cupyx.scipy.fft import fft, ifft
-        device = proj.device
-    else:
-        from scipy.fft import fft, ifft
-        device = None
+              redundancy_factor=None, backend=None):
+    execution = get_backend(backend, proj)
+    xp = execution.xp
+    fft, ifft = execution.fft, execution.ifft
 
     # Apply Parker weighting if needed
     if parker:
@@ -121,7 +104,8 @@ def filtering(proj, geo, angles, parker, verbose=False, dbeta=None, legacy_scale
     filt_len=max(64,2**nextpow2(2*max(geo.nDetector)))
     ramp_kernel=ramp_flat(filt_len)
 
-    with device_manager(proj) as device:
+    with execution.device_context():
+        proj = xp.asarray(proj)
         # Create filter
         d=1
         filt=xp.array(filter(geo.filter,ramp_kernel[0],filt_len,d,verbose=verbose))
@@ -162,7 +146,7 @@ def filtering(proj, geo, angles, parker, verbose=False, dbeta=None, legacy_scale
             fproj=ifft(fproj,axis=1)
             proj[angles.shape[0]-1]=fproj.real[:,padding:padding+geo.nDetector[1]] * scale[angles.shape[0]-1]
 
-        return proj.get() if xp.__name__ == "cupy" else proj
+        return execution.to_numpy(proj)
 
 
 def cosine_weight(u, v, DSD, R=None, xp=np):
@@ -192,10 +176,29 @@ def cosine_weight(u, v, DSD, R=None, xp=np):
 def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
                               wang=None, dbeta=None, legacy_scale=False,
                               redundancy_factor=None,
-                              chunk_nangles=None, verbose=False):
+                              chunk_nangles=None, verbose=False, backend="numpy"):
+    """FDK pre-weighting/filtering; NumPy by default, CuPy explicitly opt-in.
+
+    ``backend='cupy'`` lazily loads the optional accelerator. Both paths use
+    the same weighting, padding, FFT pairing and scaling implementation and
+    return a host array. The native CUDA backprojector is independent.
+    """
+    execution = get_backend(backend, proj)
+    with execution.device_context():
+        return _fdk_weight_filter_chunked(
+            proj, zgeo, angles, pad_left=pad_left, pad_right=pad_right,
+            wang=wang, dbeta=dbeta, legacy_scale=legacy_scale,
+            redundancy_factor=redundancy_factor, chunk_nangles=chunk_nangles,
+            verbose=verbose, execution=execution)
+
+
+def _fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
+                               wang=None, dbeta=None, legacy_scale=False,
+                               redundancy_factor=None,
+                               chunk_nangles=None, verbose=False, execution=None):
     """Fused, chunked FDK pre-weight + ramp filter with bounded GPU memory.
 
-    Performs, per angle-chunk on the GPU (or CPU if no CuPy device):
+    Performs, per angle-chunk on the selected backend:
         [Wang redundancy weight] -> [COR zero-pad] -> cosine (intensity)
         weight -> ramp filter with per-view scale
     writing each finished chunk into ONE host float32 output array of shape
@@ -230,21 +233,15 @@ def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
     -------
     (n, V, U + pad_left + pad_right) float32 C-contiguous host array.
     """
-    xp_in = cp.get_array_module(proj)
+    xp = execution.xp
+    fft, ifft = execution.fft, execution.ifft
     n, V, U = proj.shape
     Uo = U + pad_left + pad_right
     if int(zgeo.nDetector[1]) != Uo:
         raise ValueError(f"zgeo.nDetector[1]={int(zgeo.nDetector[1])} != "
                          f"U+pads={Uo}; pass the zeropad_geometry() result")
 
-    # Work on GPU when the input is already there or a device is available.
-    use_gpu = xp_in.__name__ == "cupy"
-    if not use_gpu:
-        try:
-            use_gpu = cp.cuda.runtime.getDeviceCount() > 0
-        except Exception:
-            use_gpu = False
-    xp = cp if use_gpu else np
+    use_gpu = execution.is_gpu
 
     # Per-view ramp scale (host), then constants on the compute device.
     if legacy_scale:
@@ -291,23 +288,13 @@ def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
     # Chunk sizing: even, from free device memory (chunk + FFT scratch + the
     # cosine grids cost roughly 3x the chunk's own bytes).
     if chunk_nangles is None:
-        if use_gpu:
-            free_b, _total = cp.cuda.runtime.memGetInfo()
-            per_view_b = V * Uo * 4
-            chunk_nangles = int(free_b * 0.4 / (per_view_b * 3))
-        else:
-            chunk_nangles = n
+        chunk_nangles = execution.default_chunk_size(n, V, Uo)
     chunk_nangles = max(2, min(n, chunk_nangles // 2 * 2))
 
     out = np.empty((n, V, Uo), dtype=np.float32)
     if verbose:
         print(f"fdk chunked filter: {n} views in chunks of {chunk_nangles} "
               f"({'GPU' if use_gpu else 'CPU'}; pad L{pad_left}/R{pad_right})")
-
-    if use_gpu:
-        from cupyx.scipy.fft import fft, ifft
-    else:
-        from scipy.fft import fft, ifft
 
     fproj = xp.empty((int(V), filt_len), dtype=xp.complex64)
     yv = xp.linspace(-V / 2 + 0.5, V / 2 - 0.5, int(V)) * zgeo.dDetector[0]
@@ -324,6 +311,10 @@ def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
                 c[:, :, pad_left:pad_left + U] *= wang_dev
         else:
             c = xp.asarray(proj[s:e])  # device view (CuPy in) or H2D copy
+            if not use_gpu:
+                # Match host-to-device staging: filtering must not consume
+                # the caller's NumPy stack when CPU execution is selected.
+                c = c.copy()
             if wang_dev is not None:
                 c *= wang_dev          # in place (see docstring note)
 
@@ -353,11 +344,10 @@ def fdk_weight_filter_chunked(proj, zgeo, angles, pad_left=0, pad_right=0,
             c[m - 1] = fp.real[:, padding:padding + Uo] * scale_np[e - 1]
 
         # --- chunk done -> host output --------------------------------------
-        out[s:e] = c.get() if use_gpu else c
+        out[s:e] = execution.to_numpy(c)
         del c
 
-    if use_gpu:
-        cp.get_default_memory_pool().free_all_blocks()
+    execution.release_cached_memory()
     return out
 
 

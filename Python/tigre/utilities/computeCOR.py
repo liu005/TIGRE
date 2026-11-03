@@ -72,9 +72,8 @@ def computeCOR(data, geo, angles, slc=None, gpu=True):
         # `import tigre`. Asking for the GPU on a machine without it now costs a
         # notice, not an ImportError.
         try:
-            import cupy as cp
-            from cupyx.scipy.interpolate import RegularGridInterpolator
-            xp = cp
+            from tigre.utilities._cupy_backend import cor_interpolator
+            xp, RegularGridInterpolator = cor_interpolator()
         except ImportError:
             print("computeCOR: CuPy unavailable, running on the CPU")
             gpu = False

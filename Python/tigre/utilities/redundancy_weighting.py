@@ -1,6 +1,6 @@
 import numpy as np
 import copy
-import cupy as cp
+from tigre.utilities._array_backend import get_backend
 
 
 def scan_arc(angles):
@@ -192,7 +192,7 @@ def zeropadding(proj, geo):
         Angles of projection.
 
     """
-    xp = cp.get_array_module(proj)
+    xp = get_backend(None, proj).xp
     zgeo = copy.copy(geo)
     
     offDet1 = np.atleast_2d(geo.offDetector)[0, 1]
