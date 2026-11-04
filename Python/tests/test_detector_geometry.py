@@ -600,6 +600,12 @@ def test_failed_preview_clears_old_scene_and_disables_animation():
 
 def test_gui_has_help_text_for_every_input_label():
     assert set(DETECTOR_FIELD_HELP) == {
+        "Beam model",
+        "Beam axis mode",
+        "Beam full angles (wide, narrow deg)",
+        "Beam reference flux fraction",
+        "Beam roll (degrees)",
+        "Hard aperture full angles (deg; 0,0 off)",
         "Source trajectory",
         "Source waypoints (x, y, z mm)",
         "Views per source segment",

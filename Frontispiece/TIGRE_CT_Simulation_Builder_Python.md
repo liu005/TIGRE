@@ -1,7 +1,7 @@
 **TIGRE CT Simulation Builder — Python user manual**
 
-**Manual version: 1.7**
-**Updated: 3 November 2026**
+**Manual version: 1.8**
+**Updated: 4 November 2026**
 **Software reference: TIGRE Python package 3.0.0; CT Simulation Builder checkout.**
 
 The manual version identifies this document, not a separate application release.
@@ -947,6 +947,68 @@ Edit the waypoints and segment counts to define additional straight segments.
 **Reconstruction:** Use surface iterative reconstruction. The detector pose
 stays fixed throughout; limited angular coverage can leave reconstruction
 artifacts. See [piecewise linear movement](#piecewise-linear-source-movement).
+
+### Diamond: L-shaped source + detector
+
+**What it is:** In top view, four sides surround the object as a diamond with
+vertices `(600, 0)`, `(0, 600)`, `(-600, 0)` and `(0, -600)` mm. The source
+samples the two upper sides, from the right vertex through the top vertex to
+the left vertex. The two fixed detector panels form the lower sides and meet
+at the bottom vertex. Each source segment has 31 samples; the shared top
+vertex is acquired once, giving 61 views.
+
+**Used for:** Exploring an opposing pair of L-shaped source and detector
+arrays. Source positions can represent sequentially fired focal spots or a
+source moving along two joined straight tracks. Both detector panels are
+used at each position. Each panel has 64 rows and 128 columns, is 256 mm high,
+and has a transverse length of `600*sqrt(2)` mm. The source path lies at z=0;
+detector rows extend along z. Hardware meets at idealized corner edges;
+mechanical clearance and physical source switching are not simulated.
+
+The Source tab includes **Beam model**, **Beam axis mode**, wide/narrow full
+opening angles, reference flux fraction, roll and independent hard-aperture
+full opening angles. The diamond preset enables elliptical beams normal to
+each source arm, pointing inward. Its reference contour is 95 degrees wide
+and 20 degrees narrow at 50% of central flux; the separate hard aperture is
+140 by 40 degrees. Zero roll puts the wide axis in the diamond plane. Set
+roll to 90 degrees to put it along the detector height. The source junction
+uses the incoming arm's beam direction. These illustrative settings can be
+edited; they are not manufacturer measurements.
+
+Orange ellipse/spokes show the reference contour; purple shows the aperture.
+Both markers use 20% opacity to keep the detector and volume visible.
+Both envelopes extend 5% beyond the farthest physical detector pixel measured
+along the beam axis, including pixels outside the aperture. The end ellipses
+are transverse display sections, not intersections with the detector. The
+displayed illuminated pixel cloud changes with the active focal spot. Enter
+`0, 0` for the hard aperture to disable clipping; **Beam model: Off** restores
+the uncollimated geometry. A contour alone does not discard rays, including
+pixels receiving less than the specified reference fraction.
+
+The aperture is elliptical in the forward tangent plane, not a rectangular
+intersection of two angle limits. Its mask is combined with detector gaps
+and applied by both native forward and adjoint projectors. CGLS, SIRT and
+ordered-subset surface methods inherit that mask. The flux fraction is
+metadata; projection values remain log line integrals and are not multiplied
+by the reference flux contour. `SourceBeam.relative_flux` offers an explicit
+Gaussian-in-tangent-angle approximation for future count/noise simulation;
+it is not a measured angular spectrum or a complete intensity simulator.
+
+For code without a GUI, construct `tigre.SourceBeam(axis_directions,
+wide_axis_directions, opening_angles_deg, reference_fraction,
+aperture_angles_deg)` and pass it as `source_beam=` to
+`DetectorSurfaceGeometry`. Axes are world xyz unit directions, one per view;
+the wide direction must be perpendicular to the central axis. Opening and
+aperture angles are **full angles**, `(wide, narrow)`, shared or per-view,
+with `0 < narrow <= wide < 180`. Beam metadata, the original detector mask
+and the effective aperture mask survive Python YAML/NPZ and MAT bridge round
+trips, view subsets and object-coordinate transformations. MATLAB receives
+the effective mask, but its native GUI has no beam-editing controls yet.
+
+**Reconstruction:** Use surface iterative methods. Transmission through the
+volume is checked, but the preset does not establish complete CT sampling or
+the applicability of FDK. Detector pixel arrays stay fixed while the active
+source position changes.
 
 ### Tomosynthesis: three fixed panels, linear source
 

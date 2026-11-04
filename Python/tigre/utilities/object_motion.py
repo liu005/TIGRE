@@ -42,7 +42,11 @@ def fixed_object_geometry(surface, geometry):
         rotation = rotation_zyz(angle)
         source[view] = (surface.source_positions_mm[view] - center) @ rotation
         pixels[view] = (surface.pixel_centers_mm[view] - center) @ rotation
-    transformed = DetectorSurfaceGeometry(source, pixels, surface.valid_mask,
-        module_slices=getattr(surface, "_module_slices", None))
+    beam = getattr(surface, "source_beam", None)
+    if beam is not None:
+        beam = beam.rotated(np.array([rotation_zyz(a).T for a in angles]))
+    transformed = DetectorSurfaceGeometry(source, pixels,
+        getattr(surface, "detector_valid_mask", surface.valid_mask),
+        module_slices=getattr(surface, "_module_slices", None), source_beam=beam)
     volume = SimpleNamespace(sVoxel=geometry.sVoxel, offOrigin=np.zeros(3))
     return transformed, volume

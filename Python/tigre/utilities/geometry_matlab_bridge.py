@@ -17,13 +17,23 @@ def to_mat(source, target):
     arrays = dict(source_positions_mm=surface.source_positions_mm.T,
                   pixel_centers_mm=surface.pixel_centers_mm.transpose(1, 2, 3, 0),
                   valid_mask=surface.valid_mask.transpose(1, 2, 0))
+    if surface.source_beam is not None:
+        arrays['detector_valid_mask'] = surface.detector_valid_mask.transpose(1, 2, 0)
+        arrays['source_beam'] = {name: getattr(surface.source_beam, name) for name in
+            ('axis_directions', 'wide_axis_directions', 'opening_angles_deg', 'reference_fraction', 'aperture_angles_deg')
+            if getattr(surface.source_beam, name) is not None}
     if surface._module_slices:
         arrays['module_slices'] = np.array([[r.start, r.stop, c.start, c.stop]
                                           for r, c in surface._module_slices])
     result = {'surface': arrays, 'geo': np.empty((0, 0))}
     if document.settings is not None:
-        result['settings'] = {k: np.empty((0, 0)) if v is None else v
-                              for k, v in document.settings.items()}
+        def mat_value(value):
+            if value is None:
+                return np.empty((0, 0))
+            if isinstance(value, dict):
+                return {key: mat_value(item) for key, item in value.items()}
+            return value
+        result['settings'] = mat_value(document.settings)
     if document.geometry is not None:
         result['geo'] = dict(sVoxel=np.asarray(document.geometry.sVoxel)[::-1],
                              offOrigin=np.atleast_2d(document.geometry.offOrigin)[:, ::-1].T)
@@ -67,6 +77,10 @@ def from_mat(source, target):
             settings['hardware_angles_deg'] = np.asarray(settings['hardware_angles_deg'], dtype=float).reshape(-1, 3)
         if not isinstance(settings.get('acquisition'), dict):
             settings['acquisition'] = None
+        if not isinstance(settings.get('source_beam'), dict):
+            settings['source_beam'] = None
+        elif np.asarray(settings['source_beam'].get('aperture_angles_deg', [])).size == 0:
+            settings['source_beam']['aperture_angles_deg'] = None
         for key in ('n_views', 'n_modules', 'column_gap'):
             value = float(settings[key])
             if not value.is_integer():
@@ -105,8 +119,20 @@ def from_mat(source, target):
         modules = getattr(raw, 'module_slices', None)
         if modules is not None:
             modules = [(slice(int(a), int(b)), slice(int(c), int(d))) for a, b, c, d in modules]
+        beam = None
+        if hasattr(raw, 'source_beam'):
+            from tigre.utilities.source_beam import SourceBeam
+            saved = raw.source_beam[0, 0]
+            values = {name: getattr(saved, name) for name in
+                ('axis_directions', 'wide_axis_directions', 'opening_angles_deg', 'reference_fraction', 'aperture_angles_deg')
+                if hasattr(saved, name)}
+            values['reference_fraction'] = values['reference_fraction'].ravel()
+            beam = SourceBeam(**values)
+            mask = raw.detector_valid_mask
+            if mask.ndim == 2:
+                mask = mask[..., None]
         surface = DetectorSurfaceGeometry(raw.source_positions_mm.T,
-            pixels.transpose(3, 0, 1, 2), mask.transpose(2, 0, 1), module_slices=modules)
+            pixels.transpose(3, 0, 1, 2), mask.transpose(2, 0, 1), module_slices=modules, source_beam=beam)
         save_geometry_yaml(target, surface=surface, geometry=volume)
 
 

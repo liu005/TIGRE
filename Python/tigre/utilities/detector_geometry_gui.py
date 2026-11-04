@@ -193,6 +193,15 @@ TAB_HELP = {
     "Movement": "Object rotation is configured in Volume. Orbit timing is disabled when object rotation is selected. Configure timing and volume translation otherwise. Timing uses one frame per pulse. CT requires rotating hardware; DR uses fixed hardware and endpoint motion along any axis. Choose z-speed mode or start/end interpolation; endpoints use z, y, x mm. Play and the slider animate the volume in the same world-frame scene. Moving offOrigin is for preview; surface reconstruction requires a fixed object coordinate frame.",
 }
 
+DETECTOR_FIELD_HELP.update({
+    "Beam model": "Off preserves existing rays. Elliptical adds per-source beam metadata and an optional hard aperture. Flux contours never multiply log projections.",
+    "Beam axis mode": "Toward origin aims each spot at world zero. Segment normal uses the inward xy normal of each straight source arm; the shared junction uses the incoming arm. Zero roll places the wide axis in the xy plane.",
+    "Beam full angles (wide, narrow deg)": "Full opening angles at the reference central-flux fraction. Enter 0 < narrow <= wide < 180 degrees. This contour is not a cutoff.",
+    "Beam reference flux fraction": "Fraction of central beam flux defining the contour, for example 0.5 or 0.7. Must be strictly between zero and one.",
+    "Beam roll (degrees)": "Rotate the wide/narrow axes about the central beam direction. Zero puts the wide axis in the xy plane; 90 degrees puts it along detector height for horizontal beams.",
+    "Hard aperture full angles (deg; 0,0 off)": "Independent elliptical collimator opening, full wide/narrow angles. 0,0 disables collimation. Rays outside the forward aperture are masked in both projection and backprojection; detector gaps stay masked.",
+})
+
 
 # Overrides of the GUI defaults; each selection resets all fields first.
 GUI_EXAMPLES = {
@@ -237,6 +246,26 @@ GUI_EXAMPLES = {
          "source_waypoints_mm": "[[1000, -300, 0], [1000, 0, 0], [800, 300, 100]]",
          "source_segment_views": "21, 21", "n_views": "41"},
         "Two joined straight source segments and one fixed panel; 41 views with the junction acquired once. Edit waypoints and segment view counts, then Confirm. Use surface iterative reconstruction."),
+    "Diamond: L-shaped source + detector": ("Piecewise linear", True,
+        {"rows": "64", "columns": "128", "row_pitch_mm": "4",
+         "column_pitch_mm": f"{600 * np.sqrt(2) / 128:.17g}", "column_gap": "0",
+         "detector_radius_mm": "300", "transverse_centers_mm": "-300, -300",
+         "normal_offsets_mm": "0, 600", "panel_angles_deg": "45, 135",
+         "z_offsets_mm": "0, 0", "panel_x_angles_deg": "0, 0",
+         "panel_y_angles_deg": "0, 0", "top_arm_rows": "0", "arm_clearance_mm": "0",
+         "source_waypoints_mm": "[[600, 0, 0], [0, 600, 0], [-600, 0, 0]]",
+         "source_segment_views": "31, 31", "n_views": "61", "cor_mm": "0",
+         "beam_model": "Elliptical", "beam_axis_mode": "Segment normal",
+         "beam_opening_angles_deg": "95, 20", "beam_reference_fraction": "0.5",
+         "beam_roll_deg": "0", "beam_aperture_angles_deg": "140, 40"},
+        "Top view: four sides form a diamond with vertices (+600,0), (0,+600), "
+        "(-600,0), (0,-600) mm. Two upper sides sample 61 source positions "
+        "(shared junction once); two fixed lower detector panels meet at (0,-600). "
+        "Each detector side is 600*sqrt(2) mm long and 256 mm high. "
+        "Represents sequential focal spots or a moving source; all spots use both panels. "
+        "Inward arm-normal beams: 95/20-degree full angles at 50% flux; independent 140/40-degree hard apertures. "
+        "Use surface iterative reconstruction; this preset does not establish CT completeness. "
+        "Hardware shares idealized corner edges; mechanical clearance is not modeled."),
     "Tomosynthesis: three fixed panels, linear source": ("Piecewise linear", True,
         {"rows": "256", "columns": "256", "column_gap": "2",
          "transverse_centers_mm": "-256, 0, 256",
@@ -328,6 +357,53 @@ def _piecewise_source_positions(waypoints, segment_views):
         for index, (start, end, count) in enumerate(zip(points[:-1], points[1:], counts))])
 
 
+def _with_source_beam(surface, specification, waypoints=None, segment_views=None):
+    if specification is None:
+        return surface
+    from tigre.utilities.source_beam import SourceBeam
+    from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
+    spec = dict(specification)
+    mode = spec.pop("axis_mode", "Toward origin")
+    roll = np.deg2rad(spec.pop("roll_deg", 0.0))
+    if not np.isfinite(roll):
+        raise ValueError("Beam roll must be finite")
+    if "axis_directions" in spec:
+        axis = np.asarray(spec.pop("axis_directions"), dtype=float)
+        axis = np.broadcast_to(axis, surface.source_positions_mm.shape).copy()
+    elif mode == "Toward origin":
+        axis = -surface.source_positions_mm.astype(float)
+    elif mode == "Segment normal":
+        if waypoints is None:
+            raise ValueError("Segment-normal beams require a piecewise linear source")
+        points = np.asarray(waypoints, dtype=float)
+        axes = []
+        for k, (start, end, count) in enumerate(zip(points[:-1], points[1:], segment_views)):
+            tangent = end - start
+            if tangent[2] != 0 or np.linalg.norm(tangent[:2]) == 0:
+                raise ValueError("Segment-normal beams require nonzero source segments in the xy plane")
+            normal = np.array([tangent[1], -tangent[0], 0.])
+            if normal @ (-(start + end) / 2) < 0:
+                normal *= -1
+            axes.extend([normal] * (int(count) - (k > 0)))
+        axis = np.asarray(axes)
+    else:
+        raise ValueError("Beam axis mode must be 'Toward origin' or 'Segment normal'")
+    lengths = np.linalg.norm(axis, axis=1)
+    if np.any(lengths == 0) or not np.isfinite(axis).all():
+        raise ValueError("Cannot aim a beam with a zero or nonfinite axis")
+    axis /= lengths[:, None]
+    # Zero roll: wide axis lies in xy, narrow axis is approximately world z.
+    reference = np.tile([0., 0., 1.], (len(axis), 1))
+    reference[np.abs(axis[:, 2]) > .99] = [0., 1., 0.]
+    wide = np.cross(reference, axis)
+    wide /= np.linalg.norm(wide, axis=1)[:, None]
+    wide = wide * np.cos(roll) + np.cross(axis, wide) * np.sin(roll)
+    wide = spec.pop("wide_axis_directions", wide)
+    beam = SourceBeam(axis, wide, **spec)
+    return DetectorSurfaceGeometry(surface.source_positions_mm, surface.pixel_centers_mm,
+        surface.valid_mask, module_slices=surface._module_slices, source_beam=beam)
+
+
 def build_modular_surface(
         layout, n_views, source_radius_mm, source_z_mm, module_shape,
         pixel_spacing_mm, detector_radius_mm, column_gap, n_modules,
@@ -338,7 +414,7 @@ def build_modular_surface(
         source_start_mm=None, orbit_start_deg=0.0, scan_span_deg=360.0, panel_x_angles_deg=(0.0,),
         panel_y_angles_deg=(0.0,), cor_mm=0.0, acquisition=None, fixed_hardware=False, hardware_angles_deg=None,
         top_arm_rows=0, arm_clearance_mm=0.0,
-        source_waypoints_mm=None, source_segment_views=None):
+        source_waypoints_mm=None, source_segment_views=None, source_beam=None):
     """Build a surface using distances in mm and angles in degrees.
 
     Panel x/y angles accept one value or one per panel, constant per scan.
@@ -375,7 +451,7 @@ def build_modular_surface(
         import inspect
         arguments = locals()
         parameters = {key: arguments[key] for key in inspect.signature(build_modular_surface).parameters}
-        parameters.update(n_views=1, fixed_hardware=False, hardware_angles_deg=None,
+        parameters.update(n_views=1, fixed_hardware=False, hardware_angles_deg=None, source_beam=None,
                           source_motion="Rotating source + detector")
         initial = build_modular_surface(**parameters)
         from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
@@ -389,8 +465,18 @@ def build_modular_surface(
                 rotation = rotation_zyz(pose)
                 source[view] = source[view] @ rotation.T
                 pixels[view] = pixels[view] @ rotation.T
-        return DetectorSurfaceGeometry(source, pixels,
+        result = DetectorSurfaceGeometry(source, pixels,
             np.repeat(initial.valid_mask, n_views, axis=0), module_slices=initial._module_slices)
+        if source_beam is not None and not fixed_hardware:
+            # Define beam on the fixed hardware, then transform its directions
+            # with the rig; do not re-aim it after object-frame transformation.
+            beam_surface = _with_source_beam(DetectorSurfaceGeometry(
+                np.repeat(initial.source_positions_mm, n_views, axis=0),
+                np.repeat(initial.pixel_centers_mm, n_views, axis=0)), source_beam)
+            rotations = np.array([rotation_zyz(pose) for pose in angles])
+            return DetectorSurfaceGeometry(source, pixels, result.valid_mask,
+                module_slices=result._module_slices, source_beam=beam_surface.source_beam.rotated(rotations))
+        return _with_source_beam(result, source_beam)
     rows, columns = _checked_module_shape(module_shape)
     if (isinstance(top_arm_rows, (bool, np.bool_)) or not isinstance(top_arm_rows, (int, np.integer))
             or not 0 <= top_arm_rows < rows):
@@ -548,10 +634,11 @@ def build_modular_surface(
     if source_motion == "Fixed detector, moving source":
         if piecewise_source is not None:
             from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
-            return DetectorSurfaceGeometry(piecewise_source,
+            result = DetectorSurfaceGeometry(piecewise_source,
                 np.broadcast_to(detector.pixel_centers_mm, (n_views,) + detector.pixel_centers_mm.shape[1:]).copy(),
                 np.broadcast_to(detector.valid_mask, (n_views,) + detector.valid_mask.shape[1:]).copy(),
                 module_slices=detector._module_slices)
+            return _with_source_beam(result, source_beam, source_waypoints_mm, source_segment_views)
         fixed = linear_source_surface(
             detector.pixel_centers_mm[0],
             source_start,
@@ -560,16 +647,17 @@ def build_modular_surface(
             valid_mask=detector.valid_mask[0],
         )
         fixed._module_slices = detector._module_slices
-        return fixed
+        return _with_source_beam(fixed, source_beam)
     if arc_source is not None:
         from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
-        return DetectorSurfaceGeometry(
+        result = DetectorSurfaceGeometry(
             arc_source, np.broadcast_to(detector.pixel_centers_mm,
                 (int(n_views),) + detector.pixel_centers_mm.shape[1:]).copy(),
             np.broadcast_to(detector.valid_mask,
                 (int(n_views),) + detector.valid_mask.shape[1:]).copy(),
             module_slices=detector._module_slices)
-    return detector
+        return _with_source_beam(result, source_beam)
+    return _with_source_beam(detector, source_beam)
 
 
 def _panel_list_values(text, count, allow_shared):
@@ -951,6 +1039,12 @@ class DetectorGeometryBuilder:
             ("Source end (x, y, z mm)", "source_end_mm", "1000, 200, 0"),
             ("Source waypoints (x, y, z mm)", "source_waypoints_mm", "[[1000, -200, 0], [1000, 0, 0], [800, 200, 0]]"),
             ("Views per source segment", "source_segment_views", "31, 30"),
+            ("Beam model", "beam_model", "Off"),
+            ("Beam axis mode", "beam_axis_mode", "Toward origin"),
+            ("Beam full angles (wide, narrow deg)", "beam_opening_angles_deg", "100, 20"),
+            ("Beam reference flux fraction", "beam_reference_fraction", "0.5"),
+            ("Beam roll (degrees)", "beam_roll_deg", "0"),
+            ("Hard aperture full angles (deg; 0,0 off)", "beam_aperture_angles_deg", "0, 0"),
             ("COR (mm)", "cor_mm", "0"),
             ("Panel roll / x (degrees)", "panel_x_angles_deg", "0"),
             ("Panel pitch / y (degrees)", "panel_y_angles_deg", "0"),
@@ -972,6 +1066,8 @@ class DetectorGeometryBuilder:
         source_fields = {
             "n_views", "orbit_start_deg", "scan_span_deg", "source_radius_mm",
             "source_z_mm", "source_start_mm", "source_end_mm", "source_waypoints_mm", "source_segment_views",
+            "beam_model", "beam_axis_mode", "beam_opening_angles_deg", "beam_reference_fraction",
+            "beam_roll_deg", "beam_aperture_angles_deg",
         }
         self._panel_count_display = tk.StringVar(value="")
         self._list_buttons = {}
@@ -993,6 +1089,11 @@ class DetectorGeometryBuilder:
             variable = tk.StringVar(value=default)
             self._fields[name] = variable
             entry = ttk.Entry(parent, textvariable=variable, width=42 if name == "source_waypoints_mm" else 16)
+            if name in ("beam_model", "beam_axis_mode"):
+                entry = ttk.Combobox(parent, textvariable=variable, state="readonly", width=18,
+                    values=("Off", "Elliptical") if name == "beam_model" else ("Toward origin", "Segment normal"))
+                if name == "beam_model":
+                    entry.bind("<<ComboboxSelected>>", lambda event: self._update_field_states())
             self._entries[name] = entry
             self._bind_parameter_help(entry, label)
             entry.grid(row=row, column=1, sticky="ew", pady=2)
@@ -1184,6 +1285,11 @@ class DetectorGeometryBuilder:
             self._object_angle_list.set(repr((-np.asarray(rig_angles)[:, ::-1]).tolist()))
         for name, default in self._default_fields.items():
             value = settings.get(name, default)
+            if name.startswith("beam_") and settings.get("source_beam") is not None:
+                beam = settings["source_beam"]
+                value = "Elliptical" if name == "beam_model" else beam.get(name[5:], default)
+                if value is None:
+                    value = default
             if name in ("rows", "columns"):
                 value = settings["module_shape"][0 if name == "rows" else 1]
             elif name in ("row_pitch_mm", "column_pitch_mm"):
@@ -1423,11 +1529,19 @@ class DetectorGeometryBuilder:
         }
         enabled["panel_x_angles_deg"] = True
         enabled["panel_y_angles_deg"] = True
+        beam_field = getattr(self, "_fields", {}).get("beam_model")
+        beam_enabled = beam_field is not None and beam_field.get() == "Elliptical"
+        for name in ("beam_axis_mode", "beam_opening_angles_deg", "beam_reference_fraction", "beam_roll_deg", "beam_aperture_angles_deg"):
+            if name in self._entries:
+                enabled[name] = beam_enabled
         for name, button in getattr(self, "_list_buttons", {}).items():
             button.configure(state=self.tk.NORMAL if enabled.get(name, True) else self.tk.DISABLED)
         for name, active in enabled.items():
             self._entries[name].configure(
                 state=self.tk.NORMAL if active else self.tk.DISABLED)
+        for name in ("beam_model", "beam_axis_mode"):
+            if name in self._entries and (name == "beam_model" or beam_enabled):
+                self._entries[name].configure(state="readonly")
         if "movement_views" in self._entries:
             self._entries["movement_views"].configure(state=self.tk.DISABLED if piecewise_source else self.tk.NORMAL)
         timed = hasattr(self, "_timing_enabled") and self._timing_enabled.get()
@@ -1682,7 +1796,19 @@ class DetectorGeometryBuilder:
             "panel_angles_deg": np.atleast_1d(panel_angles),
             "z_offsets_mm": np.atleast_1d(z_offsets),
             "acquisition": acquisition,
+            "source_beam": self._read_source_beam(values),
         }
+
+    def _read_source_beam(self, values):
+        if values.get("beam_model", "Off") == "Off":
+            return None
+        if values["beam_model"] != "Elliptical":
+            raise ValueError("Beam model must be Off or Elliptical")
+        aperture = np.atleast_1d(self._parse_numbers(values["beam_aperture_angles_deg"], "Hard aperture"))
+        return dict(axis_mode=values["beam_axis_mode"],
+            opening_angles_deg=np.atleast_1d(self._parse_numbers(values["beam_opening_angles_deg"], "Beam angles")).tolist(),
+            reference_fraction=float(values["beam_reference_fraction"]), roll_deg=float(values["beam_roll_deg"]),
+            aperture_angles_deg=None if np.array_equal(aperture, [0, 0]) else aperture.tolist())
 
     def _read_acquisition(self):
         if not hasattr(self, "_timing_enabled") or not self._timing_enabled.get():

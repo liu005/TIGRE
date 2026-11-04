@@ -30,6 +30,26 @@ def volume():
     return SimpleNamespace(sVoxel=np.array([30, 40, 50]), offOrigin=np.zeros(3))
 
 
+def test_beam_markers_reach_detector_with_faint_per_view_envelopes():
+    from tigre.utilities.source_beam import SourceBeam
+    from tigre.utilities.visualization.surface_renderer import SurfaceRenderer
+
+    source = np.array([[10000, 20, 30], [10100, 20, 30]])
+    pixels = np.array([[[9500, 20, 30], [9000, 20, 30], [8000, 20, 30]]])
+    beam = SourceBeam([[-1, 0, 0]] * 2, [0, 1, 0], [95, 20], .5, [140, 40])
+    surface = DetectorSurfaceGeometry(source, pixels, [[True, True, False]], source_beam=beam)
+    ax = plt.figure().add_subplot(111, projection="3d")
+    renderer = SurfaceRenderer(ax, surface)
+    for view in range(2):
+        renderer.update(view)
+        for label in ("Beam flux contour", "Hard aperture"):
+            artist = next(line for line in ax.lines if line.get_label() == label)
+            assert artist.get_alpha() == pytest.approx(.2)
+            ring = np.array(artist.get_data_3d()).T[:65]
+            axial = (ring - source[view]) @ beam.axis_directions[view]
+            np.testing.assert_allclose(axial, (source[view, 0] - 9000) * 1.05)
+
+
 def test_curved_grid_uses_nonplanar_surface_triangles():
     surface = curved_surface()
     faces, lines = _surface_mesh(surface, 0)

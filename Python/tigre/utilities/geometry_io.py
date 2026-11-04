@@ -17,6 +17,13 @@ def surface_archive_arrays(surface, geometry=None):
     arrays = {name: getattr(surface, name) for name in (
         "source_positions_mm", "pixel_centers_mm", "valid_mask")}
     modules = getattr(surface, "_module_slices", None)
+    beam = getattr(surface, "source_beam", None)
+    if beam is not None:
+        arrays["detector_valid_mask"] = surface.detector_valid_mask
+        for name in ("axis_directions", "wide_axis_directions", "opening_angles_deg", "reference_fraction", "aperture_angles_deg"):
+            value = getattr(beam, name)
+            if value is not None:
+                arrays["beam_" + name] = value
     if modules:
         arrays["module_slices"] = np.array([
             [r.start, r.stop, c.start, c.stop] for r, c in modules], dtype=np.int64)
@@ -55,6 +62,9 @@ def load_geometry_archive(path):
                         "table_speed_mm_s", "playback_rate")
         keys.update("acquisition_" + name for name in timing_names)
         keys.update(("view_times_s", "volume_motion_mode", "object_angles_deg", "simulation_mode"))
+        beam_names = ("axis_directions", "wide_axis_directions", "opening_angles_deg", "reference_fraction", "aperture_angles_deg")
+        keys.update("beam_" + name for name in beam_names)
+        keys.add("detector_valid_mask")
         arrays = {key: archive[key] for key in archive.files if key in keys}
     if "source_positions_mm" in arrays:
         modules = arrays.get("module_slices")
@@ -62,8 +72,18 @@ def load_geometry_archive(path):
             if modules.ndim != 2 or modules.shape[1] != 4 or modules.dtype.kind not in "iu":
                 raise ValueError("module_slices must be an integer (modules, 4) array.")
             modules = [(slice(int(a), int(b)), slice(int(c), int(d))) for a, b, c, d in modules]
+        beam_values = {name: arrays["beam_" + name] for name in beam_names if "beam_" + name in arrays}
+        beam = None
+        if beam_values:
+            from .source_beam import SourceBeam
+            if not {"axis_directions", "wide_axis_directions", "opening_angles_deg", "reference_fraction"} <= beam_values.keys():
+                raise ValueError("Incomplete source beam metadata in geometry archive")
+            beam = SourceBeam(**beam_values)
         surface = DetectorSurfaceGeometry(arrays["source_positions_mm"],
-            arrays["pixel_centers_mm"], arrays.get("valid_mask"), module_slices=modules)
+            arrays["pixel_centers_mm"], arrays.get("detector_valid_mask", arrays.get("valid_mask")),
+            module_slices=modules, source_beam=beam)
+        if beam is not None and "valid_mask" in arrays and not np.array_equal(surface.valid_mask, arrays["valid_mask"]):
+            raise ValueError("Saved effective mask does not match beam aperture and detector mask")
         geometry = None
         if "sVoxel" in arrays:
             size = np.asarray(arrays["sVoxel"], dtype=float)

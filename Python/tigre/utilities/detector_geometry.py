@@ -118,14 +118,25 @@ class DetectorSurfaceGeometry:
     marks an absent sample such as a module gap. Geometry arrays are kept
     separate from projection values; callers can use :meth:`pack_module_data`
     to place module measurements into the corresponding masked dense layout.
+    Optional ``source_beam`` metadata describes elliptical flux contours and
+    independent hard collimation. ``detector_valid_mask`` preserves detector
+    sampling before collimation; ``valid_mask`` includes the hard aperture.
     """
 
     def __init__(self, source_positions_mm, pixel_centers_mm, valid_mask=None,
-                 module_slices=None):
+                 module_slices=None, source_beam=None):
         self.source_positions_mm = _source_positions(source_positions_mm)
         self.pixel_centers_mm = _pixel_centers(
             pixel_centers_mm, len(self.source_positions_mm))
         self.valid_mask = _pixel_mask(valid_mask, self.pixel_centers_mm.shape[:3])
+        self.detector_valid_mask = self.valid_mask
+        self.source_beam = source_beam
+        if source_beam is not None:
+            from .source_beam import SourceBeam
+            if not isinstance(source_beam, SourceBeam) or len(source_beam.axis_directions) != len(self.source_positions_mm):
+                raise ValueError("source_beam must be a SourceBeam with one frame per view")
+            self.valid_mask = np.ascontiguousarray(self.valid_mask & source_beam.aperture_mask(
+                self.source_positions_mm, self.pixel_centers_mm))
         self._module_slices = None
         if module_slices is not None:
             n_rows, n_columns = self.valid_mask.shape[1:]
@@ -146,6 +157,8 @@ class DetectorSurfaceGeometry:
         out.source_positions_mm = np.ascontiguousarray(self.source_positions_mm[idx])
         out.pixel_centers_mm = np.ascontiguousarray(self.pixel_centers_mm[idx])
         out.valid_mask = np.ascontiguousarray(self.valid_mask[idx])
+        out.detector_valid_mask = np.ascontiguousarray(self.detector_valid_mask[idx])
+        out.source_beam = None if self.source_beam is None else self.source_beam.subset(idx)
         out._module_slices = self._module_slices
         return out
 
@@ -185,6 +198,7 @@ class DetectorSurfaceGeometry:
             hits[start:stop] = enter < leave
         out = self.subset(np.arange(n_views))
         out.valid_mask = np.ascontiguousarray(self.valid_mask & hits)
+        out.detector_valid_mask &= hits
         return out
 
     @classmethod

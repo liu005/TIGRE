@@ -111,6 +111,11 @@ class SurfaceRenderer:
         ax.add_collection3d(lines, autolim=False)
         cloud = ax.scatter([], [], [], s=1, color="navy", alpha=0.6)
         central_ray, = ax.plot([], [], [], color="pink")
+        beam = getattr(surface, "source_beam", None)
+        beam_lines = []
+        if beam is not None:
+            for label, color in (("Beam flux contour", "darkorange"), ("Hard aperture", "purple")):
+                beam_lines.append(ax.plot([], [], [], color=color, linewidth=1, alpha=0.2, label=label)[0])
         title = ax.set_title("")
 
         # Scan frame-wise to avoid copying a large acquisition into float64.
@@ -149,6 +154,23 @@ class SurfaceRenderer:
                     orientation.set_data_3d(*np.stack((center, tip)).T)
             source._offsets3d = tuple(src[frame, :, None])
             source_label.set_position_3d(src[frame])
+            if beam is not None:
+                # Extend past the physical detector, including pixels outside
+                # the aperture. Cone length is measured along its central axis.
+                axis = beam.axis_directions[frame]
+                axial = pix[frame] @ axis - src[frame] @ axis
+                detector_mask = getattr(surface, "detector_valid_mask", mask)[frame]
+                distance = max(float(np.max(axial, where=detector_mask, initial=0)) * 1.05, 1.)
+                for aperture, line in enumerate(beam_lines):
+                    ring = beam.outline(src[frame], frame, distance, aperture=bool(aperture))
+                    if ring is None:
+                        line.set_data_3d([], [], [])
+                    else:
+                        # Closed ellipse plus four spokes show the cone orientation.
+                        points = list(ring)
+                        for index in (0, 16, 32, 48):
+                            points.extend(([np.nan] * 3, src[frame], ring[index]))
+                        line.set_data_3d(*np.asarray(points).T)
             if panel_vertices is None:
                 faces, segments = _surface_mesh(surface, frame)
             else:
@@ -167,7 +189,7 @@ class SurfaceRenderer:
             title.set_text(f"Detector surface geometry - view {frame}/{n_views}\n"
                            f"{module_count} detector module(s), {len(valid)} valid pixels")
             artists = (source, source_label, mesh, lines, cloud, central_ray, title)
-            return artists + ((volume_mesh,) if volume_mesh is not None else ())
+            return artists + tuple(beam_lines) + ((volume_mesh,) if volume_mesh is not None else ())
 
         self.surface = surface
         self.mesh = mesh

@@ -24,6 +24,7 @@ from .utilities.geometry_default import FanGeometryDefault as fan_geometry_defau
 from .utilities.Ax import Ax
 from .utilities.Atb import Atb
 from .utilities.Ax_surface import Ax_surface, Atb_surface
+from .utilities.source_beam import SourceBeam
 from .utilities.detector_geometry import (
     DetectorModule,
     DetectorSurfaceGeometry,

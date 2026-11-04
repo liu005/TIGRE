@@ -19,7 +19,8 @@ for attenuation inputs, output arrays and sampling limitations.
 The complete preset catalogues in the [Python manual](./TIGRE_CT_Simulation_Builder_Python.md#catalogue-of-gui-presets)
 and [MATLAB manual](./TIGRE_CT_Simulation_Builder_MATLAB.md#catalogue-of-gui-presets)
 describe the GUI examples, their uses and reconstruction/DR constraints.
-Python has 14 presets, including a [piecewise linear source path](./TIGRE_CT_Simulation_Builder_Python.md#piecewise-linear-source-movement);
+Python has 15 presets, including a [piecewise linear source path](./TIGRE_CT_Simulation_Builder_Python.md#piecewise-linear-source-movement)
+and [opposing L-shaped source/detector arrays forming a diamond](./TIGRE_CT_Simulation_Builder_Python.md#diamond-l-shaped-source--detector);
 MATLAB has the original 13. The Python mode joins straight source segments
 on one fixed detector, retains shared junctions once, and saves both editable
 waypoint recipes and exact per-view geometry for iterative reconstruction.
@@ -36,10 +37,75 @@ without rebinning the data to a flat uniform detector.
 | `source_positions_mm` | `(views, 3)` | source position per view, world (x, y, z) in mm |
 | `pixel_centers_mm` | `(views, rows, cols, 3)` | centre of every pixel per view |
 | `valid_mask` | `(views, rows, cols)` | false marks absent pixels (gaps, pixels outside the beam) |
+| `detector_valid_mask` | `(views, rows, cols)` | detector sampling mask before source collimation |
+| `source_beam` | optional `SourceBeam` | per-view elliptical flux contour and independent hard aperture |
 
 The world frame is the one drawn by `tigre.animate_geometry`: x, y, z, with the
 volume centred at `offOrigin`. Volume geometry (`nVoxel`, `dVoxel`, `offOrigin`) still
 comes from an ordinary `tigre.geometry()`.
+
+## Elliptical source beams and hard collimation (Python)
+
+`tigre.SourceBeam` describes a central direction and perpendicular wide-axis
+direction per focal spot, in world xyz. Angles are **full opening angles**,
+not half angles, supplied as `(wide, narrow)` or one pair per view. They must
+satisfy `0 < narrow <= wide < 180` degrees. The narrow direction follows from
+the cross product of the central and wide directions.
+
+```python
+# Example for one focal spot at (600, 0, 0), aimed toward the origin.
+beam = tigre.SourceBeam(
+    axis_directions=[[-1, 0, 0]],
+    wide_axis_directions=[0, 1, 0],
+    opening_angles_deg=[95, 20],
+    reference_fraction=0.5,
+    aperture_angles_deg=[140, 40],  # None disables hard collimation.
+)
+surf = DetectorSurfaceGeometry(
+    [[600, 0, 0]], pixel_centres, valid_mask=detector_mask,
+    source_beam=beam,
+)
+projections = tigre.Ax_surface(volume, geo, surf)
+```
+
+The 95/20-degree ellipse above is the contour at 50% of central flux. It is
+metadata, not a cutoff. `relative_flux(directions, view=...)` optionally
+evaluates a Gaussian-in-tangent-angle approximation matching that contour;
+it is not a measured spectrum or an automatic photon-count/noise simulator.
+Changing the reference contour alone leaves the projection operator unchanged.
+
+The separate hard aperture is an ellipse in the forward tangent plane.
+`valid_mask` combines this aperture with `detector_valid_mask`, preserving
+module gaps. Forward and adjoint projectors use the same effective mask,
+including for iterative surface methods. No angular flux weighting is
+multiplied into log line integrals. Existing surfaces without `source_beam`
+retain their previous projection behavior.
+
+The Python GUI's diamond preset uses inward normals for the two source arms,
+95/20-degree contours at 50% flux and independent 140/40-degree apertures.
+Each shared source junction is acquired once using the incoming arm's beam.
+The Source tab allows beam roll and contour/aperture changes; zero roll puts
+the wide axis in the diamond plane. Flux-contour and aperture markers have
+20% opacity and extend 5% beyond the farthest detector pixel along the beam
+axis. Their end ellipses are display cross-sections, not detector footprints.
+
+YAML recipes and exact NPZ archives preserve the beam frames and masks.
+Python MAT-bridge round trips also preserve the metadata. MATLAB can use the
+effective mask, but its native GUI does not yet edit beam settings. View
+subsets and object-coordinate transformations preserve the beam definition.
+The preset illustrates geometry and transmission; it does not establish CT
+sampling completeness or model mechanical clearance at the diamond corners.
+
+Validation on 4 November 2026 used the checkout in the `recon` environment:
+the complete Python suite reported **481 passed, 2 skipped, 4 warnings**.
+The two skips were existing CUDA error/memory checks whose ctypes CUDA-runtime
+query was unavailable; native projection and adjoint beam tests passed.
+The suite covers beam masks, ellipse contours, archive/MAT round trips,
+object transforms, the diamond GUI, and per-view envelope length/opacity.
+No native extensions were rebuilt. The run log is
+`.codex-results/beam_diamond_validation_20261104.log`.
+
+## Constructing detector surfaces
 
 ```python
 import numpy as np, tigre
