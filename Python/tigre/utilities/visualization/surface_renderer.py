@@ -115,7 +115,10 @@ class SurfaceRenderer:
         beam_lines = []
         if beam is not None:
             for label, color in (("Beam flux contour", "darkorange"), ("Hard aperture", "purple")):
+                if label == "Hard aperture" and beam.aperture_angles_deg is None:
+                    continue
                 beam_lines.append(ax.plot([], [], [], color=color, linewidth=1, alpha=0.2, label=label)[0])
+        beam_distances = np.empty(n_views) if beam is not None else None
         title = ax.set_title("")
 
         # Scan frame-wise to avoid copying a large acquisition into float64.
@@ -131,6 +134,22 @@ class SurfaceRenderer:
             valid = pix[frame][mask[frame]]
             if len(valid):
                 lo, hi = np.minimum(lo, valid.min(axis=0)), np.maximum(hi, valid.max(axis=0))
+            if beam is not None:
+                # Include physical detector pixels even outside the aperture.
+                detector_mask = getattr(surface, "detector_valid_mask", mask)[frame]
+                physical = pix[frame][detector_mask]
+                if len(physical):
+                    lo = np.minimum(lo, physical.min(axis=0))
+                    hi = np.maximum(hi, physical.max(axis=0))
+                axis = beam.axis_directions[frame]
+                axial = pix[frame] @ axis - src[frame] @ axis
+                distance = max(float(np.max(axial, where=detector_mask, initial=0)) * 1.05, 1.)
+                beam_distances[frame] = distance
+                # Stable scan-wide limits prevent both clipping and zoom jumps.
+                for aperture in range(len(beam_lines)):
+                    ring = beam.outline(src[frame], frame, distance, aperture=bool(aperture))
+                    lo = np.minimum(lo, ring.min(axis=0))
+                    hi = np.maximum(hi, ring.max(axis=0))
         span = np.maximum(hi - lo, 1)
         # Leave vertical breathing room for thin detectors, preserving mm scale.
         middle_z = (lo[2] + hi[2]) / 2
@@ -155,12 +174,7 @@ class SurfaceRenderer:
             source._offsets3d = tuple(src[frame, :, None])
             source_label.set_position_3d(src[frame])
             if beam is not None:
-                # Extend past the physical detector, including pixels outside
-                # the aperture. Cone length is measured along its central axis.
-                axis = beam.axis_directions[frame]
-                axial = pix[frame] @ axis - src[frame] @ axis
-                detector_mask = getattr(surface, "detector_valid_mask", mask)[frame]
-                distance = max(float(np.max(axial, where=detector_mask, initial=0)) * 1.05, 1.)
+                distance = beam_distances[frame]
                 for aperture, line in enumerate(beam_lines):
                     ring = beam.outline(src[frame], frame, distance, aperture=bool(aperture))
                     if ring is None:

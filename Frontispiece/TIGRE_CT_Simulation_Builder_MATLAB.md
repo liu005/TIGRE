@@ -658,9 +658,8 @@ surface MEX build. For language differences, see the
 ## Sea-cargo digital radiography example
 
 Choose **Sea cargo: 20-foot container (2D Digital Radiography)**, select
-**Load example**, **Confirm** and **Play**. This refines plot 5 of the legacy
-TIGRE_MOD `Python/tests/test_animate_geometry.py` into a source-facing modular
-L-shaped detector. The external checkout is not needed to run the preset.
+**Load example**, **Confirm** and **Play**. This preset uses a source-facing
+modular L-shaped detector and a fixed source for conveyor DR simulation.
 
 | Setting | Value |
 |---|---|

@@ -85,7 +85,11 @@ The Python GUI's diamond preset uses inward normals for the two source arms,
 95/20-degree contours at 50% flux and independent 140/40-degree apertures.
 Each shared source junction is acquired once using the incoming arm's beam.
 The Source tab allows beam roll and contour/aperture changes; zero roll puts
-the wide axis in the diamond plane. Flux-contour and aperture markers have
+the wide axis in the diamond plane.
+An explicit **Beam model: On/Off** control enables or removes the model.
+Off disables aperture masking and hides both profiles; switching updates the
+preview and active geometry immediately while retaining entered beam settings.
+Flux-contour and aperture markers have
 20% opacity and extend 5% beyond the farthest detector pixel along the beam
 axis. Their end ellipses are display cross-sections, not detector footprints.
 

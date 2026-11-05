@@ -48,6 +48,26 @@ def test_beam_markers_reach_detector_with_faint_per_view_envelopes():
             ring = np.array(artist.get_data_3d()).T[:65]
             axial = (ring - source[view]) @ beam.axis_directions[view]
             np.testing.assert_allclose(axial, (source[view, 0] - 9000) * 1.05)
+            limits = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()])
+            assert np.all(ring >= limits[:, 0]) and np.all(ring <= limits[:, 1])
+
+
+def test_disabled_hard_aperture_has_no_legend_entry():
+    from tigre.utilities.source_beam import SourceBeam
+    from tigre.utilities.visualization.surface_renderer import SurfaceRenderer
+
+    surface = curved_surface()
+    axes = -surface.source_positions_mm
+    surface = DetectorSurfaceGeometry(surface.source_positions_mm, surface.pixel_centers_mm,
+        source_beam=SourceBeam(axes, np.cross([0, 0, 1], axes), [95, 20]))
+    ax = plt.figure().add_subplot(111, projection="3d")
+    renderer = SurfaceRenderer(ax, surface)
+    for frame in (0, 1):
+        renderer.update(frame)
+        labels = {line.get_label() for line in ax.lines}
+        assert "Beam flux contour" in labels
+        assert "Hard aperture" not in labels
+    ax.figure.canvas.draw()
 
 
 def test_curved_grid_uses_nonplanar_surface_triangles():

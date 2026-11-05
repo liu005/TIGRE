@@ -194,7 +194,7 @@ TAB_HELP = {
 }
 
 DETECTOR_FIELD_HELP.update({
-    "Beam model": "Off preserves existing rays. Elliptical adds per-source beam metadata and an optional hard aperture. Flux contours never multiply log projections.",
+    "Beam model": "On enables the elliptical source beam and optional hard aperture. Off removes both the beam model and aperture masking and hides both beam profiles. Switching updates the preview immediately; entered beam settings are retained. Flux contours never multiply log projections.",
     "Beam axis mode": "Toward origin aims each spot at world zero. Segment normal uses the inward xy normal of each straight source arm; the shared junction uses the incoming arm. Zero roll places the wide axis in the xy plane.",
     "Beam full angles (wide, narrow deg)": "Full opening angles at the reference central-flux fraction. Enter 0 < narrow <= wide < 180 degrees. This contour is not a cutoff.",
     "Beam reference flux fraction": "Fraction of central beam flux defining the contour, for example 0.5 or 0.7. Must be strictly between zero and one.",
@@ -255,7 +255,7 @@ GUI_EXAMPLES = {
          "panel_y_angles_deg": "0, 0", "top_arm_rows": "0", "arm_clearance_mm": "0",
          "source_waypoints_mm": "[[600, 0, 0], [0, 600, 0], [-600, 0, 0]]",
          "source_segment_views": "31, 31", "n_views": "61", "cor_mm": "0",
-         "beam_model": "Elliptical", "beam_axis_mode": "Segment normal",
+         "beam_model": "On", "beam_axis_mode": "Segment normal",
          "beam_opening_angles_deg": "95, 20", "beam_reference_fraction": "0.5",
          "beam_roll_deg": "0", "beam_aperture_angles_deg": "140, 40"},
         "Top view: four sides form a diamond with vertices (+600,0), (0,+600), "
@@ -1091,9 +1091,9 @@ class DetectorGeometryBuilder:
             entry = ttk.Entry(parent, textvariable=variable, width=42 if name == "source_waypoints_mm" else 16)
             if name in ("beam_model", "beam_axis_mode"):
                 entry = ttk.Combobox(parent, textvariable=variable, state="readonly", width=18,
-                    values=("Off", "Elliptical") if name == "beam_model" else ("Toward origin", "Segment normal"))
+                    values=("Off", "On") if name == "beam_model" else ("Toward origin", "Segment normal"))
                 if name == "beam_model":
-                    entry.bind("<<ComboboxSelected>>", lambda event: self._update_field_states())
+                    entry.bind("<<ComboboxSelected>>", self._on_beam_model_changed)
             self._entries[name] = entry
             self._bind_parameter_help(entry, label)
             entry.grid(row=row, column=1, sticky="ew", pady=2)
@@ -1287,7 +1287,7 @@ class DetectorGeometryBuilder:
             value = settings.get(name, default)
             if name.startswith("beam_") and settings.get("source_beam") is not None:
                 beam = settings["source_beam"]
-                value = "Elliptical" if name == "beam_model" else beam.get(name[5:], default)
+                value = "On" if name == "beam_model" else beam.get(name[5:], default)
                 if value is None:
                     value = default
             if name in ("rows", "columns"):
@@ -1530,7 +1530,7 @@ class DetectorGeometryBuilder:
         enabled["panel_x_angles_deg"] = True
         enabled["panel_y_angles_deg"] = True
         beam_field = getattr(self, "_fields", {}).get("beam_model")
-        beam_enabled = beam_field is not None and beam_field.get() == "Elliptical"
+        beam_enabled = beam_field is not None and beam_field.get() in ("On", "Elliptical")
         for name in ("beam_axis_mode", "beam_opening_angles_deg", "beam_reference_fraction", "beam_roll_deg", "beam_aperture_angles_deg"):
             if name in self._entries:
                 enabled[name] = beam_enabled
@@ -1799,11 +1799,16 @@ class DetectorGeometryBuilder:
             "source_beam": self._read_source_beam(values),
         }
 
+    def _on_beam_model_changed(self, event=None):
+        self._update_field_states()
+        if getattr(self, "surface", None) is not None and not getattr(self, "_inspection_mode", False):
+            self.update_preview()
+
     def _read_source_beam(self, values):
         if values.get("beam_model", "Off") == "Off":
             return None
-        if values["beam_model"] != "Elliptical":
-            raise ValueError("Beam model must be Off or Elliptical")
+        if values["beam_model"] not in ("On", "Elliptical"):
+            raise ValueError("Beam model must be Off or On")
         aperture = np.atleast_1d(self._parse_numbers(values["beam_aperture_angles_deg"], "Hard aperture"))
         return dict(axis_mode=values["beam_axis_mode"],
             opening_angles_deg=np.atleast_1d(self._parse_numbers(values["beam_opening_angles_deg"], "Beam angles")).tolist(),

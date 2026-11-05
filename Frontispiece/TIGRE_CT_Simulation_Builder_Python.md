@@ -1,84 +1,146 @@
-**TIGRE CT Simulation Builder — Python user manual**
+**TIGRE CT Simulation Builder**\
+**Python user manual**
 
-**Manual version: 1.8**
-**Updated: 4 November 2026**
-**Software reference: TIGRE Python package 3.0.0; CT Simulation Builder checkout.**
+**Manual version: 1.9**\
+**Updated: 5 November 2026**\
+**Software scope: Python CT Simulation Builder, development checkout.**
 
-The manual version identifies this document, not a separate application release.
-The PDF edition includes a cover page, contents, and wrapping tables/code.
+# Overview
 
-# Start the GUI
+The CT Simulation Builder defines source trajectories, detector surfaces and
+object motion for CT reconstruction and digital radiography (DR) simulation.
+Use it to inspect an acquisition, save editable or exact geometry, and export
+a script for projection or reconstruction. The preview displays geometry;
+it does not acquire data or run a reconstruction.
 
-Install TIGRE's Python requirements, including Tkinter and Matplotlib, and
-use the project's `recon-new` conda environment (`conda activate recon-new`). From the repository's
-`Python/` directory, launch the module:
+This manual is intended for researchers and engineers designing or evaluating
+acquisition geometries. It covers the Python interface. The
+[MATLAB manual](./TIGRE_CT_Simulation_Builder_MATLAB.md) documents its counterpart;
+features introduced in Python are identified where they differ.
 
-```console
-python -m tigre.utilities.detector_geometry_gui
-```
+## Reading guide
 
-Alternatively, from that same directory run:
+| Task | Start here |
+|---|---|
+| Launch the application | [Getting started](#getting-started) |
+| Build and save a first acquisition | [Quick start](#quick-start) |
+| Choose the relative source, detector and object motion | [Acquisition models](#acquisition-models) |
+| Configure source paths and beams | [Source configuration](#source-configuration) |
+| Configure panels, the object and acquisition timing | [Detector configuration](#detector-configuration), [Volume configuration](#volume-configuration), [Movement and timing](#movement-and-timing) |
+| Save geometry or export a script | [Geometry files](#geometry-files), [Simulation and reconstruction export](#simulation-and-reconstruction-export) |
+| Explore a supplied design | [Preset catalogue](#examples-and-presets), [Worked examples](#worked-examples) |
+| Diagnose an unsupported or invalid setup | [Limitations and troubleshooting](#limitations-and-troubleshooting) |
 
-```console
-python tigre/utilities/detector_geometry_gui.py
-```
+## Units and coordinate conventions
 
-On Windows PowerShell, for example:
+| Quantity | Convention |
+|---|---|
+| Lengths and pixel pitches | Millimetres. |
+| Source positions and detector pixel centres | World `(x, y, z)`. |
+| Volume counts, physical size and offsets | TIGRE Python `(z, y, x)`. |
+| Projection arrays | `(views, rows, columns)`. |
+| GUI and YAML angles | Degrees; beam openings are **full angles**. |
+| Standard TIGRE `angles` and `rotDetector` arrays | Radians. |
+
+Bold text identifies interface labels and actions. Monospace identifies
+filenames, code, array fields and values. Examples use the project's `recon`
+Conda environment; commands that change directory state their starting point.
+
+**Geometry checks have a defined scope.** Confirmation checks hardware
+positions and source-to-detector transmission through the volume. It does not
+establish complete CT sampling, calibration accuracy, mechanical clearance or
+the suitability of FDK. Review the algorithm checks before reconstruction.
+
+The manual version tracks documentation changes independently of the software
+package version. The PDF edition includes a cover, numbered contents and
+page references.
+
+<a id="start-the-gui"></a>
+
+# Getting started
+
+## Prerequisites
+
+Use the project checkout and its configured `recon` Conda environment.
+The interface uses NumPy, SciPy, Matplotlib and Tkinter; YAML files require
+PyYAML. TIGRE's native extension dependencies must be available when the
+package is imported. Drawing the preview does not execute a CUDA reconstruction;
+projection and reconstruction require the compiled surface CUDA extensions.
+
+## Launch from the repository root
 
 ```powershell
-conda activate recon-new
-Set-Location D:\works\software\TIGRE_work\Python
+Set-Location Python
+conda run -n recon python -m tigre.utilities.detector_geometry_gui
+```
+
+Alternatively, activate `recon` and launch the module from the same `Python/`
+directory:
+
+```powershell
+conda activate recon
 python -m tigre.utilities.detector_geometry_gui
 ```
 
-The GUI does not require a CUDA reconstruction to draw its scene. Running
-exported reconstruction scripts requires the compiled surface CUDA backend.
+To run the file directly from `Python/`, use
+`python tigre/utilities/detector_geometry_gui.py` in the activated environment.
+Keep the checkout ahead of any older installed TIGRE copy when running scripts.
 
-# Basic workflow
+<a id="basic-workflow"></a>
 
-1. Choose **Detector motion** and **Layout**.
-2. Enter the scan, panel, and pixel parameters described below. Hover over a
-   label to display its help in the **Parameter help** box.
-3. Select **Confirm** and read the check results. Invalid entries are reported
-   in a dialog; the previous confirmed scene is retained and the rejected
-   candidate is not activated.
-4. Inspect the 3D detector and source path. Use the **View** slider to select a
-   view, or **Play**/**Pause** to animate it.
-5. Select **Save surface...**. TIGRE checks the geometry before opening the
-   save dialog. Review the iterative-projector and `fdk_surface` messages, then
-   confirm to choose the `.npz` destination.
+# Quick start
+
+1. In **Example**, choose **TIGRE: circular cone-beam CT**, then select
+   **Load example**. This provides a small circular scan as a starting point.
+2. Review the four tabs: **Source**, **Detectors**, **Volume** and **Movement**.
+   Hover over or focus a field to read its description in **Parameter help**.
+3. Select **Confirm**. Read **Confirmation checks** before continuing. An
+   invalid candidate leaves the previous confirmed geometry active.
+4. Inspect the 3D view. Use **View** to select a pose and **Play**/**Pause**
+   to animate. The first explicit successful confirmation enables playback.
+5. Select **Save YAML...** to save editable settings and volume metadata.
+   Reopen that file with **Load geometry...** to continue editing.
+6. Use **Save surface...** when you need the exact displayed source and pixel
+   coordinates in an NPZ archive. This saves the active scene, not pending edits.
+7. After saving YAML, choose **Export recon script...**. Inspect the generated
+   script and run it separately in the CUDA environment. DR presets instead
+   offer **Export DR simulation script...**.
+
+Most field edits take effect on **Confirm**. **Beam model: On/Off** applies
+immediately and refreshes the active geometry; the entered beam parameters are
+retained while Off. Loading a preset also rebuilds the scene immediately.
+
+## Read the preview
+
+World axes share the origin `(0, 0, 0)`: +x is red, +y green and +z blue.
+The plot shows the source path, active source, detector panels and volume.
+Its coordinates are physical distances, rather than a scale-independent
+schematic. The four settings tabs share this view; controls scroll while
+the action buttons remain accessible.
+
+For rotating acquisitions with nonzero COR, an orange sphere and connecting
+line show the current translation `COR * (-sin(angle), cos(angle), 0)`.
+The translation is drawn at actual scale; the sphere is a display marker.
+This is the applied rig correction, not an additional rotation axis.
+
+When enabled, orange beam profiles show the reference flux contour and purple
+profiles show the hard aperture. Both use 20% opacity. The axes include the
+envelopes across the scan, so enabling a wide beam can zoom the view out.
+See [Elliptical beams and collimation](#elliptical-beams-and-collimation).
 
 For suitable circular acquisitions, **Remap for FDK...** can resample measured
-projections onto a compatible detector. It cannot repair a noncircular source
-trajectory or inadequate angular coverage. This optional data conversion does
-not alter the preview or original data.
+projections onto a compatible detector. It does not change the preview or
+repair inadequate angular coverage or a noncircular trajectory.
 
-Every preview marks the world coordinate origin `(0, 0, 0)` with three short
-arrows: +x in red, +y in green, and +z in blue. The arrows share the origin,
-carry x/y/z labels, and scale with the source distance for visibility.
-When a rotating scan has nonzero COR, an orange sphere labelled **COR** marks the current
-COR translation `COR * (-sin(angle), cos(angle), 0)`, connected to the origin
-by an orange line. It updates with the view slider and playback. The legend
-states the signed COR in millimetres. The shift is drawn at actual scale;
-zoom near the origin to inspect small offsets. This is the applied rig
-translation, not a separate rotation axis or a per-panel correction.
+<a id="applications"></a>
 
-The plot shows panel outlines, the source path, and the current source position;
-it is a layout preview, not a projection or a scale-independent schematic.
-
-The four settings tabs share one main 3D view. Larger/bold tabs, scrollable
-settings and fixed action buttons keep controls accessible on smaller screens.
-Parameter help switches with the tab; hover or focus a field for details.
-
-Hover over or focus any of the three checkboxes (Rotate object, acquisition timing, or start/end movement) to show its purpose, enabled/disabled behavior and constraints in Parameter help.
-
-## Applications
+# Acquisition models
 
 Choose geometry from the relative motion of the source, detector and object,
 rather than from the application name alone. The following setups are starting
 points; detector coverage and reconstruction suitability still need checking.
 
-### Medical CT: rotating source and detector
+## Medical CT: rotating source and detector
 
 Conventional rotating-gantry CT keeps the patient approximately stationary while
 the source and detector rotate together. Fan-beam scans can use a line detector;
@@ -94,7 +156,7 @@ for a multirow detector, or one piecewise-linear panel for a flat panel.
 For a helical/spiral scan, add volume translation in Movement. Confirm checks
 ray intersections; it does not establish sufficient sampling or clinical image quality.
 
-### Industrial CT: rotating object
+## Industrial CT: rotating object
 
 Laboratory and industrial CT commonly keep the source and detector fixed and
 rotate the specimen. This is a common arrangement rather than a requirement
@@ -107,7 +169,7 @@ object poses. The d18 preset illustrates the latter. Endpoint translation in
 Movement can be combined with rotation. Exported scripts transform the rays
 into the stationary object frame before reconstruction.
 
-### Tomosynthesis: limited-angle depth imaging
+## Tomosynthesis: limited-angle depth imaging
 
 Tomosynthesis reconstructs depth sections from projections over a limited
 angular range rather than a complete CT orbit. Digital breast tomosynthesis
@@ -131,7 +193,7 @@ passing the physical geometry check does not remove this incompleteness.
 A circular-geometry FDK check alone does not certify tomosynthesis coverage.
 The presets illustrate geometry, not a calibrated clinical acquisition.
 
-### Cargo and baggage scanning: geometry varies
+## Cargo and baggage scanning: geometry varies
 
 Security systems may use rotating CT, stationary-source CT, line scanning or
 multiple projection views while cargo travels through the scanner. For example,
@@ -145,7 +207,7 @@ example, not a validated model of every cargo scanner. Spectral response,
 scatter, attenuation calibration and detection performance are outside this
 geometry builder's scope.
 
-### Stationary / multisource CT: electronically switched source positions
+## Stationary / multisource CT: electronically switched source positions
 
 Stationary CT can use fixed detectors and an array of fixed source spots fired
 in sequence. No tube needs to move mechanically: the *active source position*
@@ -168,9 +230,11 @@ view; simultaneous-source superposition, independent emitter schedules and
 scanner electronics are not simulated. These layouts generally need iterative
 reconstruction; check the exported script's FDK assessment separately.
 
-The numbered [References and further reading](#references-and-further-reading) are listed at the end of this manual.
+See [References and further reading](#references-and-further-reading) for the acquisition background used in these examples.
 
-# Use the Source tab
+<a id="use-the-source-tab"></a>
+
+# Source configuration
 
 Choose **Source trajectory: Cylindrical** for a circular orbit about +z,
 **Linear** for world x/y/z endpoints, or **Piecewise linear** for joined straight
@@ -206,6 +270,31 @@ both source and detector receive the per-view shift
 `COR * (-sin(angle), cos(angle), 0)`. It defaults to zero and stays enabled in every example. Stationary detectors
 require COR = 0; a nonzero value produces a validation error.
 
+## Stationary detector and moving source
+
+Set **Detector motion** to **Fixed Position** and Source trajectory to **Linear** to hold the panels fixed while the
+source travels along a straight line. Enter **Views**, **Source start (x, y, z
+mm)**, and **Source end (x, y, z mm)** in TIGRE world coordinates. Both
+endpoints are included when there is more than one view. Source radius, source
+height, orbit start, and scan span are ignored in this mode.
+
+The **Tomosynthesis: linear source, fixed panel** preset moves the source
+from `(1000, -500, 0)` to `(1000, 500, 0)` mm over 41 views, a 1000 mm
+linear travel past a fixed 512 x 256 mm panel.
+
+The panel pose is set from the first source position and held fixed. COR stays
+editable and must be zero in stationary modes. The validated `fdk_surface` path
+rejects a linear source trajectory; use iterative surface methods. The
+experimental FDK opt-in is described below.
+
+## Stationary detector and arc source
+
+Select **Fixed Position** in Detector motion and **Cylindrical** in Source
+trajectory for an arc source with stationary panels. Arc mode uses **Source radius**,
+**Source height**, **Orbit start**, **Scan span**, and **Views**. The detector
+faces the midpoint of the acquisition arc and stays fixed as the source moves.
+Source start/end fields are ignored. Prefer iterative reconstruction.
+
 ## Piecewise linear source movement
 
 Choose **Source trajectory: Piecewise linear** to join two or more straight
@@ -240,32 +329,53 @@ builder does not edit piecewise source paths. Importing a Python recipe uses
 the exact coordinates supplied by the bridge. A MATLAB-only recipe without
 those coordinates is rejected rather than rebuilt as a straight path.
 
-## Stationary detector and moving source
+## Elliptical beams and collimation
 
-Set **Detector motion** to **Fixed Position** and Source trajectory to **Linear** to hold the panels fixed while the
-source travels along a straight line. Enter **Views**, **Source start (x, y, z
-mm)**, and **Source end (x, y, z mm)** in TIGRE world coordinates. Both
-endpoints are included when there is more than one view. Source radius, source
-height, orbit start, and scan span are ignored in this mode.
+The optional beam model describes each focal spot's central direction and an
+elliptical angular flux contour. The wide and narrow opening angles are
+measured at a specified fraction of central flux. A separate hard aperture
+defines which rays are blocked by collimation.
 
-The **Tomosynthesis: linear source, fixed panel** preset moves the source
-from `(1000, -500, 0)` to `(1000, 500, 0)` mm over 41 views, a 1000 mm
-linear travel past a fixed 512 x 256 mm panel.
+| Source control | Definition |
+|---|---|
+| **Beam model** | **On** enables the model; **Off** removes it, disables its aperture masking and hides its profiles. Switching applies immediately. Entered beam values are retained. |
+| **Beam axis mode** | **Toward origin** aims at world zero. **Segment normal** uses the inward normal of each nonzero xy source segment; it requires a piecewise linear path in the xy plane. The junction belongs to the incoming arm. |
+| **Beam full angles (wide, narrow deg)** | Two full opening angles, with `0 < narrow <= wide < 180`. |
+| **Beam reference flux fraction** | The central-flux fraction defining the contour, for example `0.5` or `0.7`; strictly between zero and one. |
+| **Beam roll (degrees)** | Rotation of the ellipse about the beam axis. For horizontal beams, zero puts the wide axis in xy and 90 degrees puts it along detector height. |
+| **Hard aperture full angles (deg; 0,0 off)** | Independent wide/narrow collimator openings. Enter `0, 0` to disable clipping while retaining beam metadata and its flux contour. |
 
-The panel pose is set from the first source position and held fixed. COR stays
-editable and must be zero in stationary modes. The validated `fdk_surface` path
-rejects a linear source trajectory; use iterative surface methods. The
-experimental FDK opt-in is described below.
+### Flux contour and hard aperture
 
-## Stationary detector and arc source
+A 50% contour is not a cutoff: rays outside that contour can still receive
+radiation. Changing only the contour or its reference fraction does not mask
+detector samples. The hard aperture is an ellipse in the forward tangent
+plane, rather than two independent rectangular angle limits. Rays outside it
+are excluded by both the native forward and adjoint projectors. Detector gaps
+remain excluded, and iterative surface methods inherit the same mask.
 
-Select **Fixed Position** in Detector motion and **Cylindrical** in Source
-trajectory for an arc source with stationary panels. Arc mode uses **Source radius**,
-**Source height**, **Orbit start**, **Scan span**, and **Views**. The detector
-faces the midpoint of the acquisition arc and stays fixed as the source moves.
-Source start/end fields are ignored. Prefer iterative reconstruction.
+Flux contours do not multiply the log line integrals returned by projection.
+The optional `SourceBeam.relative_flux` method evaluates a
+Gaussian-in-tangent-angle approximation matching the selected contour. It is
+not measured source data or a complete spectrum/count/noise simulator.
 
-# Use the Detectors tab
+### Beam display
+
+Orange ellipse/spokes represent the reference contour. Purple profiles appear
+only when a hard aperture is enabled. Both use 20% opacity and extend 5%
+beyond the farthest physical detector pixel along the beam axis. Their end
+ellipses are transverse display sections, not intersections with the detector.
+Plot limits include complete envelopes across the scan to prevent clipping
+and changes in zoom during playback. Wider beams can reduce the apparent size
+of the hardware in the shared view.
+
+Only the diamond preset enables beams by default. Other presets start with
+**Beam model: Off**; enable it explicitly to inspect a profile. Loading another
+preset resets beam settings and removes profiles from the previous example.
+
+<a id="use-the-detectors-tab"></a>
+
+# Detector configuration
 
 All distances and pixel pitches are in millimetres. The source and detector
 coordinates use TIGRE's world frame.
@@ -382,7 +492,9 @@ To model one misaligned panel, adjust that panel's tilt and position offsets.
 Do not assign separate COR values to the panels: that would imply different
 source/rotation geometries rather than a panel-only alignment correction.
 
-# Use the Volume tab
+<a id="use-the-volume-tab"></a>
+
+# Volume configuration
 
 Use **Volume** to define the reconstruction box. All four vectors use
 **z, y, x** order; source coordinates use **x, y, z** instead.
@@ -447,7 +559,9 @@ order is essential. Press Confirm after switching. The equivalent hardware
 trajectory is retained by geometry saves and reconstruction export. This
 preset-specific switch preserves d18's relative geometry with its centered,
 stationary object; it does not add acquisition timing to arbitrary ZYZ paths.
-# Use the Movement tab
+<a id="use-the-movement-tab"></a>
+
+# Movement and timing
 
 Use **Movement** for object translation and acquisition timing. Object rotation
 is configured in **Volume**. Geometry
@@ -520,7 +634,9 @@ timing is rejected. Arbitrary object/rig rotation timing remains unsupported.
 Press Confirm after edits, then Play; playback follows the saved frame times.
 Save YAML again before exporting DR simulation. YAML/MAT/NPZ retain timing;
 DR simulation outputs include `view_times_s` when timing is enabled.
-# Confirm, check results and animate
+<a id="confirm-check-results-and-animate"></a>
+
+# Confirmation and playback
 
 After editing any tab, select **Confirm**. It builds a candidate from all
 current controls, validates it, and replaces the active scene only on success.
@@ -545,7 +661,9 @@ Select **Play** to animate or pause, or drag the view slider to inspect a pose.
 With timing enabled, playback follows elapsed time and may skip display frames;
 all acquired views remain saved. The view slider displays sample time.
 
-# Save and load geometry
+<a id="save-and-load-geometry"></a>
+
+# Geometry files
 
 **Save YAML...** validates and saves current entries, even if not yet
 confirmed. **Save surface...** writes the displayed rays/volume, not pending
@@ -616,7 +734,7 @@ For scripts, `tigre.utilities.geometry_io.load_geometry_file(path)` returns a
 ## Load existing geometry for inspection
 
 Select **Load geometry...** and choose `.npz`, `.yaml`, or `.yml`. Modular YAML
-settings reopen in editable builder mode (see below). Numeric surface archives
+settings reopen in [editable builder mode](#save-and-reload-editable-yaml-settings). Numeric surface archives
 and YAML surface references open in
 **Inspection mode**, preserving the loaded source positions, pixel coordinates,
 validity masks (including per-view changes), and available module boundaries.
@@ -674,7 +792,9 @@ use the same renderer for the detector mesh, source path, volume, sampled
 pixels, central ray, and per-view updates. Builder previews additionally draw
 physical panel edges and the known COR marker.
 
-# Export CT reconstruction or DR simulation
+<a id="export-ct-reconstruction-or-dr-simulation"></a>
+
+# Simulation and reconstruction export
 
 The export type follows the **last successfully saved YAML**. CT scans use
 **Export recon script...**. The sea-cargo DR preset uses **Export DR simulation
@@ -743,12 +863,15 @@ intensity. `dr_image` samples a central column from each module and concatenates
 the row strips in module order; `module_slices` describes that order, and
 `valid_mask` identifies measured samples. This is a sampled 2D
 DR view, not a uniform-pixel conveyor mosaic or a reconstructed 3D volume.
-The L-shaped arms have different ray directions and magnification, and 100
-views over 6.2 m do not by themselves guarantee dense conveyor sampling.
+The L-shaped arms have different ray directions and magnification. The
+1253 views span 6260 mm at 5 mm conveyor steps; that sampling alone does not
+establish a uniformly sampled object-plane image.
 Geometry-dependent resampling, calibration, scatter, spectra and noise need
 separate treatment. The script contains no FDK or CGLS calls.
 
-# Reconstruction compatibility and measured-data remapping
+<a id="reconstruction-compatibility-and-measured-data-remapping"></a>
+
+# Reconstruction compatibility and remapping
 
 ## What restricts `fdk_surface`?
 
@@ -776,7 +899,6 @@ weighting. This path is experimental—not a validated general-trajectory FDK—
 and can produce substantial artifacts. TIGRE emits a runtime warning when it
 runs; use it for design exploration, and prefer iterative surface reconstruction
 for quantitative results.
-
 
 
 ## Remap measured projections
@@ -841,7 +963,7 @@ short scan.
 
 ## Catalogue of GUI presets
 
-The Python Example menu contains the following 14 presets, in this order.
+The Python **Example** menu contains the following 15 presets, in this order.
 MATLAB has the original 13; the piecewise linear source preset is currently
 Python-only. Choose a name and select **Load example** to replace the
 current controls and build its preview. Press **Confirm** before playback.
@@ -965,45 +1087,12 @@ and has a transverse length of `600*sqrt(2)` mm. The source path lies at z=0;
 detector rows extend along z. Hardware meets at idealized corner edges;
 mechanical clearance and physical source switching are not simulated.
 
-The Source tab includes **Beam model**, **Beam axis mode**, wide/narrow full
-opening angles, reference flux fraction, roll and independent hard-aperture
-full opening angles. The diamond preset enables elliptical beams normal to
-each source arm, pointing inward. Its reference contour is 95 degrees wide
-and 20 degrees narrow at 50% of central flux; the separate hard aperture is
-140 by 40 degrees. Zero roll puts the wide axis in the diamond plane. Set
-roll to 90 degrees to put it along the detector height. The source junction
-uses the incoming arm's beam direction. These illustrative settings can be
-edited; they are not manufacturer measurements.
-
-Orange ellipse/spokes show the reference contour; purple shows the aperture.
-Both markers use 20% opacity to keep the detector and volume visible.
-Both envelopes extend 5% beyond the farthest physical detector pixel measured
-along the beam axis, including pixels outside the aperture. The end ellipses
-are transverse display sections, not intersections with the detector. The
-displayed illuminated pixel cloud changes with the active focal spot. Enter
-`0, 0` for the hard aperture to disable clipping; **Beam model: Off** restores
-the uncollimated geometry. A contour alone does not discard rays, including
-pixels receiving less than the specified reference fraction.
-
-The aperture is elliptical in the forward tangent plane, not a rectangular
-intersection of two angle limits. Its mask is combined with detector gaps
-and applied by both native forward and adjoint projectors. CGLS, SIRT and
-ordered-subset surface methods inherit that mask. The flux fraction is
-metadata; projection values remain log line integrals and are not multiplied
-by the reference flux contour. `SourceBeam.relative_flux` offers an explicit
-Gaussian-in-tangent-angle approximation for future count/noise simulation;
-it is not a measured angular spectrum or a complete intensity simulator.
-
-For code without a GUI, construct `tigre.SourceBeam(axis_directions,
-wide_axis_directions, opening_angles_deg, reference_fraction,
-aperture_angles_deg)` and pass it as `source_beam=` to
-`DetectorSurfaceGeometry`. Axes are world xyz unit directions, one per view;
-the wide direction must be perpendicular to the central axis. Opening and
-aperture angles are **full angles**, `(wide, narrow)`, shared or per-view,
-with `0 < narrow <= wide < 180`. Beam metadata, the original detector mask
-and the effective aperture mask survive Python YAML/NPZ and MAT bridge round
-trips, view subsets and object-coordinate transformations. MATLAB receives
-the effective mask, but its native GUI has no beam-editing controls yet.
+The preset enables 95/20-degree elliptical contours at 50% of central flux,
+with independent 140/40-degree hard apertures. Beam directions are normal to
+the source arms and point inward; the shared junction uses the incoming arm.
+These illustrative values are editable in Source. See
+[Elliptical beams and collimation](#elliptical-beams-and-collimation) for the
+control definitions and display conventions.
 
 **Reconstruction:** Use surface iterative methods. Transmission through the
 volume is checked, but the preset does not establish complete CT sampling or
@@ -1093,6 +1182,8 @@ checking geometry and data. A one-row detector does not provide a complete
 3D cone-beam volume acquisition. This preset is idealized: detector corrections,
 measurement calibration and sufficient sampling must be assessed separately.
 
+# Worked examples
+
 ## TIGRE circular CT example
 
 Select **TIGRE: circular cone-beam CT** and **Load example**, then **Confirm** and **Play**
@@ -1131,7 +1222,7 @@ with additional working memory needed for construction and saving. Preview
 and export check geometry compatibility; they do not simulate projections or
 run reconstruction.
 
-### GCT modular scan (last preset)
+## GCT modular scan (last preset)
 
 **GCT: 53-panel circular scan** is the last entry in **Example**. It restores
 the idealized GCT layout: 53 panels of 1 x 64 pixels, 2.6172 mm column pitch,
@@ -1148,7 +1239,7 @@ about 240 MiB, with additional working memory during construction/export.
 Reduce **Views** before previewing on memory-constrained systems.
 **Load example** builds the full geometry immediately.
 
-### Tilt and COR presets
+## Tilt and COR presets
 
 Select one of these entries in **Example**, then **Load example**, **Confirm** and **Play**:
 
@@ -1167,7 +1258,7 @@ The example tests compare both full circular scans against TIGRE's geometry
 converter. Use panel offsets and tilts for individual panel alignment; COR
 remains one global value.
 
-### Try panel tilt and COR
+## Try panel tilt and COR
 
 Load **TIGRE: circular cone-beam CT**, enter **Panel roll / x = 13**,
 **Panel pitch / y = -17**, **Panel yaw / z = 23**, and **COR = 7**, then select
@@ -1181,32 +1272,11 @@ coordinates; `geo` supplies the reconstruction volume. The archive contains
 geometry arrays and available module/volume metadata, not the original GUI
 settings. Reloading opens inspection mode rather than editable settings.
 
-### Validation against TIGRE examples
-
-`test_detector_geometry_examples.py` reads geometry assignments from
-`d17_DetectorRotation.py` and checks all 100 poses against
-`surface_from_geometry` and an independent SciPy Euler rotation reference.
-Each pose is checked separately: the GUI does not reproduce the demo's
-changing tilt in a single scan. Tests also read `d01_CreateGeometry.py` and
-check its zero-COR baseline, plus additional positive and negative COR values
-at four cardinal angles. The nonzero COR values are test extensions.
-Comparisons allow 0.0005 mm for float32 rounding. These are geometry checks,
-not projection or reconstruction-quality tests.
-
-Run the CPU geometry and remapping tests from the repository root:
-
-```powershell
-conda activate recon
-$env:PYTHONPATH = (Join-Path $PWD 'Python')
-python -m pytest Python/tests/test_detector_geometry.py Python/tests/test_detector_geometry_examples.py Python/tests/test_detector_geometry_remap.py -q
-```
-
 ## Sea-cargo digital radiography example
 
 Choose **Sea cargo: 20-foot container (2D Digital Radiography)**, select
-**Load example**, **Confirm** and **Play**. This refines plot 5 of the legacy
-TIGRE_MOD `Python/tests/test_animate_geometry.py` into a source-facing modular
-L-shaped detector. The external checkout is not needed to run the preset.
+**Load example**, **Confirm** and **Play**. This preset uses a source-facing
+modular L-shaped detector and a fixed source for conveyor DR simulation.
 
 | Setting | Value |
 |---|---|
@@ -1290,7 +1360,7 @@ sampling, calibration, scatter, spectra and noise need separate treatment.
 # Programmatic visualization
 
 Use `tigre.animate_geometry(geo, surface=surface)` after loading the archive
-as shown below. The renderer supports curved grids, module boundaries, gaps,
+as described in [Geometry files](#geometry-files). The renderer supports curved grids, module boundaries, gaps,
 and changing per-view masks. It shares the GUI's surface renderer and coordinate-arrow drawing.
 See the [surface visualization guide](./Detector_surface.md#visualizing-curved-and-modular-detectors)
 for details. New GUI exports include available `module_slices`; pass them
@@ -1302,6 +1372,36 @@ For a full YAML-to-CUDA workflow, see
 That separate demonstration chooses its own volume settings; the GUI-exported
 sample script instead uses saved volume metadata. Detector tilt reference
 checks are in `test_detector_geometry_examples.py` and `test_demo_geometry_animations.py`.
+
+## Beam metadata in code
+
+For code without a GUI, attach a `SourceBeam` to the explicit surface. Given
+source positions, detector pixel centres and a detector sampling mask:
+
+```python
+import tigre
+from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
+
+beam = tigre.SourceBeam(
+    axis_directions=central_axes,
+    wide_axis_directions=wide_axes,
+    opening_angles_deg=(95, 20),
+    reference_fraction=0.5,
+    aperture_angles_deg=(140, 40),  # Use None for no hard aperture.
+)
+surface = DetectorSurfaceGeometry(
+    source_positions_mm, pixel_centers_mm,
+    valid_mask=detector_mask, source_beam=beam,
+)
+```
+
+`central_axes` and `wide_axes` are world xyz unit directions, one per view;
+the wide direction must be perpendicular to the central axis. Opening and
+aperture angles are **full angles**, `(wide, narrow)`, shared or per-view,
+with `0 < narrow <= wide < 180`. Beam metadata, the original detector mask
+and the effective aperture mask survive Python YAML/NPZ and MAT bridge round
+trips, view subsets and object-coordinate transformations. MATLAB receives
+the effective mask, but its native GUI has no beam-editing controls yet.
 
 # Limitations and troubleshooting
 
@@ -1338,13 +1438,39 @@ Other common issues:
 * **Unexpected panel orientation:** check the sign of the transverse offset
   and panel angle; positive angles rotate counterclockwise about +z.
 * **Unexpected preview or stale geometry:** edit the inputs and select
-  **Confirm** again. Saving always checks the currently previewed surface.
+  **Confirm** again. **Save YAML...** validates current entries;
+  **Save surface...** saves the displayed active geometry.
 * **FDK unsupported:** use an iterative surface algorithm, or adjust the scan
   and detector geometry to satisfy `fdk_surface`'s constraints.
 * **Save/check error:** correct the reported invalid geometry and preview
   again; a successful save is not attempted if the compatibility check fails.
 
-# Documentation and PDF regeneration
+<a id="documentation-and-pdf-regeneration"></a>
+
+# Validation and document maintenance
+
+<a id="validation-against-tigre-examples"></a>
+
+## Geometry validation
+
+`test_detector_geometry_examples.py` reads geometry assignments from
+`d17_DetectorRotation.py` and checks all 100 poses against
+`surface_from_geometry` and an independent SciPy Euler rotation reference.
+Each pose is checked separately: the GUI does not reproduce the demo's
+changing tilt in a single scan. Tests also read `d01_CreateGeometry.py` and
+check its zero-COR baseline, plus additional positive and negative COR values
+at four cardinal angles. The nonzero COR values are test extensions.
+Comparisons allow 0.0005 mm for float32 rounding. These are geometry checks,
+not projection or reconstruction-quality tests.
+
+Run the CPU geometry and remapping tests from the repository root:
+
+```powershell
+conda activate recon
+$env:PYTHONPATH = (Join-Path $PWD 'Python')
+python -m pytest Python/tests/test_detector_geometry.py Python/tests/test_detector_geometry_examples.py Python/tests/test_detector_geometry_remap.py -q
+```
+
 
 See the [validation guide](./Validation.md) for current regression commands.
 `test_sea_cargo_preset.py` covers the modular DR layout, projected seams and air
@@ -1357,10 +1483,28 @@ See the [MATLAB manual](./TIGRE_CT_Simulation_Builder_MATLAB.md),
 [surface geometry reference](./Detector_surface.md), and
 [demo comparison](./Demo_language_comparison.md).
 
-From the repository root, run `./Frontispiece/Export_Manuals.ps1` to regenerate
-both PDFs. Pandoc, XeLaTeX and the configured Consolas font are required.
-The PDF helper fixes table widths, wraps code, and produces a versioned cover
-and separate contents pages. PDFs are generated artifacts ignored by Git.
+## Beam display validation
+
+The [beam-display audit](./Beam_display_audit_2026-11-05.md) records checks of
+all 15 presets, including On/Off state, beam-frame updates, envelope extent
+and legend behavior. Beam and renderer regression tests are in
+`test_source_beam.py`, `test_diamond_geometry_example.py` and
+`test_animate_surface_mesh.py`.
+
+## Regenerate the PDF
+
+From the repository root:
+
+```powershell
+./Frontispiece/Export_Manuals.ps1 -ManualLanguage Python
+```
+
+Omit `-ManualLanguage` to regenerate both manuals, or use `MATLAB` for the
+MATLAB edition. Pandoc, XeLaTeX, Segoe UI and Consolas must be available.
+The export reads the version and date from each source document. It applies
+consistent typography, wrapping tables/code, page headers and footers, a
+versioned cover and separate contents pages. PDFs are generated artifacts
+ignored by Git.
 
 # References and further reading
 

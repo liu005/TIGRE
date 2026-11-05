@@ -1,6 +1,10 @@
 # Generate both manuals with wrapping tables and code blocks. Requires Pandoc/XeLaTeX.
+param([ValidateSet('Python', 'MATLAB', 'Both')][string]$ManualLanguage = 'Both')
+
 $ErrorActionPreference = 'Stop'
-foreach ($manual in @('TIGRE_CT_Simulation_Builder_Python', 'TIGRE_CT_Simulation_Builder_MATLAB')) {
+$manualNames = if ($ManualLanguage -eq 'Both') { @('Python', 'MATLAB') } else { @($ManualLanguage) }
+foreach ($language in $manualNames) {
+    $manual = 'TIGRE_CT_Simulation_Builder_' + $language
     $edition = if ($manual -eq 'TIGRE_CT_Simulation_Builder_Python') { 'Python User Manual' } else { 'MATLAB User Manual' }
     $source = Join-Path $PSScriptRoot ($manual + '.md')
     $manualText = Get-Content -LiteralPath $source -Raw
@@ -12,11 +16,11 @@ foreach ($manual in @('TIGRE_CT_Simulation_Builder_Python', 'TIGRE_CT_Simulation
         $source, '--from=gfm', '--pdf-engine=xelatex', '--toc', '--toc-depth=3', '--number-sections',
         '--metadata=title:TIGRE CT Simulation Builder',
         ('--metadata=subtitle:' + $edition),
-        '--metadata=author:TIGRE package reference 3.0.0',
         "--metadata=date:Manual version $manualVersion - $manualDate",
         ('--lua-filter=' + (Join-Path $PSScriptRoot 'pdf_support/manual-tables.lua')),
         ('--include-in-header=' + (Join-Path $PSScriptRoot 'pdf_support/manual-header.tex')),
-        '-V', 'papersize=a4', '-V', 'classoption=titlepage', '-V', 'geometry:margin=20mm', '-V', 'fontsize=10pt',
+        '-V', 'papersize=a4', '-V', 'classoption=titlepage', '-V', 'geometry:margin=23mm', '-V', 'fontsize=11pt',
+        '-V', 'mainfont=Segoe UI', '-V', 'sansfont=Segoe UI', '-V', 'linestretch=1.08',
         '-V', 'colorlinks=true', '-V', 'monofont=Consolas', '-o', $target
     )
     & pandoc @arguments

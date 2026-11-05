@@ -68,7 +68,7 @@ def test_diamond_preset_gui_geometry_and_transmission(tmp_path):
         save_geometry_yaml(path, settings=parameters, geometry=geometry)
         with patch("tkinter.messagebox.showerror", side_effect=AssertionError):
             app.load_geometry_path(path)
-        assert app._fields["beam_model"].get() == "Elliptical"
+        assert app._fields["beam_model"].get() == "On"
         assert app._fields["beam_axis_mode"].get() == "Segment normal"
         np.testing.assert_array_equal(app.surface.valid_mask, surface.valid_mask)
         assert app._surface_renderer.update(31)
@@ -80,9 +80,19 @@ def test_diamond_preset_gui_geometry_and_transmission(tmp_path):
         rolled = build_modular_surface(**app._read_parameters())
         np.testing.assert_allclose(np.abs(rolled.source_beam.wide_axis_directions[:, 2]), 1)
         app._fields["beam_model"].set("Off")
-        app._update_field_states()
+        with patch("tkinter.messagebox.showerror", side_effect=AssertionError):
+            app._on_beam_model_changed()
         assert str(app._entries["beam_opening_angles_deg"].cget("state")) == "disabled"
         uncollimated = build_modular_surface(**app._read_parameters())
         assert uncollimated.source_beam is None and uncollimated.valid_mask.all()
+        assert app.surface.source_beam is None and app.surface.valid_mask.all()
+        assert not any(line.get_label() in ("Beam flux contour", "Hard aperture") for line in app._axes.lines)
+        app._fields["beam_aperture_angles_deg"].set("140, 40")
+        app._fields["beam_roll_deg"].set("0")
+        app._fields["beam_model"].set("On")
+        with patch("tkinter.messagebox.showerror", side_effect=AssertionError):
+            app._on_beam_model_changed()
+        np.testing.assert_array_equal(app.surface.valid_mask, surface.valid_mask)
+        assert {"Beam flux contour", "Hard aperture"} <= {line.get_label() for line in app._axes.lines}
     finally:
         root.destroy()
