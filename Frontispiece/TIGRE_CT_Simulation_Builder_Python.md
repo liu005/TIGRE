@@ -297,7 +297,7 @@ Source start/end fields are ignored. Prefer iterative reconstruction.
 
 ## Piecewise linear source movement
 
-Choose **Source trajectory: Piecewise linear** to join two or more straight
+Choose **Source trajectory: Piecewise linear** to define one or more straight
 source movements into one acquisition with a fixed detector. The
 **Tomosynthesis: piecewise linear source** example provides a starting point.
 
@@ -309,6 +309,17 @@ source movements into one acquisition with a fixed detector. The
 3. Configure the fixed detector panels and volume, then press **Confirm**.
    **Views** is derived from the segment counts. Use Play or the slider to inspect
    the source moving through the junction.
+
+For spatial gaps, enter separate `[start, end]` pairs in **Source waypoints**:
+`[[[1000, -300, 0], [1000, -50, 0]], [[1000, 50, 0], [800, 300, 0]]]`.
+With `21, 21` views this acquires 42 views, with no samples across the gap.
+Pairs that share exactly the same junction coordinates acquire that junction
+once. The preview leaves the source path broken across gaps. A single segment
+is also supported, either as two waypoints or one start/end pair.
+
+**Segment normal** beam axes work with both **Linear** and **Piecewise linear**
+sources. Each nonzero segment must lie in the xy plane; connected junctions use
+the incoming segment's normal, and a segment after a gap uses its own normal.
 
 The detector pose is established from the first waypoint and held fixed for
 every segment, including its tilts, gaps and mask. This combines source paths

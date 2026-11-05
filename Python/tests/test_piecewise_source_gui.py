@@ -43,7 +43,7 @@ def test_join_matches_two_linear_scans_on_the_same_detector(layout):
 
 
 @pytest.mark.parametrize("points,counts", [
-    ([[1, 0, 0], [2, 0, 0]], [3]),
+    ([[1, 0, 0]], []),
     ([[1, 0, 0], [2, np.nan, 0], [3, 0, 0]], [3, 3]),
     ([[1, 0], [2, 0], [3, 0]], [3, 3]),
     ([[1, 0, 0], [2, 0, 0], [3, 0, 0]], [3]),
@@ -71,9 +71,43 @@ def test_three_segments_retain_endpoints_and_nonuniform_sampling():
         [8, 4, 0], [8, 4, 2], [8, 4, 4], [8, 4, 6]])
 
 
-def test_recipe_exact_and_export_preserve_piecewise_path(tmp_path):
+@pytest.mark.parametrize("piecewise", [False, True])
+def test_single_segment_supports_segment_normal_beam(piecewise):
+    points = [[1000, -60, 0], [1000, 60, 0]]
+    parameters = settings() | dict(
+        source_waypoints_mm=points if piecewise else None,
+        source_segment_views=[6] if piecewise else None,
+        source_start_mm=points[0], source_end_mm=points[1],
+        source_beam=dict(axis_mode="Segment normal", opening_angles_deg=[60, 30]))
+    surface = build_modular_surface(**parameters)
+    np.testing.assert_allclose(surface.source_positions_mm, np.linspace(*points, 6))
+    np.testing.assert_allclose(surface.source_beam.axis_directions,
+        np.tile([-1, 0, 0], (6, 1)))
+    np.testing.assert_array_equal(surface.pixel_centers_mm,
+        np.broadcast_to(surface.pixel_centers_mm[0], surface.pixel_centers_mm.shape))
+
+
+def test_gaps_skip_unacquired_positions_and_keep_segment_beam_normals():
+    parameters = settings() | dict(n_views=7,
+        source_waypoints_mm=[[[1000, -60, 0], [1000, 0, 0]],
+            [[1000, 0, 0], [900, 0, 0]], [[800, 40, 0], [800, 60, 0]]],
+        source_segment_views=[3, 3, 2],
+        source_beam=dict(axis_mode="Segment normal", opening_angles_deg=[60, 30]))
+    surface = build_modular_surface(**parameters)
+    np.testing.assert_allclose(surface.source_positions_mm,
+        [[1000, -60, 0], [1000, -30, 0], [1000, 0, 0],
+         [950, 0, 0], [900, 0, 0], [800, 40, 0], [800, 60, 0]])
+    np.testing.assert_allclose(surface.source_beam.axis_directions,
+        [[-1, 0, 0]] * 3 + [[0, 1, 0]] * 2 + [[-1, 0, 0]] * 2)
+
+
+@pytest.mark.parametrize("gaps", [False, True])
+def test_recipe_exact_and_export_preserve_piecewise_path(tmp_path, gaps):
     from tigre.utilities.geometry_recon_export import reconstruction_script_text
     parameters = settings()
+    if gaps:
+        parameters.update(source_waypoints_mm=[[[1000, -60, 0], [1000, -20, 0]],
+            [[900, 20, 0], [900, 60, 0]]], source_segment_views=[3, 3])
     expected = build_modular_surface(**parameters)
     geo = SimpleNamespace(nVoxel=np.array([8, 8, 8]), sVoxel=np.array([40., 40., 40.]), offOrigin=np.zeros(3))
     recipe, exact = tmp_path / "recipe.yaml", tmp_path / "exact.yaml"
@@ -166,6 +200,20 @@ def test_gui_confirm_save_load_inspect_and_switch_modes(tmp_path):
         assert len(app.surface.source_positions_mm) == 41
         np.testing.assert_array_equal(app.surface.source_positions_mm[[0, 20, 40]],
             [[1000, -300, 0], [1000, 0, 0], [800, 300, 100]])
+        app._fields["source_waypoints_mm"].set(
+            "[[[1000, -60, 0], [1000, -20, 0]], [[900, 20, 0], [900, 60, 0]]]")
+        app._fields["source_segment_views"].set("3, 3")
+        app._fields["beam_model"].set("On")
+        app._fields["beam_axis_mode"].set("Segment normal")
+        with patch("tkinter.messagebox.showerror", side_effect=AssertionError):
+            app._preview_button.invoke()
+        assert app._fields["n_views"].get() == "6"
+        expected = app.surface.source_positions_mm.copy()
+        path = next(line for line in app._axes.lines if line.get_label() == "Source path")
+        assert np.isnan(np.asarray(path.get_data_3d())).any()
+        save_geometry_yaml(recipe, settings=app._read_parameters())
+        app.load_geometry_path(recipe)
+        np.testing.assert_array_equal(app.surface.source_positions_mm, expected)
     finally:
         root.destroy()
 

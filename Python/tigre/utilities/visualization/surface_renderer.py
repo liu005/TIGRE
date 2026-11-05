@@ -145,11 +145,8 @@ class SurfaceRenderer:
                 axial = pix[frame] @ axis - src[frame] @ axis
                 distance = max(float(np.max(axial, where=detector_mask, initial=0)) * 1.05, 1.)
                 beam_distances[frame] = distance
-                # Stable scan-wide limits prevent both clipping and zoom jumps.
-                for aperture in range(len(beam_lines)):
-                    ring = beam.outline(src[frame], frame, distance, aperture=bool(aperture))
-                    lo = np.minimum(lo, ring.min(axis=0))
-                    hi = np.maximum(hi, ring.max(axis=0))
+                # Beam outlines may extend beyond the physical scene limits;
+                # enabling the beam must not zoom out to fit its profile.
         span = np.maximum(hi - lo, 1)
         # Leave vertical breathing room for thin detectors, preserving mm scale.
         middle_z = (lo[2] + hi[2]) / 2

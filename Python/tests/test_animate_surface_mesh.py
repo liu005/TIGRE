@@ -38,6 +38,11 @@ def test_beam_markers_reach_detector_with_faint_per_view_envelopes():
     pixels = np.array([[[9500, 20, 30], [9000, 20, 30], [8000, 20, 30]]])
     beam = SourceBeam([[-1, 0, 0]] * 2, [0, 1, 0], [95, 20], .5, [140, 40])
     surface = DetectorSurfaceGeometry(source, pixels, [[True, True, False]], source_beam=beam)
+    plain = DetectorSurfaceGeometry(source, pixels, surface.detector_valid_mask)
+    reference_ax = plt.figure().add_subplot(111, projection="3d")
+    SurfaceRenderer(reference_ax, plain)
+    expected_limits = np.array([reference_ax.get_xlim3d(), reference_ax.get_ylim3d(),
+                               reference_ax.get_zlim3d()])
     ax = plt.figure().add_subplot(111, projection="3d")
     renderer = SurfaceRenderer(ax, surface)
     for view in range(2):
@@ -49,7 +54,16 @@ def test_beam_markers_reach_detector_with_faint_per_view_envelopes():
             axial = (ring - source[view]) @ beam.axis_directions[view]
             np.testing.assert_allclose(axial, (source[view, 0] - 9000) * 1.05)
             limits = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()])
-            assert np.all(ring >= limits[:, 0]) and np.all(ring <= limits[:, 1])
+            np.testing.assert_allclose(limits, expected_limits)
+            assert np.any(ring < limits[:, 0]) or np.any(ring > limits[:, 1])
+    ax.set_xlim3d(8500, 9500)
+    ax.set_ylim3d(-100, 100)
+    ax.set_zlim3d(-100, 100)
+    zoomed_limits = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()])
+    renderer.update(0)
+    ax.figure.canvas.draw()
+    np.testing.assert_allclose(
+        [ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()], zoomed_limits)
 
 
 def test_disabled_hard_aperture_has_no_legend_entry():

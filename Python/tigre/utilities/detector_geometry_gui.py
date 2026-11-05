@@ -168,8 +168,8 @@ DETECTOR_FIELD_HELP = {
 DETECTOR_FIELD_HELP.update({
     "Voxel size (z, y, x mm)": "Positive physical voxel spacing in z, y, x mm. Full size = voxel counts * voxel size. Editing voxel size or counts updates full size; editing full size updates voxel size while keeping counts fixed.",
     "Source trajectory": "Cylindrical follows a circular orbit about world +z. Linear samples start/end coordinates. Piecewise linear joins consecutive waypoint pairs with a view count for each segment, counting shared junctions once. Both linear modes require a fixed detector. Selecting Moving with Source switches to Cylindrical. Confirm applies the selection.",
-    "Source waypoints (x, y, z mm)": "Ordered world coordinates, for example [[1000, -200, 0], [1000, 0, 0], [800, 200, 0]]. At least three triples define two joined straight segments. The detector stays in the pose defined by the first waypoint. Press Confirm to apply.",
-    "Views per source segment": "One integer of at least 2 for each consecutive waypoint pair, including both endpoints. Shared junctions are acquired once: 31, 30 gives 60 total views. Samples are uniformly spaced within each segment. Total Views is derived on Confirm. Orbit timing must be disabled.",
+    "Source waypoints (x, y, z mm)": "Ordered world coordinates, for example [[1000, -200, 0], [1000, 0, 0], [800, 200, 0]]. Two triples define one straight segment. For spatial gaps use explicit pairs: [[[1000, -200, 0], [1000, -50, 0]], [[1000, 50, 0], [800, 200, 0]]]. No views are acquired across gaps. The detector stays in the pose defined by the first start point. Press Confirm to apply.",
+    "Views per source segment": "One integer of at least 2 for each segment, including both endpoints. Shared junctions are acquired once: 31, 30 gives 60 views when connected, or 61 with a gap. Samples are uniformly spaced within each segment. Total Views is derived on Confirm. Orbit timing must be disabled.",
     "Voxel counts": "Three positive integer counts in TIGRE z, y, x order. Changing counts preserves voxel size and updates full physical size. Full size = counts * voxel size. Confirm applies changes; the preview allocates no voxel array.",
     "Full size (mm)": "Full positive physical extent along z, y, x in mm (not half-widths). Editing this field preserves voxel counts and updates voxel size = full size / counts. The box is centered at the center offset.",
     "Center offset (mm)": "Initial volume center offOrigin in z, y, x mm. Shared with Start position in Movement. Source coordinates use x, y, z instead.",
@@ -341,20 +341,33 @@ GUI_EXAMPLES["GCT: 53-panel circular scan"] = (
     "GCT idealized 53-panel arc, 5701 views over 228 degrees. Large geometry (~240 MiB arrays); measured-data pixel corrections are not included.")
 
 
-def _piecewise_source_positions(waypoints, segment_views):
-    """Sample joined straight segments, retaining each shared junction once."""
+def _source_segments(waypoints, segment_views):
+    """Validate connected waypoints or explicit (segment, endpoint, xyz) pairs."""
     points = np.asarray(waypoints, dtype=float)
     counts = np.asarray(segment_views)
-    if points.ndim != 2 or points.shape[1] != 3 or len(points) < 3 or not np.isfinite(points).all():
-        raise ValueError("Source waypoints require at least three finite x, y, z triples.")
-    if (counts.shape != (len(points) - 1,) or counts.dtype.kind not in "iu"
+    if points.ndim == 2 and points.shape[1] == 3 and len(points) >= 2:
+        segments = np.stack((points[:-1], points[1:]), axis=1)
+    elif points.ndim == 3 and points.shape[1:] == (2, 3) and len(points) >= 1:
+        segments = points
+    else:
+        raise ValueError("Source waypoints require at least two finite x, y, z triples or a list of [start, end] pairs.")
+    if not np.isfinite(segments).all():
+        raise ValueError("Source segment coordinates must be finite.")
+    if (counts.shape != (len(segments),) or counts.dtype.kind not in "iu"
             or np.any(counts < 2)):
         raise ValueError("Enter one integer view count of at least 2 for each source segment.")
-    total = sum(int(count) - 1 for count in counts) + 1
+    shared = np.r_[False, np.all(segments[1:, 0] == segments[:-1, 1], axis=1)]
+    total = sum(int(count) - int(skip) for count, skip in zip(counts, shared))
     if total > MAX_GUI_VIEWS:
         raise ValueError(f"Piecewise source exceeds the {MAX_GUI_VIEWS} view limit.")
-    return np.concatenate([np.linspace(start, end, int(count))[0 if index == 0 else 1:]
-        for index, (start, end, count) in enumerate(zip(points[:-1], points[1:], counts))])
+    return segments, counts, shared
+
+
+def _piecewise_source_positions(waypoints, segment_views):
+    """Sample source segments without acquiring views across spatial gaps."""
+    segments, counts, shared = _source_segments(waypoints, segment_views)
+    return np.concatenate([np.linspace(start, end, int(count))[int(skip):]
+        for (start, end), count, skip in zip(segments, counts, shared)])
 
 
 def _with_source_beam(surface, specification, waypoints=None, segment_views=None):
@@ -374,17 +387,17 @@ def _with_source_beam(surface, specification, waypoints=None, segment_views=None
         axis = -surface.source_positions_mm.astype(float)
     elif mode == "Segment normal":
         if waypoints is None:
-            raise ValueError("Segment-normal beams require a piecewise linear source")
-        points = np.asarray(waypoints, dtype=float)
+            raise ValueError("Segment-normal beams require a linear or piecewise linear source")
+        segments, counts, shared = _source_segments(waypoints, segment_views)
         axes = []
-        for k, (start, end, count) in enumerate(zip(points[:-1], points[1:], segment_views)):
+        for (start, end), count, skip in zip(segments, counts, shared):
             tangent = end - start
             if tangent[2] != 0 or np.linalg.norm(tangent[:2]) == 0:
                 raise ValueError("Segment-normal beams require nonzero source segments in the xy plane")
             normal = np.array([tangent[1], -tangent[0], 0.])
             if normal @ (-(start + end) / 2) < 0:
                 normal *= -1
-            axes.extend([normal] * (int(count) - (k > 0)))
+            axes.extend([normal] * (int(count) - int(skip)))
         axis = np.asarray(axes)
     else:
         raise ValueError("Beam axis mode must be 'Toward origin' or 'Segment normal'")
@@ -425,8 +438,9 @@ def build_modular_surface(
     use panel position offsets and tilts for individual panel alignment.
     Returned coordinates include these corrections; do not apply them again.
     Fixed panels face the initial linear-source position or the arc midpoint.
-    source_waypoints_mm and source_segment_views join two or more linear
+    source_waypoints_mm and source_segment_views define one or more linear
     segments on the same fixed detector, counting each shared junction once.
+    Use a list of [start, end] pairs to leave unacquired gaps between segments.
     """
     if not isinstance(n_views, (int, np.integer)) or n_views < 1:
         raise ValueError("Number of views must be a positive integer.")
@@ -647,7 +661,7 @@ def build_modular_surface(
             valid_mask=detector.valid_mask[0],
         )
         fixed._module_slices = detector._module_slices
-        return _with_source_beam(fixed, source_beam)
+        return _with_source_beam(fixed, source_beam, [source_start, source_end], [int(n_views)])
     if arc_source is not None:
         from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
         result = DetectorSurfaceGeometry(
@@ -1708,7 +1722,7 @@ class DetectorGeometryBuilder:
             try:
                 waypoints = ast.literal_eval(values["source_waypoints_mm"])
             except (ValueError, SyntaxError) as exc:
-                raise ValueError("Source waypoints must be a list of x, y, z triples.") from exc
+                raise ValueError("Source waypoints must be a list of x, y, z triples or [start, end] pairs.") from exc
             segment_views = np.atleast_1d(self._parse_numbers(
                 values["source_segment_views"], "Views per source segment", integer=True)).tolist()
             positions = _piecewise_source_positions(waypoints, segment_views)
@@ -2100,6 +2114,16 @@ class DetectorGeometryBuilder:
             axes, self.surface, geo=getattr(self, "_builder_geometry", None), world_axes=False,
             panel_vertices=(None if parameters.get("top_arm_rows", 0) or (parameters.get("hardware_angles_deg") is not None and not parameters.get("fixed_hardware"))
                             else lambda frame: self._panel_vertices(parameters, frame)))
+        if parameters.get("source_waypoints_mm") is not None:
+            segments, counts, shared = _source_segments(
+                parameters["source_waypoints_mm"], parameters["source_segment_views"])
+            path_parts = []
+            for (start, end), count, skip in zip(segments, counts, shared):
+                if path_parts and not skip:
+                    path_parts.append(np.full((1, 3), np.nan))
+                path_parts.append(np.linspace(start, end, int(count)))
+            path = np.concatenate(path_parts)
+            next(line for line in axes.lines if line.get_label() == "Source path").set_data_3d(*path.T)
         self._panel_collection = self._surface_renderer.mesh
         self._source_artist = self._surface_renderer.source
         source_path = self.surface.source_positions_mm
