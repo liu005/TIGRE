@@ -132,7 +132,7 @@ def remap_projections_for_fdk(projections, surface, target_columns=None):
         raise ValueError("target_columns must be an integer of at least two.")
     if nv * nrows * int(target_columns) > 20_000_000:
         raise ValueError(
-            "Remapped data would exceed the 20,000,000-sample GUI limit; "
+            "Remapped data would exceed the 20,000,000-sample dense surface limit; "
             "reduce the input views or detector size.")
     target_gamma = np.linspace(lower, upper, int(target_columns))
 

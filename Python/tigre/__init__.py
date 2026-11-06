@@ -23,6 +23,7 @@ from .utilities.geometry_default import ConeGeometryDefault as geometry_default
 from .utilities.geometry_default import FanGeometryDefault as fan_geometry_default
 from .utilities.Ax import Ax
 from .utilities.Atb import Atb
+from .utilities.projection_operator import ProjectionOperator, TigreOperator, SurfaceOperator
 from .utilities.Ax_surface import Ax_surface, Atb_surface
 from .utilities.source_beam import SourceBeam
 from .utilities.detector_geometry import (

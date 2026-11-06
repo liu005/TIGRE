@@ -61,6 +61,13 @@ function [res,resL2,qualMeasOut]=SART(proj,geo,angles,niter,varargin)
 %--------------------------------------------------------------------------
 
 %% Deal with input parameters
+[operatorHandled,operatorImage,operatorResidual,operatorQuality]=genericOperatorDispatch('SART',proj,niter,varargin);
+if operatorHandled
+    res=operatorImage;
+    resL2=operatorResidual;
+    qualMeasOut=operatorQuality;
+    return;
+end
 blocksize=1;
 [lambda,res,lambdared,verbose,QualMeasOpts,OrderStrategy,nonneg,gpuids,redundancy_weights,gt]=parse_inputs(proj,geo,angles,varargin);
 

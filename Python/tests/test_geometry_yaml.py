@@ -8,7 +8,7 @@ import yaml
 from pathlib import Path
 from unittest.mock import patch
 from tigre.utilities.geometry_io import save_geometry_yaml, load_geometry_file
-from tigre.utilities.detector_geometry_gui import build_modular_surface, DetectorGeometryBuilder
+from tigre.utilities.detector_geometry_builder import build_modular_surface
 from tigre.utilities.detector_geometry import DetectorSurfaceGeometry
 from tigre.utilities.visualization.animate_geometry import animate_geometry
 
@@ -126,48 +126,6 @@ def test_yaml_does_not_construct_python_objects(tmp_path):
         load_geometry_file(path)
 
 
-def test_gui_yaml_restores_editable_fields_and_surface_yaml_is_inspection(tmp_path):
-    import tkinter as tk
-    try:
-        root = tk.Tk()
-    except tk.TclError as exc:
-        pytest.skip(str(exc))
-    root.withdraw()
-    try:
-        with patch.object(DetectorGeometryBuilder, "update_preview"):
-            gui = DetectorGeometryBuilder(root)
-        path = tmp_path / "editable.yaml"
-        parameters = settings(motion="Fixed detector, arc source")
-        save_geometry_yaml(path, settings=parameters)
-        gui.load_geometry_path(path)
-        expected = load_geometry_file(path)
-        saved = tmp_path / "saved_by_gui.yaml"
-        with patch("tkinter.filedialog.asksaveasfilename", return_value=str(saved)):
-            gui.save_geometry_settings()
-        np.testing.assert_array_equal(load_geometry_file(saved).surface.pixel_centers_mm,
-                                      expected.surface.pixel_centers_mm)
-        assert not gui._inspection_mode
-        assert str(gui._entries["panel_y_angles_deg"].cget("state")) == "normal"
-        assert str(gui._entries["source_start_mm"].cget("state")) == "disabled"
-        assert gui._detector_stationary == "arc"
-        np.testing.assert_array_equal(gui.surface.pixel_centers_mm, expected.surface.pixel_centers_mm)
-        for name in ("panel_x_angles_deg", "panel_y_angles_deg", "z_offsets_mm"):
-            np.testing.assert_allclose(gui._read_parameters()[name], parameters[name])
-        exact = tmp_path / "exact.yaml"
-        save_geometry_yaml(exact, surface=gui.surface)
-        gui.load_geometry_path(exact)
-        assert gui._inspection_mode
-        inspected = tmp_path / "saved_inspection.yaml"
-        with patch("tkinter.filedialog.asksaveasfilename", return_value=str(inspected)):
-            gui.save_geometry_settings()
-        assert load_geometry_file(inspected).settings is None
-        np.testing.assert_array_equal(load_geometry_file(inspected).surface.pixel_centers_mm,
-                                      expected.surface.pixel_centers_mm)
-        assert str(gui._entries["panel_y_angles_deg"].cget("state")) == "disabled"
-        gui.return_to_builder()
-        np.testing.assert_array_equal(gui.surface.pixel_centers_mm, expected.surface.pixel_centers_mm)
-    finally:
-        root.destroy()
 
 
 
@@ -197,18 +155,3 @@ def test_failed_atomic_save_keeps_existing_yaml(tmp_path):
             save_geometry_yaml(path, settings=settings(layout="Cylindrical"))
     assert path.read_bytes() == original
     assert not list(tmp_path.glob("*.tmp"))
-
-
-def test_nonlinear_volume_recipe_opens_in_exact_inspection(tmp_path):
-    from types import SimpleNamespace
-    from unittest.mock import Mock
-    volume = SimpleNamespace(sVoxel=np.array([20, 30, 40]),
-                              offOrigin=np.array([[0, 0, 0], [17, 0, 0], [20, 0, 0]]))
-    path = tmp_path / "nonlinear.yaml"
-    save_geometry_yaml(path, settings=settings(), geometry=volume)
-    builder = object.__new__(DetectorGeometryBuilder)
-    builder.inspect_geometry = Mock()
-    builder.load_geometry_path(path)
-    builder.inspect_geometry.assert_called_once()
-    loaded = builder.inspect_geometry.call_args.args[0]
-    np.testing.assert_array_equal(loaded.offOrigin, volume.offOrigin)

@@ -155,10 +155,12 @@ class FISTA(IterativeReconAlg):
         x /= l2norm(x)
         L = 1.0
         for _ in range(n_iter):
-            y = tigre.Atb(
-                tigre.Ax(x, self.geo, self.angles, "interpolated", gpuids=self.gpuids),
+            y = self._project_adjoint(tigre.Atb,
+                self._project_forward(tigre.Ax,x, self.geo, self.angles, "interpolated", gpuids=self.gpuids),
                 self.geo, self.angles, "matched", gpuids=self.gpuids)
             L = float(l2norm(y))
+            if L==0 and hasattr(self,'operator'):
+                return 1.
             x = y / L
         L *= 2.0 * 1.05
         if self.verbose:
@@ -182,10 +184,10 @@ class FISTA(IterativeReconAlg):
         self.res += (
             self.__bm__
             * 2
-            * tigre.Atb(
+            * self._project_adjoint(tigre.Atb,
                 (
                     self.proj[self.angle_index[iteration]]
-                    - tigre.Ax(self.res, geo, angle, "interpolated", gpuids=self.gpuids)
+                    - self._project_forward(tigre.Ax,self.res, geo, angle, "interpolated", gpuids=self.gpuids)
                 ),
                 geo,
                 angle,
@@ -212,7 +214,8 @@ class FISTA(IterativeReconAlg):
             getattr(self, self.dataminimizing)()
 
             x_rec_old = copy.deepcopy(x_rec)
-            x_rec = im3ddenoise(self.res, self.__numiter_tv__, 1.0 / lambdaForTv, self.gpuids)
+            x_rec = (self.res.copy() if hasattr(self,'operator') and lambdaForTv==0 else
+                     self._volume_denoise(im3ddenoise,self.res, self.__numiter_tv__, 1.0 / lambdaForTv, self.gpuids))
             t_old = t
             # float(): np.sqrt returns an np.float64 SCALAR, and under NumPy 2
             # promotion (NEP 50) a np.float64 scalar UPCASTS a float32 array -
@@ -248,7 +251,7 @@ class ISTA(FISTA):  # noqa: D101
         :return: None
         """
         Quameasopts = self.Quameasopts
-        lambdaForTv = 2 * self.__bm__ * self.lmbda
+        lambdaForTv = 2 * self.__bm__ * (self.__lambda__ if hasattr(self,'operator') else self.lmbda)
         for i in range(self.niter):
 
             res_prev = copy.deepcopy(self.res) if Quameasopts is not None else None
@@ -257,7 +260,10 @@ class ISTA(FISTA):  # noqa: D101
 
             getattr(self, self.dataminimizing)()
 
-            self.res = im3ddenoise(self.res, 20, 1.0 / lambdaForTv, self.gpuids)
+            self.res = (self.res.copy() if hasattr(self,'operator') and lambdaForTv==0 else
+                        self._volume_denoise(im3ddenoise,self.res,
+                            self.__numiter_tv__ if hasattr(self,'operator') else 20,
+                            1.0 / lambdaForTv, self.gpuids))
             
             if Quameasopts is not None:
                 self.error_measurement(res_prev, i)

@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tigre
 from tigre.algorithms import cgls_surface
-from tigre.utilities.detector_geometry_gui import build_modular_surface
+from tigre.utilities.detector_geometry_builder import build_modular_surface
 from tigre.utilities.sample_loader import load_head_phantom
 
 

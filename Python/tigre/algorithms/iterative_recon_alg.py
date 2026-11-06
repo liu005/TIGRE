@@ -15,6 +15,7 @@ from tigre.utilities.order_subsets import order_subsets
 from tigre.utilities.redundancy_weighting import redundancy_weighting
 from tigre.utilities.Measure_Quality import Measure_Quality as MQ
 from tigre.utilities.gpu import GpuIds
+from .operator_recon_adapter import OperatorReconMixin
 
 """
 This module is where the umbrella class IterativeReconAlg is located
@@ -31,7 +32,7 @@ else:
     default_timer = time.clock
 
 
-class IterativeReconAlg(object):
+class IterativeReconAlg(OperatorReconMixin):
     """
     Parameters
     ----------
@@ -129,6 +130,11 @@ class IterativeReconAlg(object):
     """
 
     def __init__(self, proj, geo, angles, niter, **kwargs):
+
+        operator=kwargs.pop('_projection_operator',None)
+        if operator is not None:
+            self._initialize_operator(proj,operator,niter,kwargs)
+            return
 
         self.proj = proj
         self.angles = angles
@@ -234,7 +240,7 @@ class IterativeReconAlg(object):
 
         geox.nVoxel = np.array([2, 2, 2])
         geox.dVoxel = geox.sVoxel / geox.nVoxel
-        W = Ax(
+        W = self._project_forward(Ax,
             np.ones(geox.nVoxel, dtype=np.float32), geox, geox.angles, "Siddon", gpuids=self.gpuids
         )
         W[W <= min(self.geo.dVoxel) / 4] = np.inf
@@ -275,7 +281,7 @@ class IterativeReconAlg(object):
                 proj_one = np.ones(
                     (len(self.angleblocks[i]), geo.nDetector[0], geo.nDetector[1]), dtype=np.float32
                 )
-                V[i] = Atb(proj_one, geox, self.angleblocks[i], "FDK", gpuids=self.gpuids).mean(
+                V[i] = self._project_adjoint(Atb,proj_one, geox, self.angleblocks[i], "FDK", gpuids=self.gpuids).mean(
                     axis=0
                 )
 
@@ -353,6 +359,9 @@ class IterativeReconAlg(object):
             self.error_measurement(res_prev, i)
 
     def art_data_minimizing(self):
+        if hasattr(self,'operator'):
+            self._operator_data_step()
+            return
         geo = copy.deepcopy(self.geo)
 
         for j in range(len(self.angleblocks)):
@@ -435,11 +444,14 @@ class IterativeReconAlg(object):
         if self.computel2:
             # compute l2 norm for b-Ax
             errornow = im3DNORM(
-                self.proj - Ax(self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids), 2
+                self.proj - self._project_forward(Ax,self.res, self.geo, self.angles, "Siddon", gpuids=self.gpuids), 2
             )
             self.l2l[0, iter] = errornow
 
     def update_image(self, geo, angle, iteration):
+        if hasattr(self,'operator'):
+            self._operator_update(iteration)
+            return
         """
         VERBOSE:
          for j in range(angleblocks):
@@ -458,10 +470,10 @@ class IterativeReconAlg(object):
 
         # Projection-domain residual. Advanced indexing already hands us a private
         # copy, so the W weighting folds in in place.
-        proj_err = self.proj[ang_index] - Ax(self.res, geo, angle, "Siddon", gpuids=self.gpuids)
+        proj_err = self.proj[ang_index] - self._project_forward(Ax,self.res, geo, angle, "Siddon", gpuids=self.gpuids)
         proj_err *= self.W[ang_index]
 
-        backprj = Atb(proj_err, geo, angle, "FDK", gpuids=self.gpuids)
+        backprj = self._project_adjoint(Atb,proj_err, geo, angle, "FDK", gpuids=self.gpuids)
         # backprj is a fresh volume-sized array nobody else holds, so scale it in
         # place. The old `lmbda * 1.0 / V * Atb(...)` expression allocated and wrote
         # a second full volume first - 3.55 GB per block at V3 scale. Multiplication
@@ -531,7 +543,18 @@ def decorator(IterativeReconAlg, name=None, docstring=None):  # noqa: N803
 
     """
 
-    def iterativereconalg(proj, geo, angles, niter, **kwargs):
+    def iterativereconalg(proj, geo=None, angles=None, niter=None, **kwargs):
+
+        if niter is None:
+            raise TypeError("niter is required")
+        operator = kwargs.pop("operator", None)
+        if operator is not None:
+            from tigre.algorithms.operator_algorithms import reconstruct
+            if geo is not None or angles is not None:
+                raise ValueError("with operator=, omit geo and angles; geometry belongs to the operator")
+            return reconstruct(name, proj, operator, niter, _algorithm_class=IterativeReconAlg, **kwargs)
+        if geo is None or angles is None:
+            raise TypeError("geo and angles are required when operator is not supplied")
 
         geo.check_geo(angles)
         alg = IterativeReconAlg(proj, geo, angles, niter, **kwargs)

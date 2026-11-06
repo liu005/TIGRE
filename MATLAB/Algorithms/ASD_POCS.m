@@ -68,6 +68,8 @@ function [ f,qualMeasOut ] = ASD_POCS(proj,geo,angles,maxiter,varargin)
 
 
 %% parse inputs
+[operatorHandled,f,qualMeasOut]=operatorPocsDispatch(proj,maxiter,false,false,varargin);
+if operatorHandled, return; end
 blocksize=1;
 [beta,beta_red,f,ng,verbose,alpha,alpha_red,rmax,epsilon,OrderStrategy,QualMeasOpts,nonneg,gpuids,redundancy_weights,gt]=parse_inputs(proj,geo,angles,varargin);
 

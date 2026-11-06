@@ -76,6 +76,8 @@ function [ fres, qualMeasOut ] = OS_ASD_POCS (proj,geo,angles,maxiter,varargin)
 %--------------------------------------------------------------------------
 
 %% parse inputs
+[operatorHandled,fres,qualMeasOut]=operatorPocsDispatch(proj,maxiter,false,true,varargin);
+if operatorHandled, return; end
 [beta,beta_red,f,ng,verbose,alpha,alpha_red,rmax,epsilon,blocksize,OrderStrategy,nonneg,QualMeasOpts,gpuids,redundancy_weights,gt]=parse_inputs(proj,geo,angles,varargin);
 measurequality=~isempty(QualMeasOpts) | ~any(isnan(gt(:)));
 if ~any(isnan(gt(:)))

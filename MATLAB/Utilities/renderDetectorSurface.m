@@ -1,5 +1,5 @@
 function scene=renderDetectorSurface(ax,surface,geo,settings)
-%RENDERDETECTORSURFACE Shared curved/modular scene for GUI and animation.
+%RENDERDETECTORSURFACE Shared curved/modular scene for script rendering and animation.
 % scene.update(k) updates a one-based view. No GPU computation is performed.
 if nargin<3, geo=[]; end
 if nargin<4, settings=[]; end

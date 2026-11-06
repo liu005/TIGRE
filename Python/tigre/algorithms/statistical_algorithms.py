@@ -81,7 +81,7 @@ class MLEM(IterativeReconAlg):  # noqa: D101
         if self.init is None:
             self.res += 1.0
 
-        self.W = Atb(np.ones(proj.shape, dtype=np.float32), geo, angles, backprojection_type="matched", gpuids=self.gpuids)
+        self.W = self._project_adjoint(Atb,np.ones(proj.shape, dtype=np.float32), geo, angles, backprojection_type="matched", gpuids=self.gpuids)
         self.W[self.W <= 0.0] = np.inf
 
     # override
@@ -100,11 +100,11 @@ class MLEM(IterativeReconAlg):  # noqa: D101
                 res_prev = copy.deepcopy(self.res)
             self._estimate_time_until_completion(i)
 
-            den = Ax(self.res, self.geo, self.angles, "interpolated", gpuids=self.gpuids)
+            den = self._project_forward(Ax,self.res, self.geo, self.angles, "interpolated", gpuids=self.gpuids)
             auxmlem = mlem_ratio(self.proj, den)      # in place into den; see mlem_ratio
 
             # update
-            img = Atb(auxmlem, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids) / self.W
+            img = self._project_adjoint(Atb,auxmlem, self.geo, self.angles, backprojection_type="matched", gpuids=self.gpuids) / self.W
             del auxmlem, den
 
             self.res = self.res * img

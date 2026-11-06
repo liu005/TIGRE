@@ -1,63 +1,43 @@
 # Python demos
 
-Run these examples in the project's `recon` Conda environment. From `Python/`:
+Use the [core user manual](../../Frontispiece/TIGRE_User_Manual.md) for the complete
+workflow and [validation guide](../../Frontispiece/Validation.md) for reproducible checks.
+Run from a checkout with matching native binaries. Python execution uses `recon`;
+MATLAB uses its normal TIGRE path and compiled MEX files. GPU reconstruction
+examples require CUDA. Inspect each script before running large volume sizes.
 
-```powershell
-conda run -n recon python demos/d25_CurvedDetector.py
-```
+| Example | Topic |
+| --- | --- |
+| [d01_CreateGeometry.py](d01_CreateGeometry.py) | CreateGeometry |
+| [d02_SampleData.py](d02_SampleData.py) | SampleData |
+| [d03_generateData.py](d03_generateData.py) | generateData |
+| [d04_SimpleReconstruction.py](d04_SimpleReconstruction.py) | SimpleReconstruction |
+| [d05_plottingFunctions.py](d05_plottingFunctions.py) | plottingFunctions |
+| [d06_Algorithms01.py](d06_Algorithms01.py) | Algorithms01 |
+| [d07_Algorithms02.py](d07_Algorithms02.py) | Algorithms02 |
+| [d08_Algorithms03.py](d08_Algorithms03.py) | Algorithms03 |
+| [d09_Algorithms04.py](d09_Algorithms04.py) | Algorithms04 |
+| [d10_QualityMeasurements.py](d10_QualityMeasurements.py) | QualityMeasurements |
+| [d11_PostProcessing.py](d11_PostProcessing.py) | PostProcessing |
+| [d12_ProjectionOperators.py](d12_ProjectionOperators.py) | ProjectionOperators |
+| [d13_HelicalGeometry.py](d13_HelicalGeometry.py) | HelicalGeometry |
+| [d14_Offsets.py](d14_Offsets.py) | Offsets |
+| [d15_3Dparallel.py](d15_3Dparallel.py) | 3Dparallel |
+| [d16_2Dtomography.py](d16_2Dtomography.py) | 2Dtomography |
+| [d17_DetectorRotation.py](d17_DetectorRotation.py) | DetectorRotation |
+| [d18_ArbitraryAxisOfRotation.py](d18_ArbitraryAxisOfRotation.py) | ArbitraryAxisOfRotation |
+| [d19_DBTexample.py](d19_DBTexample.py) | DBTexample |
+| [d20_Algorithms05.py](d20_Algorithms05.py) | Algorithms05 |
+| [d21_ScannerDataLoader.py](d21_ScannerDataLoader.py) | ScannerDataLoader |
+| [d22_ListGPUs.py](d22_ListGPUs.py) | ListGPUs |
+| [d23_DualEnergy.py](d23_DualEnergy.py) | DualEnergy |
+| [d25_CurvedDetector.py](d25_CurvedDetector.py) | CurvedDetector |
+| [d26_ModularDetector.py](d26_ModularDetector.py) | ModularDetector |
 
-Scanner demo 21 and new demos 23/25/26/27 resolve the checkout automatically
-when launched directly from an IDE. For other legacy scripts launched from the
-repository root, set `PYTHONPATH` to the checkout's `Python` folder so the local
-package is used. Reconstruction examples require
-TIGRE's compiled CUDA extensions; most introductory scripts use bundled head
-data or generated phantoms. Many legacy examples allocate large volumes.
+Demos 25 and 26 use exact curved/modular surfaces and native reconstruction.
+Scanner loading and measured GCT examples require external input data; check
+their headers and the loader guides. YAML reconstruction examples use shared
+headless geometry-file APIs.
 
-Examples 1–22 cover geometry, sample data, noisy projections, reconstruction,
-plotting, algorithm families, quality measures, postprocessing, projection
-operators, helical/offset/parallel/2D geometry, detector rotations, arbitrary
-orbits, tomosynthesis, FISTA, scanner loading and GPU selection.
-
-- `d21_ScannerDataLoader.py` requires external scanner files. Run one scanner
-  section at a time after replacing its path. The generic-loader block is a
-  commented template. Varian loading is an explicitly limited CPU baseline;
-  see the [loader guide](../../Frontispiece/Varian_loader.md).
-- `d23_DualEnergy.py` shares MATLAB d23's calibration/attenuation tables and
-  accepts its exact preprocessed MAT export. It also accepts raw low/high
-  Varian folders using the CPU baseline; see the
-  [dual-energy guide](../../Frontispiece/Dual_energy.md).
-- `d25_CurvedDetector.py` projects the bundled head onto a smooth cylindrical
-  surface, animates after plotting projections, then runs matched CGLS and
-  approximate surface FDK. It uses exact source/pixel coordinates without
-  flattening. `main(..., show=False)` supports runs without plots.
-- `d26_ModularDetector.py` matches MATLAB's three tilted panels, gaps, COR,
-  head phantom, CGLS reconstruction and geometry animation.
-- `d27_DetectorGeometryGUI.py` demonstrates the matching build/save/load
-  workflow with editable YAML recipes and exact YAML/NPZ archives. It needs
-  Tk desktop graphics and PyYAML, with no projection or reconstruction calls.
-- `d_pytorch.py` requires optional PyTorch bindings and a compatible PyTorch
-  installation.
-- `d_detector_surface_gct.py` requires a measured float32 GCT projection file;
-  its module docstring specifies the expected acquisition dimensions.
-- `d_geometry_yaml_reconstruction.py` loads a bundled YAML geometry, simulates
-  head or synthetic measurements, and writes reconstruction comparisons.
-
-Numbered counterparts now share their MATLAB basenames. Demo 24
-(`Algorithms06`, anatomical priors/PICCS) remains MATLAB-only because there is
-no corresponding Python PICCS implementation. PyTorch remains a named
-Python-only example. The [content comparison](../../Frontispiece/Demo_language_comparison.md)
-records matched acquisitions, algorithms, outputs and remaining differences.
-See the
-[MATLAB demo index](../../MATLAB/Demos/README.md) and
-[Python GUI manual](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md).
-
-Its [catalogue of GUI presets](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md#catalogue-of-gui-presets)
-explains each geometry, its intended application and CT/DR export limitations.
-
-The GUI's **Sea cargo: 20-foot container (2D Digital Radiography)** preset
-simulates conveyor DR with a fixed source and L-shaped detector. Its exported
-script performs forward projection only; see the manual's
-[DR simulation export](../../Frontispiece/TIGRE_CT_Simulation_Builder_Python.md#dr-simulation-export).
-
-The [validation guide](../../Frontispiece/Validation.md) lists current test
-commands, plotting-angle regressions, scanner fixtures and hardware limits.
+The interactive demo 27, desktop tests, GUI preset catalogue and script exporters
+are maintained in [TIGRE-GUI](../../../TIGRE-GUI/README.md).

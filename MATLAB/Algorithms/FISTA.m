@@ -46,6 +46,13 @@ function [res,resL2,qualMeasOut] = FISTA(proj,geo,angles,maxiter,varargin)
 % Coded by:           Ander Biguri, Reuben Lindroos
 %--------------------------------------------------------------------------
 
+[operatorHandled,operatorImage,operatorResidual,operatorQuality]=genericOperatorDispatch('FISTA',proj,maxiter,varargin);
+if operatorHandled
+    res=operatorImage;
+    resL2=operatorResidual;
+    qualMeasOut=operatorQuality;
+    return;
+end
 [verbose,res,tviter,hyper,lambda,p,q,QualMeasOpts,gpuids,gt]=parse_inputs(proj,geo,angles,varargin);
 
 measurequality=~isempty(QualMeasOpts) | ~any(isnan(gt(:)));

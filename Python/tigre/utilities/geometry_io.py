@@ -43,7 +43,7 @@ def surface_archive_arrays(surface, geometry=None):
             arrays["nVoxel"] = _volume(dict(sVoxel=size[::-1],
                 nVoxel=geometry.nVoxel)).nVoxel
         if hasattr(geometry, "acquisition"):
-            from .detector_geometry_gui import acquisition_timing
+            from .detector_geometry_builder import acquisition_timing
             timing, times = acquisition_timing(len(surface.source_positions_mm), geometry.acquisition)
             arrays["view_times_s"] = times
             arrays.update({"acquisition_" + name: value for name, value in timing.items()})
@@ -99,7 +99,7 @@ def load_geometry_archive(path):
                 **({"motion_mode": arrays["volume_motion_mode"].item()} if "volume_motion_mode" in arrays else {})))
             _validate_volume_views(geometry, len(surface.source_positions_mm))
             if any("acquisition_" + name in arrays for name in timing_names):
-                from .detector_geometry_gui import acquisition_timing
+                from .detector_geometry_builder import acquisition_timing
                 timing = {name: arrays["acquisition_" + name].item() for name in timing_names
                           if "acquisition_" + name in arrays}
                 geometry.acquisition, geometry.view_times_s = acquisition_timing(
@@ -153,7 +153,7 @@ def _plain(value):
 
 
 def _settings(values):
-    from .detector_geometry_gui import build_modular_surface
+    from .detector_geometry_builder import build_modular_surface
     if not isinstance(values, dict):
         raise ValueError("builder must be a mapping of modular geometry settings.")
     try:
@@ -250,12 +250,12 @@ def load_geometry_file(path):
         raise ValueError(f"Unknown YAML fields: {sorted(set(data) - allowed)}")
     geo = _volume(data.get("volume"))
     if kind == "modular":
-        from .detector_geometry_gui import build_modular_surface
+        from .detector_geometry_builder import build_modular_surface
         settings = _settings(data.get("builder"))
         surface = build_modular_surface(**settings)
         _validate_volume_views(geo, len(surface.source_positions_mm))
         if geo is not None and settings.get("acquisition") is not None:
-            from .detector_geometry_gui import acquisition_timing
+            from .detector_geometry_builder import acquisition_timing
             geo.acquisition, geo.view_times_s = acquisition_timing(
                 settings["n_views"], settings["acquisition"])
         return GeometryDocument(geo, surface, settings)
@@ -301,7 +301,7 @@ def save_geometry_yaml(path, *, settings=None, surface=None, geometry=None):
             data["volume"]["motion_mode"] = _volume(dict(
                 **data["volume"], motion_mode=geometry.motion_mode)).motion_mode
     if settings is not None:
-        from .detector_geometry_gui import build_modular_surface
+        from .detector_geometry_builder import build_modular_surface
         values = _settings(settings)
         built = build_modular_surface(**values)
         _validate_volume_views(geometry, len(built.source_positions_mm))

@@ -52,6 +52,8 @@ function [ f,qualMeasOut] = PCSD(proj,geo,angles,maxiter,varargin)
 %--------------------------------------------------------------------------
 
 %% parse inputs
+[operatorHandled,f,qualMeasOut]=operatorPocsDispatch(proj,maxiter,false,false,varargin,true);
+if operatorHandled, return; end
 [beta,beta_red,f,ng,verbose,epsilon,QualMeasOpts,nonneg,gpuids,redundancy_weights,gt]=parse_inputs(proj,geo,angles,varargin);
 
 measurequality=~isempty(QualMeasOpts) | ~any(isnan(gt(:)));
@@ -113,6 +115,8 @@ DSD=geo.DSD;
 DSO=geo.DSO;
 %%
 while ~stop_criteria %POCS
+    % Save the pre-data iterate before computing dp_vec below.
+    f0=f;
     % If quality is going to be measured, then we need to save previous image
     if measurequality && ~strcmp(QualMeasOpts,'error_norm')
         res_prev = f; % only store if necessary

@@ -38,24 +38,22 @@ application, do not hesitate to [contact us](#contact) or open a  [discussion th
  - [Licensing](#licensing)
 
 
-For modular detector layouts, 3D panel orientation, and COR, see the
-[detector geometry GUI manual](Frontispiece/TIGRE_CT_Simulation_Builder_Python.md) and
+Start with the [TIGRE user manual](Frontispiece/TIGRE_User_Manual.md),
+the [projection-operator guide](Frontispiece/Projection_operator.md), and the
 [detector-surface API guide](Frontispiece/Detector_surface.md).
-The GUI can also load existing geometry in read-only inspection mode, save editable
-YAML settings, and reload those settings for editing. `animate_geometry` accepts
-the same YAML and NPZ geometry files.
-A [MATLAB builder and animation port](Frontispiece/TIGRE_CT_Simulation_Builder_MATLAB.md)
-supports native MAT files and shared YAML/NPZ interchange.
-It also provides native CUDA surface projection/backprojection, CGLS/SIRT and
-validated circular surface FDK. See the [MATLAB build guide](Frontispiece/MATLAB_Blackwell_build.md)
-for the custom local Blackwell toolchain and its limits.
+The manual covers Python and MATLAB installation, geometry, reconstruction,
+regularization, measured data, validation and troubleshooting.
+
+The optional desktop builder, its exporters, tests and full GUI manuals live
+in the separate [TIGRE-GUI repository](../TIGRE-GUI/README.md).
+Detector construction, file interchange, rendering and reconstruction remain
+headless TIGRE APIs. See the [repository boundary](Frontispiece/GUI_repository_split.md).
 
 The [MATLAB](MATLAB/Demos/README.md) and [Python](Python/demos/README.md) demo
 indexes use matching names where implementations are available. The
 [content comparison](Frontispiece/Demo_language_comparison.md) records shared
 geometry, algorithms and remaining differences. Demos 25/26 reconstruct the
-head phantom with curved/modular detectors; demo 27 demonstrates GUI geometry
-creation and editable/exact file round trips. The
+head phantom with curved/modular detectors; the separate GUI repository provides the interactive builder. The
 [dual-energy guide](Frontispiece/Dual_energy.md) covers demo 23's shared
 calibration tables and MATLAB-data import. Python's
 [Varian loader](Frontispiece/Varian_loader.md) is an explicitly limited CPU

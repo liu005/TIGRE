@@ -1,0 +1,40 @@
+\usepackage{fvextra}
+\fvset{breaklines=true,breakanywhere=true,fontsize=\small}
+\setlength{\emergencystretch}{2em}
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\definecolor{ManualNavy}{HTML}{16324F}
+\definecolor{ManualBlue}{HTML}{245B83}
+\definecolor{ManualGrey}{HTML}{64748B}
+\AtBeginDocument{\hypersetup{colorlinks=true,linkcolor=ManualBlue,urlcolor=ManualBlue}}
+\titleformat{\section}{\Large\bfseries\sffamily\color{ManualNavy}}{\thesection}{0.65em}{}
+\titleformat{\subsection}{\large\bfseries\sffamily\color{ManualNavy}}{\thesubsection}{0.65em}{}
+\setlength{\headheight}{16pt}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\sffamily\textcolor{ManualGrey}{TIGRE User Manual}}
+\fancyfoot[R]{\small\sffamily\thepage}
+\clubpenalty=10000
+\widowpenalty=10000
+\makeatletter
+\renewcommand{\maketitle}{%
+  \begin{titlepage}
+  \thispagestyle{empty}\sffamily
+  \vspace*{16mm}
+  {\small\color{ManualGrey}TOMOGRAPHIC RECONSTRUCTION WORKFLOWS\par}
+  \vspace{7mm}
+  {\color{ManualBlue}\rule{\textwidth}{1.2pt}\par}
+  \vspace{12mm}
+  {\Huge\bfseries\color{ManualNavy}\@title\par}
+  \vspace{9mm}
+  {\large\color{ManualGrey}Python and MATLAB\par}
+  \vfill
+  {\normalsize\@date\par}
+  \vspace{4mm}
+  {\small Development checkout\par}
+  \end{titlepage}
+}
+\makeatother
+\let\ManualTableOfContents\tableofcontents
+\renewcommand{\tableofcontents}{\pagenumbering{roman}\ManualTableOfContents\clearpage\pagenumbering{arabic}}

@@ -59,6 +59,13 @@ function [ f,resL2,qualMeasOut] = AwPCSD(proj,geo,angles,maxiter,varargin)
 % Coded by:           Ander Biguri and Manasavee Lohvithee
 %--------------------------------------------------------------------------
 %% parse inputs
+[operatorHandled,operatorImage,operatorResidual,operatorQuality]=genericOperatorDispatch('AwPCSD',proj,maxiter,varargin);
+if operatorHandled
+    f=operatorImage;
+    resL2=operatorResidual;
+    qualMeasOut=operatorQuality;
+    return;
+end
 [beta,beta_red,f,ng,verbose,epsilon,delta,QualMeasOpts,nonneg,gpuids,redundancy_weights,gt]=parse_inputs(proj,geo,angles,varargin);
 measurequality=~isempty(QualMeasOpts) | ~any(isnan(gt(:)));
 if ~any(isnan(gt(:)))

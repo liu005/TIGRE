@@ -28,8 +28,14 @@ from .pocs_algorithms import aw_pcsd
 from .pocs_algorithms import os_pcsd
 from .pocs_algorithms import os_aw_pcsd
 from .single_pass_algorithms import fdk
+FDK = fdk  # Preserve the documented uppercase name and star-import contract.
 from .single_pass_algorithms import fbp
 from .surface_algorithms import cgls_surface, sirt_surface, os_sart_surface, fast_os_sart_surface
+from .surface_algorithms import asd_pocs_surface, os_asd_pocs_surface, awasd_pocs_surface, os_awasd_pocs_surface
+from .operator_algorithms import cgls_operator, sirt_operator, os_sart_operator, fast_os_sart_operator
+from .operator_pocs import asd_pocs_operator, os_asd_pocs_operator, awasd_pocs_operator, os_awasd_pocs_operator
+from .operator_pocs import pcsd_operator
+from .surface_algorithms import pcsd_surface
 from .fdk_surface import fdk_surface
 from .statistical_algorithms import mlem
 
@@ -62,4 +68,26 @@ __all__ = [
     "fista",
     "ista",
     "mlem",
+    "cgls_operator",
+    "sirt_operator",
+    "os_sart_operator",
+    "fast_os_sart_operator",
+    "asd_pocs_operator",
+    "os_asd_pocs_operator",
+    "awasd_pocs_operator",
+    "os_awasd_pocs_operator",
+    "cgls_surface",
+    "sirt_surface",
+    "os_sart_surface",
+    "fast_os_sart_surface",
+    "asd_pocs_surface",
+    "os_asd_pocs_surface",
+    "awasd_pocs_surface",
+    "os_awasd_pocs_surface",
+    "pcsd_operator",
+    "pcsd_surface",
 ]
+
+from .operator_exports import install as _install_operator_exports
+_install_operator_exports(globals())
+del _install_operator_exports

@@ -108,7 +108,24 @@ void mexFunction(int  nlhs , mxArray *plhs[],
     } else {
        mexErrMsgIdAndTxt("err", "Too many input arguments");
     }
-    float delta=(float)(mxGetScalar(prhs[3]));
+    float delta[3]={-0.005f,-0.005f,-0.005f};
+    if (nrhs>=4) {
+        const mxArray *value=prhs[3];
+        const mwSize count=mxGetNumberOfElements(value);
+        if (!mxIsNumeric(value) || mxIsComplex(value) || mxIsSparse(value) ||
+            (count!=1 && count!=3))
+            mexErrMsgIdAndTxt("TIGRE:AwTV:delta", "delta must be a real scalar or xyz vector");
+        for (mwSize i=0;i<3;++i) {
+            double d;
+            if (count==1) d=mxGetScalar(value);
+            else if (mxIsDouble(value)) d=static_cast<const double*>(mxGetData(value))[i];
+            else if (mxIsSingle(value)) d=static_cast<const float*>(mxGetData(value))[i];
+            else { mexErrMsgIdAndTxt("TIGRE:AwTV:delta", "Vector delta must be single or double"); return; }
+            delta[i]=static_cast<float>(d);
+            if (!mxIsFinite(delta[i]) || delta[i]==0)
+                mexErrMsgIdAndTxt("TIGRE:AwTV:delta", "delta must be finite and nonzero in single precision");
+        }
+    }
 ////////////////////////// First input.
     // First input should be x from (Ax=b), or the image.
     mxArray const * const image = prhs[0];
@@ -131,7 +148,8 @@ void mexFunction(int  nlhs , mxArray *plhs[],
   
     const long imageSize[3]={size_img[0], size_img[1], third_dim };
     
-    aw_pocs_tv(img,imgout, alpha, imageSize, maxIter, delta, delta, delta, gpuids);  // per-axis capable; MATLAB passes the scalar to all three 
+    // MATLAB arrays are xyz, while gradient components are slow-to-fast zyx.
+    aw_pocs_tv(img,imgout, alpha, imageSize, maxIter, delta[2], delta[1], delta[0], gpuids);
     
     //prepareotputs
 }

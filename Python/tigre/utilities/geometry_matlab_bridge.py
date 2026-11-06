@@ -1,4 +1,4 @@
-"""MAT/YAML/NPZ interchange for the MATLAB GUI; run with the recon interpreter."""
+"""MAT/YAML/NPZ interchange for MATLAB geometry workflows; run with the recon interpreter."""
 import argparse
 from pathlib import Path
 import sys

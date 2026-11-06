@@ -3,8 +3,7 @@ import numpy as np
 import pytest
 from unittest.mock import patch
 from tigre.utilities.detector_geometry import DetectorSurfaceGeometry, surface_from_geometry
-from tigre.utilities.detector_geometry_gui import (
-    DetectorGeometryBuilder, load_geometry_archive, surface_archive_arrays)
+from tigre.utilities.geometry_io import load_geometry_archive, surface_archive_arrays
 
 
 def sample_surface():
@@ -73,72 +72,3 @@ def test_old_surface_archive_and_bad_module_metadata(tmp_path):
     np.savez(path, **arrays, module_slices=np.array([[0, 99, 0, 6]]))
     with pytest.raises(ValueError):
         load_geometry_archive(path)
-
-
-def test_inspection_controls_playback_and_return_to_builder():
-    import tkinter as tk
-    from tigre.utilities.visualization.surface_renderer import SurfaceRenderer
-    try:
-        root = tk.Tk()
-    except tk.TclError as exc:
-        pytest.skip(str(exc))
-    root.withdraw()
-    try:
-        with patch.object(DetectorGeometryBuilder, "update_preview"):
-            gui = DetectorGeometryBuilder(root)
-        gui._fields["n_views"].set("3")
-        gui._fields["rows"].set("3")
-        gui._fields["columns"].set("4")
-        gui._volume_fields["offOrigin"].set("-100, 0, 0")
-        gui._volume_motion.set(True)
-        gui._volume_end.set("100, 0, 0")
-        gui.update_preview()
-        np.testing.assert_allclose(gui._builder_geometry.offOrigin,
-                                   [[-100, 0, 0], [0, 0, 0], [100, 0, 0]])
-        assert isinstance(gui._surface_renderer, SurfaceRenderer)
-        retained = {key: value.get() for key, value in gui._fields.items()}
-        surface = sample_surface()
-        gui.inspect_geometry(surface=surface)
-        with pytest.raises(ValueError, match="angles"):
-            import tigre
-            gui.inspect_geometry(tigre.geometry_default(high_resolution=False))
-        assert gui.surface is surface
-        assert gui._inspection_mode
-        for entry in list(gui._entries.values()) + list(gui._list_buttons.values()):
-            assert str(entry.cget("state")) == "disabled"
-        assert str(gui._layout_box.cget("state")) == "disabled"
-        assert str(gui._preview_button.cget("state")) == "disabled"
-        gui.update_preview()  # Cannot overwrite inspection data.
-        assert gui.surface is surface
-        gui._render_frame(1)
-        assert gui._frame_index == 1
-        assert "17 valid pixels" in gui._axes.get_title()
-        gui._canvas.draw()
-        gui.return_to_builder()
-        assert not gui._inspection_mode
-        assert gui.surface is not surface
-        assert {key: value.get() for key, value in gui._fields.items()} == retained
-        assert str(gui._entries["rows"].cget("state")) == "normal"
-        assert str(gui._entries["cor_mm"].cget("state")) == "normal"
-        assert str(gui._entries["transverse_centers_mm"].cget("state")) == "disabled"
-        assert str(gui._layout_box.cget("state")) == "readonly"
-        gui.inspect_geometry(surface=surface)
-        gui._example.set("TIGRE: circular cone-beam CT")
-        gui.load_example()
-        assert not gui._inspection_mode
-        assert gui.surface.pixel_centers_mm.shape == (50, 128, 128, 3)
-        import tigre
-        geo = tigre.geometry_default(high_resolution=False)
-        geo.nDetector = np.array([3, 4])
-        geo.sDetector = geo.nDetector * geo.dDetector
-        geo.rotDetector = np.deg2rad([10, 15, 20])
-        geo.COR = 12
-        angles = np.array([0.1, 0.5])
-        expected = surface_from_geometry(geo, angles)
-        gui.inspect_geometry(geo, angles=angles)
-        np.testing.assert_allclose(gui.surface.pixel_centers_mm, expected.pixel_centers_mm)
-        assert np.asarray(geo.rotDetector).shape == (3,)  # Inspection did not mutate input.
-        gui._render_frame(1)
-        gui._canvas.draw()
-    finally:
-        root.destroy()

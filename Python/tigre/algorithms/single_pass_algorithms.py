@@ -75,6 +75,8 @@ def FDK(proj, geo, angles, **kwargs):
     Coded by:           MATLAB (original code): Ander Biguri
                         PYTHON : Reuben Lindroos
     """
+    if kwargs.get("operator") is not None:
+        raise NotImplementedError("FDK requires its geometry-specific API; projection operators are unsupported")
     verbose = kwargs["verbose"] if "verbose" in kwargs else False
     gpuids = kwargs["gpuids"] if "gpuids" in kwargs else None
     dowang = kwargs["dowang"] if "dowang" in kwargs else True
@@ -141,6 +143,8 @@ fdk = FDK
 
 def fbp(proj, geo, angles, **kwargs):  # noqa: D103
     __doc__ = FDK.__doc__  # noqa: F841
+    if kwargs.get("operator") is not None:
+        raise NotImplementedError("FBP requires its geometry-specific API; projection operators are unsupported")
     if geo.mode != "parallel":
         raise ValueError("Only use FBP for parallel beam. Check geo.mode.")
     geox = copy.deepcopy(geo)

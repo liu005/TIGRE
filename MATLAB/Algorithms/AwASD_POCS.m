@@ -73,6 +73,8 @@ function [ f,qualMeasOut]= AwASD_POCS(proj,geo,angles,maxiter,varargin)
 % Coded by:           Ander Biguri and Manasavee Lohvithee
 
 %% parse inputs
+[operatorHandled,f,qualMeasOut]=operatorPocsDispatch(proj,maxiter,true,false,varargin);
+if operatorHandled, return; end
 blocksize=1;
 [beta,beta_red,f,ng,verbose,alpha,alpha_red,rmax,epsilon,delta,OrderStrategy,QualMeasOpts,nonneg,gpuids,redundancy_weights,gt]=parse_inputs(proj,geo,angles,varargin);
 

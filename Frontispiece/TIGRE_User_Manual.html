@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>TIGRE User Manual</title>
+  <style>
+    /* Default styles provided by pandoc.
+    ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+    */
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    svg {
+      height: auto;
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1a1a1a;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    html { -webkit-text-size-adjust: 100%; }
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">TIGRE User Manual</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#working-with-this-manual"
+id="toc-working-with-this-manual">Working with this manual</a></li>
+<li><a href="#installation-and-first-checks"
+id="toc-installation-and-first-checks">Installation and first checks</a>
+<ul>
+<li><a href="#keep-source-environment-and-binaries-together"
+id="toc-keep-source-environment-and-binaries-together">Keep source,
+environment and binaries together</a></li>
+<li><a href="#python-build-and-dependencies"
+id="toc-python-build-and-dependencies">Python build and
+dependencies</a></li>
+<li><a href="#matlab-setup" id="toc-matlab-setup">MATLAB setup</a></li>
+<li><a href="#gpu-selection" id="toc-gpu-selection">GPU
+selection</a></li>
+</ul></li>
+<li><a href="#coordinate-systems-arrays-and-units"
+id="toc-coordinate-systems-arrays-and-units">Coordinate systems, arrays
+and units</a>
+<ul>
+<li><a href="#three-orders-to-distinguish"
+id="toc-three-orders-to-distinguish">Three orders to
+distinguish</a></li>
+<li><a href="#length-angle-and-signal-conventions"
+id="toc-length-angle-and-signal-conventions">Length, angle and signal
+conventions</a></li>
+<li><a href="#geometry-fields" id="toc-geometry-fields">Geometry
+fields</a></li>
+</ul></li>
+<li><a href="#first-reconstruction" id="toc-first-reconstruction">First
+reconstruction</a>
+<ul>
+<li><a href="#python-a-complete-conventional-example"
+id="toc-python-a-complete-conventional-example">Python: a complete
+conventional example</a></li>
+<li><a href="#matlab-the-corresponding-workflow"
+id="toc-matlab-the-corresponding-workflow">MATLAB: the corresponding
+workflow</a></li>
+<li><a href="#examine-results-before-increasing-scale"
+id="toc-examine-results-before-increasing-scale">Examine results before
+increasing scale</a></li>
+</ul></li>
+<li><a href="#explicit-detector-surfaces"
+id="toc-explicit-detector-surfaces">Explicit detector surfaces</a>
+<ul>
+<li><a href="#when-to-use-them" id="toc-when-to-use-them">When to use
+them</a></li>
+<li><a href="#convert-a-conventional-scan-and-introduce-a-gap"
+id="toc-convert-a-conventional-scan-and-introduce-a-gap">Convert a
+conventional scan and introduce a gap</a></li>
+<li><a href="#construct-rather-than-convert"
+id="toc-construct-rather-than-convert">Construct rather than
+convert</a></li>
+</ul></li>
+<li><a href="#calling-the-shared-operator-interface"
+id="toc-calling-the-shared-operator-interface">Calling the shared
+operator interface</a>
+<ul>
+<li><a href="#three-equivalent-surface-entry-styles"
+id="toc-three-equivalent-surface-entry-styles">Three equivalent surface
+entry styles</a></li>
+<li><a href="#contract" id="toc-contract">Contract</a></li>
+</ul></li>
+<li><a href="#algorithm-selection-and-reference"
+id="toc-algorithm-selection-and-reference">Algorithm selection and
+reference</a>
+<ul>
+<li><a href="#select-a-method-for-the-problem-you-actually-have"
+id="toc-select-a-method-for-the-problem-you-actually-have">Select a
+method for the problem you actually have</a></li>
+<li><a href="#available-iterative-apis"
+id="toc-available-iterative-apis">Available iterative APIs</a></li>
+<li><a href="#outputs-are-algorithm-specific"
+id="toc-outputs-are-algorithm-specific">Outputs are algorithm
+specific</a></li>
+</ul></li>
+<li><a href="#regularization-and-initialization"
+id="toc-regularization-and-initialization">Regularization and
+initialization</a>
+<ul>
+<li><a href="#warm-starts-and-constraints"
+id="toc-warm-starts-and-constraints">Warm starts and
+constraints</a></li>
+<li><a href="#tv-controls-and-axes" id="toc-tv-controls-and-axes">TV
+controls and axes</a></li>
+<li><a href="#pocs-maxl2err" id="toc-pocs-maxl2err">POCS
+maxl2err</a></li>
+</ul></li>
+<li><a href="#measured-projection-data"
+id="toc-measured-projection-data">Measured projection data</a>
+<ul>
+<li><a href="#intensity-preparation"
+id="toc-intensity-preparation">Intensity preparation</a></li>
+<li><a href="#geometry-must-correspond-to-the-data"
+id="toc-geometry-must-correspond-to-the-data">Geometry must correspond
+to the data</a></li>
+<li><a href="#rebinning-and-remapping"
+id="toc-rebinning-and-remapping">Rebinning and remapping</a></li>
+</ul></li>
+<li><a href="#geometry-files-and-interchange"
+id="toc-geometry-files-and-interchange">Geometry files and
+interchange</a>
+<ul>
+<li><a href="#editable-recipes-versus-exact-rays"
+id="toc-editable-recipes-versus-exact-rays">Editable recipes versus
+exact rays</a></li>
+<li><a href="#record-enough-information-to-reproduce-a-run"
+id="toc-record-enough-information-to-reproduce-a-run">Record enough
+information to reproduce a run</a></li>
+</ul></li>
+<li><a href="#visualization-and-interpretation"
+id="toc-visualization-and-interpretation">Visualization and
+interpretation</a></li>
+<li><a href="#performance-and-memory-planning"
+id="toc-performance-and-memory-planning">Performance and memory
+planning</a>
+<ul>
+<li><a href="#estimate-before-allocating"
+id="toc-estimate-before-allocating">Estimate before allocating</a></li>
+<li><a href="#devices-slabs-and-optional-accelerators"
+id="toc-devices-slabs-and-optional-accelerators">Devices, slabs and
+optional accelerators</a></li>
+</ul></li>
+<li><a href="#diagnostics-and-troubleshooting"
+id="toc-diagnostics-and-troubleshooting">Diagnostics and
+troubleshooting</a></li>
+<li><a href="#verification-and-contribution-workflow"
+id="toc-verification-and-contribution-workflow">Verification and
+contribution workflow</a>
+<ul>
+<li><a href="#run-the-intended-source"
+id="toc-run-the-intended-source">Run the intended source</a></li>
+<li><a href="#scope-of-numerical-agreement"
+id="toc-scope-of-numerical-agreement">Scope of numerical
+agreement</a></li>
+<li><a href="#repository-boundary"
+id="toc-repository-boundary">Repository boundary</a></li>
+</ul></li>
+<li><a href="#companion-references"
+id="toc-companion-references">Companion references</a></li>
+</ul>
+</nav>
+<p><strong>TIGRE</strong><br />
+<strong>User Manual — Python and MATLAB</strong></p>
+<p><strong>Manual version: 1.0</strong><br />
+<strong>Updated: 6 November 2026</strong><br />
+<strong>Software scope: this development checkout, including explicit
+detector surfaces and projection operators.</strong></p>
+<p>This manual describes the reconstruction toolbox. The desktop
+application and its manuals are maintained in the separate <a
+href="../../TIGRE-GUI/README.md">TIGRE-GUI repository</a>. Development
+APIs described here must not be assumed to exist in a stock upstream
+release.</p>
+<h1 id="working-with-this-manual">Working with this manual</h1>
+<p>Start with the installation check and one conventional
+reconstruction. Move to explicit detector surfaces when your acquisition
+needs curved pixels, modular panels, gaps or independently specified
+source/detector positions. Keep the conventional calling style for
+ordinary flat-detector work.</p>
+<p>The examples use small, synthetic volumes. Their purpose is to make
+array order, units, API calls and diagnostics reproducible. They are not
+scanner calibration procedures or performance benchmarks. A successful
+numerical test does not establish quantitative accuracy on measured
+data.</p>
+<p>The canonical edition is this Markdown document. To generate PDF and
+standalone HTML editions, activate an environment containing Pandoc and
+XeLaTeX, then run <code>.\Frontispiece\Export_User_Manual.ps1</code>
+from the repository root. The <a href="Projection_operator.md">operator
+reference</a>, <a href="Detector_surface.md">surface reference</a> and
+<a href="Validation.md">validation guide</a> provide implementation
+details. The <a href="Integration_audit_2026-11-06.md">integration
+audit</a> records the current checkout's verification and
+limitations.</p>
+<table>
+<thead>
+<tr>
+<th>If you need to…</th>
+<th>Read</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Verify the checkout and environment</td>
+<td>Installation and first checks</td>
+</tr>
+<tr>
+<td>Reconstruct a conventional scan</td>
+<td>First reconstruction</td>
+</tr>
+<tr>
+<td>Work with curved or missing detector samples</td>
+<td>Explicit detector surfaces</td>
+</tr>
+<tr>
+<td>Choose an iterative method</td>
+<td>Algorithm selection and reference</td>
+</tr>
+<tr>
+<td>Use TV, POCS or warm starts</td>
+<td>Regularization and initialization</td>
+</tr>
+<tr>
+<td>Transfer geometry between languages</td>
+<td>Geometry files and interchange</td>
+</tr>
+<tr>
+<td>Diagnose unexpected results</td>
+<td>Diagnostics and troubleshooting</td>
+</tr>
+<tr>
+<td>Change the implementation</td>
+<td>Verification and contribution workflow</td>
+</tr>
+</tbody>
+</table>
+<h1 id="installation-and-first-checks">Installation and first
+checks</h1>
+<h2 id="keep-source-environment-and-binaries-together">Keep source,
+environment and binaries together</h2>
+<p>TIGRE combines Python or MATLAB code with compiled CUDA extensions. A
+source checkout alone does not provide compatible native binaries.
+Changes to native sources, CUDA/toolchain versions or binding interfaces
+can require rebuilding. Do not copy a binary from an unrelated checkout
+and assume it implements the current API.</p>
+<p>For this workspace, Python execution uses the
+<strong><code>recon</code> Conda environment</strong>. Use activation or
+<code>conda run -n recon</code>; selecting an interpreter executable by
+path alone can omit required DLL search paths on Windows.</p>
+<p>From the TIGRE repository root:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">$env</span><span class="op">:</span><span class="va">PYTHONPATH</span> <span class="op">=</span> <span class="fu">Join-Path</span> <span class="op">(</span><span class="fu">Get-Location</span><span class="op">)</span> <span class="st">&#39;Python&#39;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>conda run <span class="op">-</span>n recon python <span class="op">-</span>c <span class="st">&quot;import tigre; print(tigre.__file__)&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>conda run <span class="op">-</span>n recon python <span class="op">-</span>c <span class="st">&quot;import numpy, scipy; print(numpy.__version__, scipy.__version__)&quot;</span></span></code></pre></div>
+<p>The printed TIGRE path must point to the intended checkout when
+validating local changes. An older installed copy can otherwise make a
+new module appear missing or make tests exercise a different
+implementation.</p>
+<h2 id="python-build-and-dependencies">Python build and
+dependencies</h2>
+<p>This fork uses <code>Python/setup.py</code>. Build from its
+<code>Python</code> directory in a prepared CUDA/compiler environment;
+the local <a href="python_installation.md">installation guide</a>
+documents the build configuration. A typical editable build command
+is:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>conda run <span class="op">-</span>n recon python <span class="op">-</span>m pip install <span class="op">--</span>no-build-isolation <span class="op">-</span>e <span class="op">.</span>\Python</span></code></pre></div>
+<p>That command is a build/install action, not an environment-discovery
+tool. Resolve the CUDA toolkit, supported host compiler and dependencies
+first. Consult the actual build output if compilation fails. The build
+name <code>pytigre</code> and Python import name <code>tigre</code> are
+different names for different purposes.</p>
+<p>The source declares NumPy, SciPy, Matplotlib, Cython, tqdm and PyYAML
+dependencies. CuPy and PyTorch are optional capabilities; they are not
+prerequisites for the ordinary iterative examples below. See <a
+href="Optional_CuPy.md">optional CuPy filtering</a>.</p>
+<h2 id="matlab-setup">MATLAB setup</h2>
+<p>Use the repository's MATLAB initialization from the MATLAB directory,
+or add the required folders and the matching MEX directory to the path.
+The following is convenient for local source validation from the
+repository root:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode matlab"><code class="sourceCode matlab"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="va">addpath</span>(<span class="va">genpath</span>(<span class="ss">&#39;MATLAB&#39;</span>))<span class="op">;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="va">which</span> <span class="va">Ax</span> <span class="op">-</span><span class="va">all</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="va">which</span> <span class="va">Surface_mex</span> <span class="op">-</span><span class="va">all</span></span></code></pre></div>
+<p>Check for older MEX files earlier on the path. This workspace has an
+isolated Blackwell build activated with <code>UseBlackwellBuild</code>;
+it is a local configuration, not a general installation command for
+every platform. See <a href="MATLAB_installation.md">MATLAB
+installation</a> and the <a href="MATLAB_Blackwell_build.md">local build
+guide</a>.</p>
+<h2 id="gpu-selection">GPU selection</h2>
+<p>Conventional Python calls traditionally use a <code>GpuIds</code>
+object:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tigre.utilities.gpu <span class="im">import</span> GpuIds</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>gpuids <span class="op">=</span> GpuIds()</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>gpuids.devices <span class="op">=</span> [<span class="dv">0</span>]</span></code></pre></div>
+<p><code>SurfaceOperator</code> also accepts a device integer or a
+sequence of device integers. Device indices are zero-based in both
+languages. Invalid negative, fractional or empty selections are rejected
+by the operator adapters. Device existence is checked when CUDA is
+actually used.</p>
+<p>MATLAB surface wrappers use <code>'Device',0</code>. Python surface
+projection can use multiple devices or z-slabs through
+<code>gpuids</code> and <code>n_slabs</code>; the current MATLAB surface
+interface selects one device. Do not infer multi-GPU MATLAB support from
+the Python option.</p>
+<h1 id="coordinate-systems-arrays-and-units">Coordinate systems, arrays
+and units</h1>
+<h2 id="three-orders-to-distinguish">Three orders to distinguish</h2>
+<p>Physical coordinates, array indices and acquisition order are
+separate concepts. A point in world space is always expressed as
+<strong>(x,y,z)</strong>. Python volume arrays use
+<strong>(z,y,x)</strong>; MATLAB volume arrays use
+<strong>(x,y,z)</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Quantity</th>
+<th>Python</th>
+<th>MATLAB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Volume and
+<code>nVoxel</code>/<code>dVoxel</code>/<code>sVoxel</code></td>
+<td>z, y, x</td>
+<td>x, y, z</td>
+</tr>
+<tr>
+<td>Projection array</td>
+<td>views, rows, columns</td>
+<td>rows, columns, views</td>
+</tr>
+<tr>
+<td>Conventional <code>nDetector</code></td>
+<td>rows, columns</td>
+<td>u/columns, v/rows</td>
+</tr>
+<tr>
+<td>Source positions</td>
+<td>views × xyz</td>
+<td>xyz × views</td>
+</tr>
+<tr>
+<td>Exact pixel centres</td>
+<td>views × rows × columns × xyz</td>
+<td>rows × columns × xyz × views</td>
+</tr>
+<tr>
+<td>Exact valid mask</td>
+<td>views × rows × columns</td>
+<td>rows × columns × views</td>
+</tr>
+<tr>
+<td>Subset indices</td>
+<td>zero-based</td>
+<td>one-based</td>
+</tr>
+</tbody>
+</table>
+<p>For equivalent numerical arrays, not metadata dictionaries:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>matlab_volume <span class="op">=</span> python_volume.transpose(<span class="dv">2</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>matlab_projections <span class="op">=</span> python_projections.transpose(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">0</span>)</span></code></pre></div>
+<p>Use the geometry-file bridge for complete records rather than
+manually transposing some fields and forgetting the others.</p>
+<h2 id="length-angle-and-signal-conventions">Length, angle and signal
+conventions</h2>
+<p>Geometry lengths in the surface model and the examples are
+millimetres. Conventional angle arrays and rotation fields are in
+radians. Headless modular recipes use explicitly named degree fields;
+exact pixel/source coordinates no longer need those construction angles
+during projection.</p>
+<p><code>sVoxel</code> is the full physical volume extent, not a radius
+or half-width:</p>
+<pre class="text"><code>sVoxel = nVoxel * dVoxel
+sDetector = nDetector * dDetector</code></pre>
+<p>If attenuation is expressed per millimetre and ray lengths are in
+millimetres, the forward projection is a dimensionless line integral.
+Linear reconstruction algorithms expect line integrals, not unprocessed
+detector intensities.</p>
+<p>Do not change units in only one part of a geometry record. A
+millimetre/centimetre mismatch can produce plausible-looking images with
+the wrong attenuation scale.</p>
+<h2 id="geometry-fields">Geometry fields</h2>
+<p><code>nVoxel</code>, <code>dVoxel</code>, <code>sVoxel</code> and
+<code>offOrigin</code> describe the reconstruction volume. For
+conventional geometry, detector sampling and
+<code>DSO</code>/<code>DSD</code>, detector offsets, rotations and
+<code>COR</code> describe the acquisition. Some fields may vary per
+view. Use TIGRE's validation/conversion functions rather than assuming
+every field is a scalar after a geometry has been checked.</p>
+<p>For a detector surface, the measured ray endpoints are explicit.
+Surface projectors use volume fields from <code>geo</code> and the exact
+source/pixel positions. Do not apply an additional conventional detector
+rotation or COR shift to coordinates that already include those
+corrections.</p>
+<h1 id="first-reconstruction">First reconstruction</h1>
+<h2 id="python-a-complete-conventional-example">Python: a complete
+conventional example</h2>
+<p>The following block creates a synthetic sphere with attenuation 0.02
+per millimetre; that value is an example input, not a material
+calibration.</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># manual-example: python-conventional</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> tigre</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> tigre.algorithms <span class="im">as</span> algs</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>geo <span class="op">=</span> tigre.geometry_default(high_resolution<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>geo.nVoxel <span class="op">=</span> np.array([<span class="dv">32</span>, <span class="dv">32</span>, <span class="dv">32</span>])</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>geo.dVoxel <span class="op">=</span> np.array([<span class="fl">2.</span>, <span class="fl">2.</span>, <span class="fl">2.</span>])</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>geo.sVoxel <span class="op">=</span> geo.nVoxel <span class="op">*</span> geo.dVoxel</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>geo.nDetector <span class="op">=</span> np.array([<span class="dv">48</span>, <span class="dv">64</span>])</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>geo.dDetector <span class="op">=</span> np.array([<span class="fl">2.</span>, <span class="fl">2.</span>])</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>geo.sDetector <span class="op">=</span> geo.nDetector <span class="op">*</span> geo.dDetector</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>geo.DSO, geo.DSD <span class="op">=</span> <span class="fl">1000.</span>, <span class="fl">1500.</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>geo.offOrigin <span class="op">=</span> np.zeros(<span class="dv">3</span>)</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>z, y, x <span class="op">=</span> np.indices(<span class="bu">tuple</span>(geo.nVoxel), dtype<span class="op">=</span><span class="bu">float</span>)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>phantom <span class="op">=</span> np.zeros(<span class="bu">tuple</span>(geo.nVoxel), np.float32)</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>phantom[(x <span class="op">-</span> <span class="fl">15.5</span>)<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> (y <span class="op">-</span> <span class="fl">15.5</span>)<span class="op">**</span><span class="dv">2</span> <span class="op">+</span> (z <span class="op">-</span> <span class="fl">15.5</span>)<span class="op">**</span><span class="dv">2</span> <span class="op">&lt;=</span> <span class="dv">8</span><span class="op">**</span><span class="dv">2</span>] <span class="op">=</span> <span class="fl">.02</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>angles <span class="op">=</span> np.linspace(<span class="dv">0</span>, <span class="dv">2</span><span class="op">*</span>np.pi, <span class="dv">90</span>, endpoint<span class="op">=</span><span class="va">False</span>, dtype<span class="op">=</span>np.float32)</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>data <span class="op">=</span> tigre.Ax(phantom, geo, angles)</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>image <span class="op">=</span> algs.cgls(data, geo, angles, niter<span class="op">=</span><span class="dv">12</span>, verbose<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> image.shape <span class="op">==</span> phantom.shape <span class="kw">and</span> image.dtype <span class="op">==</span> np.float32</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> np.isfinite(image).<span class="bu">all</span>()</span></code></pre></div>
+<p>This is the original calling style: data, geometry, angles, iteration
+count. There is no need to construct an operator for this conventional
+scan.</p>
+<h2 id="matlab-the-corresponding-workflow">MATLAB: the corresponding
+workflow</h2>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode matlab"><code class="sourceCode matlab"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">% manual-example: matlab-conventional</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="va">geo</span> <span class="op">=</span> <span class="va">defaultGeometry</span>(<span class="ss">&#39;nVoxel&#39;</span><span class="op">,</span>[<span class="fl">32</span><span class="op">;</span><span class="fl">32</span><span class="op">;</span><span class="fl">32</span>])<span class="op">;</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="va">geo</span>.<span class="va">dVoxel</span> <span class="op">=</span> [<span class="fl">2</span><span class="op">;</span><span class="fl">2</span><span class="op">;</span><span class="fl">2</span>]<span class="op">;</span> <span class="va">geo</span>.<span class="va">sVoxel</span> <span class="op">=</span> <span class="va">geo</span>.<span class="va">nVoxel</span><span class="op">.*</span><span class="va">geo</span>.<span class="va">dVoxel</span><span class="op">;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="va">geo</span>.<span class="va">nDetector</span> <span class="op">=</span> [<span class="fl">64</span><span class="op">;</span><span class="fl">48</span>]<span class="op">;</span> <span class="va">geo</span>.<span class="va">dDetector</span> <span class="op">=</span> [<span class="fl">2</span><span class="op">;</span><span class="fl">2</span>]<span class="op">;</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="va">geo</span>.<span class="va">sDetector</span> <span class="op">=</span> <span class="va">geo</span>.<span class="va">nDetector</span><span class="op">.*</span><span class="va">geo</span>.<span class="va">dDetector</span><span class="op">;</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="va">geo</span>.<span class="va">DSO</span> <span class="op">=</span> <span class="fl">1000</span><span class="op">;</span> <span class="va">geo</span>.<span class="va">DSD</span> <span class="op">=</span> <span class="fl">1500</span><span class="op">;</span> <span class="va">geo</span>.<span class="va">offOrigin</span> <span class="op">=</span> [<span class="fl">0</span><span class="op">;</span><span class="fl">0</span><span class="op">;</span><span class="fl">0</span>]<span class="op">;</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>[<span class="va">x</span><span class="op">,</span><span class="va">y</span><span class="op">,</span><span class="va">z</span>] <span class="op">=</span> <span class="va">ndgrid</span>(<span class="fl">0</span><span class="op">:</span><span class="fl">31</span><span class="op">,</span><span class="fl">0</span><span class="op">:</span><span class="fl">31</span><span class="op">,</span><span class="fl">0</span><span class="op">:</span><span class="fl">31</span>)<span class="op">;</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="va">phantom</span> <span class="op">=</span> <span class="va">single</span>(<span class="fl">.02</span>)<span class="op">*</span><span class="va">single</span>((<span class="va">x</span><span class="op">-</span><span class="fl">15.5</span>)<span class="op">.^</span><span class="fl">2</span><span class="op">+</span>(<span class="va">y</span><span class="op">-</span><span class="fl">15.5</span>)<span class="op">.^</span><span class="fl">2</span><span class="op">+</span>(<span class="va">z</span><span class="op">-</span><span class="fl">15.5</span>)<span class="op">.^</span><span class="fl">2</span> <span class="op">&lt;=</span> <span class="fl">8</span><span class="op">^</span><span class="fl">2</span>)<span class="op">;</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="va">angles</span> <span class="op">=</span> (<span class="fl">0</span><span class="op">:</span><span class="fl">89</span>)<span class="op">*</span><span class="fl">2</span><span class="op">*</span><span class="va">pi</span><span class="op">/</span><span class="fl">90</span><span class="op">;</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="va">data</span> <span class="op">=</span> <span class="va">Ax</span>(<span class="va">phantom</span><span class="op">,</span><span class="va">geo</span><span class="op">,</span><span class="va">angles</span>)<span class="op">;</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="va">image</span> <span class="op">=</span> <span class="va">CGLS</span>(<span class="va">data</span><span class="op">,</span><span class="va">geo</span><span class="op">,</span><span class="va">angles</span><span class="op">,</span><span class="fl">12</span><span class="op">,</span><span class="ss">&#39;Verbose&#39;</span><span class="op">,</span><span class="fl">0</span>)<span class="op">;</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="va">assert</span>(<span class="va">isequal</span>(<span class="va">size</span>(<span class="va">image</span>)<span class="op">,</span><span class="va">size</span>(<span class="va">phantom</span>)) <span class="op">&amp;&amp;</span> <span class="va">all</span>(<span class="va">isfinite</span>(<span class="va">image</span>(<span class="op">:</span>))))<span class="op">;</span></span></code></pre></div>
+<p>The volume axes and detector metadata differ in storage order, as
+described above. The physical acquisition is equivalent.</p>
+<h2 id="examine-results-before-increasing-scale">Examine results before
+increasing scale</h2>
+<p>Compare a reconstructed central slice with the synthetic truth. Plot
+measured and predicted projections using the same colour scale. Record
+the residual, relative volume error where truth exists, reconstruction
+parameters and units.</p>
+<p>Changing the iteration count, sampling, regularization and data model
+at the same time makes failures difficult to diagnose. Establish one
+small working case, then change one relevant assumption at a time.</p>
+<h1 id="explicit-detector-surfaces">Explicit detector surfaces</h1>
+<h2 id="when-to-use-them">When to use them</h2>
+<p>Use explicit surfaces for curved detector pixels, tilted modules,
+gaps, nonuniform spacing or source/detector motion not adequately
+represented by the conventional flat-detector parameters.
+<code>DetectorSurfaceGeometry</code> stores the source position, pixel
+centres and measurement mask for every view.</p>
+<p>A surface need not describe a circular CT scan. Projection and
+iterative reconstruction can use exact rays on other trajectories; this
+does <strong>not</strong> mean that analytical FDK is valid for those
+trajectories.</p>
+<h2 id="convert-a-conventional-scan-and-introduce-a-gap">Convert a
+conventional scan and introduce a gap</h2>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># manual-example: python-surface</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>surface <span class="op">=</span> tigre.surface_from_geometry(geo, angles)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>mask <span class="op">=</span> surface.valid_mask.copy()</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>mask[:, :, <span class="dv">31</span>:<span class="dv">33</span>] <span class="op">=</span> <span class="va">False</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>surface <span class="op">=</span> tigre.DetectorSurfaceGeometry(</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    surface.source_positions_mm, surface.pixel_centers_mm, mask)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>surface_data <span class="op">=</span> tigre.Ax_surface(phantom, geo, surface, gpuids<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>surface_data[<span class="op">~</span>mask] <span class="op">=</span> np.nan</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>surface_image, residuals <span class="op">=</span> algs.cgls_surface(</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    surface_data, geo, surface, niter<span class="op">=</span><span class="dv">12</span>, gpuids<span class="op">=</span><span class="dv">0</span>,</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    return_residuals<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> np.isfinite(surface_image).<span class="bu">all</span>()</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> residuals[<span class="op">-</span><span class="dv">1</span>] <span class="op">&lt;</span> np.linalg.norm(np.nan_to_num(surface_data))</span></code></pre></div>
+<p>False mask entries are absent measurements, not zero-valued
+observations. The operator solvers remove missing NaN/Inf values before
+arithmetic. Nonfinite values at valid samples are rejected. Use the
+operator or iterative wrappers for this masking contract; do not pass
+masked NaNs directly to a native kernel.</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode matlab"><code class="sourceCode matlab"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">% manual-example: matlab-surface</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="va">surface</span> <span class="op">=</span> <span class="va">surfaceFromGeometry</span>(<span class="va">geo</span><span class="op">,</span><span class="va">angles</span>)<span class="op">;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="va">surface</span>.<span class="va">valid_mask</span>(<span class="op">:,</span><span class="fl">32</span><span class="op">:</span><span class="fl">33</span><span class="op">,:</span>) <span class="op">=</span> <span class="va">false</span><span class="op">;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="va">surfaceData</span> <span class="op">=</span> <span class="va">Ax_surface</span>(<span class="va">phantom</span><span class="op">,</span><span class="va">geo</span><span class="op">,</span><span class="va">surface</span><span class="op">,</span><span class="fl">0</span>)<span class="op">;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="va">surfaceData</span>(<span class="op">~</span><span class="va">surface</span>.<span class="va">valid_mask</span>) <span class="op">=</span> <span class="va">NaN</span><span class="op">;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>[<span class="va">surfaceImage</span><span class="op">,</span><span class="va">residuals</span>] <span class="op">=</span> <span class="va">CGLS_surface</span>(<span class="va">surfaceData</span><span class="op">,</span><span class="va">geo</span><span class="op">,</span><span class="va">surface</span><span class="op">,</span><span class="fl">12</span><span class="op">,</span><span class="ss">&#39;Device&#39;</span><span class="op">,</span><span class="fl">0</span>)<span class="op">;</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="va">assert</span>(<span class="va">all</span>(<span class="va">isfinite</span>(<span class="va">surfaceImage</span>(<span class="op">:</span>))))<span class="op">;</span></span></code></pre></div>
+<h2 id="construct-rather-than-convert">Construct rather than
+convert</h2>
+<p>Low-level constructors support cylindrical modules, piecewise-linear
+modules, explicit source paths and custom per-view module poses. The
+headless <code>build_modular_surface</code> recipe API adds
+panel-centred tilts and scan controls. See <a
+href="Detector_surface.md">the surface reference</a> for constructor
+shapes and <a href="../Python/demos/d26_ModularDetector.py">demo 26</a>
+for a three-panel acquisition.</p>
+<p>The recipe builder imposes sample-count limits to prevent accidental
+oversized allocations. These are allocation policy limits, not
+statements about detector physics or the capacity of a particular
+computer.</p>
+<h1 id="calling-the-shared-operator-interface">Calling the shared
+operator interface</h1>
+<h2 id="three-equivalent-surface-entry-styles">Three equivalent surface
+entry styles</h2>
+<p>For adapted methods, the following entry styles choose the same
+surface backend:</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># manual-example: python-operator</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>operator <span class="op">=</span> tigre.SurfaceOperator(geo, surface, gpuids<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>via_operator <span class="op">=</span> algs.lsqr(surface_data, operator<span class="op">=</span>operator, niter<span class="op">=</span><span class="dv">8</span>, verbose<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>via_wrapper <span class="op">=</span> algs.lsqr_surface(surface_data, geo, surface, niter<span class="op">=</span><span class="dv">8</span>,</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>                              gpuids<span class="op">=</span><span class="dv">0</span>, verbose<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>np.testing.assert_allclose(via_operator, via_wrapper, atol<span class="op">=</span><span class="fl">2e-5</span>, rtol<span class="op">=</span><span class="fl">2e-3</span>)</span></code></pre></div>
+<p>The explicit <code>algs.lsqr_operator(data, operator, ...)</code>
+convenience is also available. When passing <code>operator=</code>, omit
+<code>geo</code> and <code>angles</code> from the algorithm call: the
+selected operator already owns its acquisition state.</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode matlab"><code class="sourceCode matlab"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co">% manual-example: matlab-operator</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="va">op</span> <span class="op">=</span> <span class="va">projectionOperator</span>(<span class="va">geo</span><span class="op">,</span><span class="va">surface</span><span class="op">,</span><span class="ss">&#39;Device&#39;</span><span class="op">,</span><span class="fl">0</span>)<span class="op">;</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="va">viaOperator</span> <span class="op">=</span> <span class="va">LSQR_operator</span>(<span class="va">surfaceData</span><span class="op">,</span><span class="va">op</span><span class="op">,</span><span class="fl">8</span>)<span class="op">;</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="va">viaWrapper</span> <span class="op">=</span> <span class="va">LSQR_surface</span>(<span class="va">surfaceData</span><span class="op">,</span><span class="va">geo</span><span class="op">,</span><span class="va">surface</span><span class="op">,</span><span class="fl">8</span><span class="op">,</span><span class="ss">&#39;Device&#39;</span><span class="op">,</span><span class="fl">0</span>)<span class="op">;</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="va">assert</span>(<span class="va">norm</span>(<span class="va">double</span>(<span class="va">viaOperator</span>(<span class="op">:</span>)<span class="op">-</span><span class="va">viaWrapper</span>(<span class="op">:</span>))) <span class="op">&lt;</span> <span class="fl">1e-3</span>)<span class="op">;</span></span></code></pre></div>
+<p>Existing MATLAB conventional methods also accept an explicit
+<code>'Operator',op</code> option with empty geometry/angles.
+<code>_operator</code> and <code>_surface</code> are the uniform entry
+points for methods that did not previously have a conventional MATLAB
+function.</p>
+<h2 id="contract">Contract</h2>
+<p>An operator exposes <code>forward</code>, <code>adjoint</code>,
+<code>subset</code>, volume/projection shapes and a valid mask. It is
+linear and must not modify caller inputs. Normalized algebraic methods
+additionally assume nonnegative ray weights. The conventional adapter's
+legacy matched backprojection is approximate; the exact surface Siddon
+projector/backprojector pair is a discrete adjoint pair.</p>
+<p>Subsets select view indices relative to the current operator.
+Reordered, repeated and nested indices are supported. Subset
+normalization is calculated from that subset's own rays and mask. A
+completely missing view contributes neither data nor sensitivity.</p>
+<p>Adapters copy acquisition state when bound. Treat a bound operator's
+geometry as fixed. Construct a new operator after changing the scan.
+Keep GPU selection on the operator instead of supplying contradictory
+per-algorithm device options.</p>
+<h1 id="algorithm-selection-and-reference">Algorithm selection and
+reference</h1>
+<h2 id="select-a-method-for-the-problem-you-actually-have">Select a
+method for the problem you actually have</h2>
+<table>
+<thead>
+<tr>
+<th>Method family</th>
+<th>Useful starting point</th>
+<th>Important distinction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CGLS / LSQR</td>
+<td>Linear least-squares data fitting</td>
+<td>Accurate adjoints matter; noise can be fitted with excessive
+iterations</td>
+</tr>
+<tr>
+<td>LSMR</td>
+<td>Least-squares/normal-equation residual control with damping</td>
+<td>Damping changes the objective; the unregularized residual need not
+decrease monotonically</td>
+</tr>
+<tr>
+<td>SIRT</td>
+<td>Normalized simultaneous data updates</td>
+<td>Slower updates can be easier to inspect; sensitivity is operator
+dependent</td>
+</tr>
+<tr>
+<td>SART / OS-SART</td>
+<td>Sequential or subset data updates</td>
+<td>Subset ordering and relaxation affect the path</td>
+</tr>
+<tr>
+<td>Fast OS-SART</td>
+<td>Extrapolated subset updates</td>
+<td>Momentum is a heuristic; compare quality at comparable noise
+levels</td>
+</tr>
+<tr>
+<td>ISTA / FISTA</td>
+<td>Data fitting with a volume-TV proximal step</td>
+<td>Step-size/Lipschitz selection and TV strength must be
+consistent</td>
+</tr>
+<tr>
+<td>ASD-POCS / PCSD</td>
+<td>Alternating data consistency and TV descent</td>
+<td>Requires an explicit data tolerance on the operator path</td>
+</tr>
+<tr>
+<td>Hybrid / IRN Krylov-TV</td>
+<td>Projected or iteratively reweighted regularization</td>
+<td>More controls and greater numerical sensitivity; validate on a
+representative small case</td>
+</tr>
+<tr>
+<td>MLEM</td>
+<td>Nonnegative multiplicative updates</td>
+<td>Valid measurements must be nonnegative; it is not interchangeable
+with least squares</td>
+</tr>
+</tbody>
+</table>
+<p>This table describes mathematical behavior, not a universal ranking.
+Compare methods with the same data model, geometry, constraints and
+diagnostic measures.</p>
+<h2 id="available-iterative-apis">Available iterative APIs</h2>
+<p>Append <code>_operator</code> or <code>_surface</code> to each Python
+name below. MATLAB uses its existing capitalization and established
+spellings.</p>
+<table>
+<thead>
+<tr>
+<th>Python</th>
+<th>MATLAB base name</th>
+<th>Family</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cgls</code></td>
+<td><code>CGLS</code></td>
+<td>Least squares</td>
+</tr>
+<tr>
+<td><code>lsqr</code></td>
+<td><code>LSQR</code></td>
+<td>Least squares</td>
+</tr>
+<tr>
+<td><code>lsmr</code></td>
+<td><code>LSMR</code></td>
+<td>Damped least squares</td>
+</tr>
+<tr>
+<td><code>sart</code></td>
+<td><code>SART</code></td>
+<td>Sequential algebraic</td>
+</tr>
+<tr>
+<td><code>sirt</code></td>
+<td><code>SIRT</code></td>
+<td>Simultaneous algebraic</td>
+</tr>
+<tr>
+<td><code>os_sart</code></td>
+<td><code>OS_SART</code></td>
+<td>Ordered subsets</td>
+</tr>
+<tr>
+<td><code>fast_os_sart</code></td>
+<td><code>fast_OS_SART</code></td>
+<td>Accelerated ordered subsets</td>
+</tr>
+<tr>
+<td><code>sart_tv</code></td>
+<td><code>SART_TV</code></td>
+<td>Sequential + TV</td>
+</tr>
+<tr>
+<td><code>os_sart_tv</code></td>
+<td><code>OS_SART_TV</code></td>
+<td>Subsets + TV</td>
+</tr>
+<tr>
+<td><code>iterativereconalg</code></td>
+<td><code>iterativereconalg</code></td>
+<td>Generic normalized iteration</td>
+</tr>
+<tr>
+<td><code>ista</code></td>
+<td><code>ISTA</code></td>
+<td>Proximal TV</td>
+</tr>
+<tr>
+<td><code>fista</code></td>
+<td><code>FISTA</code></td>
+<td>Accelerated proximal TV</td>
+</tr>
+<tr>
+<td><code>mlem</code></td>
+<td><code>MLEM</code></td>
+<td>Multiplicative statistical update</td>
+</tr>
+<tr>
+<td><code>hybrid_lsqr</code></td>
+<td><code>hybrid_LSQR</code></td>
+<td>Projected regularization</td>
+</tr>
+<tr>
+<td><code>irn_tv_cgls</code></td>
+<td><code>IRN_TV_CGLS</code></td>
+<td>Reweighted TV</td>
+</tr>
+<tr>
+<td><code>hybrid_flsqr_tv</code></td>
+<td><code>hybrid_fLSQR_TV</code></td>
+<td>Flexible Krylov-TV</td>
+</tr>
+<tr>
+<td><code>ab_gmres</code></td>
+<td><code>AB_GMRES</code></td>
+<td>Projection-space GMRES</td>
+</tr>
+<tr>
+<td><code>ba_gmres</code></td>
+<td><code>BA_GMRES</code></td>
+<td>Volume-space GMRES</td>
+</tr>
+<tr>
+<td><code>asd_pocs</code></td>
+<td><code>ASD_POCS</code></td>
+<td>Single-view ASD</td>
+</tr>
+<tr>
+<td><code>os_asd_pocs</code></td>
+<td><code>OS_ASD_POCS</code></td>
+<td>Subset ASD</td>
+</tr>
+<tr>
+<td><code>awasd_pocs</code></td>
+<td><code>AwASD_POCS</code></td>
+<td>Weighted-TV ASD</td>
+</tr>
+<tr>
+<td><code>os_awasd_pocs</code></td>
+<td><code>OS_AwASD_POCS</code></td>
+<td>Subset weighted-TV ASD</td>
+</tr>
+<tr>
+<td><code>pcsd</code></td>
+<td><code>PCSD</code></td>
+<td>Single-view PCSD</td>
+</tr>
+<tr>
+<td><code>os_pcsd</code></td>
+<td><code>OS_PCSD</code></td>
+<td>Subset PCSD</td>
+</tr>
+<tr>
+<td><code>aw_pcsd</code></td>
+<td><code>AwPCSD</code></td>
+<td>Weighted-TV PCSD</td>
+</tr>
+<tr>
+<td><code>os_aw_pcsd</code></td>
+<td><code>OS_AwPCSD</code></td>
+<td>Subset weighted-TV PCSD</td>
+</tr>
+</tbody>
+</table>
+<p>FDK and FBP remain geometry-specific analytical APIs.
+<code>fdk_surface</code> is a separate approximate analytical surface
+reconstruction with additional geometry requirements. A surface accepted
+by an iterative method need not be accepted by surface FDK.</p>
+<h2 id="outputs-are-algorithm-specific">Outputs are algorithm
+specific</h2>
+<table>
+<thead>
+<tr>
+<th>Entry</th>
+<th>Diagnostics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python <code>cgls_surface(..., return_residuals=True)</code></td>
+<td><code>(image, residual_array)</code></td>
+</tr>
+<tr>
+<td>Python POCS methods with <code>return_history=True</code></td>
+<td><code>(image, history_dict)</code></td>
+</tr>
+<tr>
+<td>Reused Python class methods with <code>computel2</code> or quality
+options</td>
+<td>Existing <code>(image, errors)</code> convention</td>
+</tr>
+<tr>
+<td>MATLAB POCS operator/surface methods</td>
+<td>Second output is a history struct</td>
+</tr>
+<tr>
+<td>Other MATLAB operator/surface methods</td>
+<td>Residual history; quality output where supported</td>
+</tr>
+</tbody>
+</table>
+<p>Do not assume every solver accepts <code>return_history</code>. Check
+the <a href="Projection_operator.md">operator guide</a> before
+automating a parameter sweep.</p>
+<h1 id="regularization-and-initialization">Regularization and
+initialization</h1>
+<h2 id="warm-starts-and-constraints">Warm starts and constraints</h2>
+<p>Supply a finite volume of the correct shape as
+<code>init</code>/<code>Init</code>. Solvers own their initial
+reconstruction buffer; the caller's array is preserved. A zero-iteration
+call returns an owned initializer, after the applicable initialization
+policy. MLEM uses ones when no initializer is supplied; most other
+methods start at zero.</p>
+<p>Some algebraic/proximal methods enforce nonnegativity during
+iteration. Krylov methods must preserve their recurrences; upper bounds
+and support constraints are applied at suitable initialization/terminal
+steps rather than arbitrarily clipping every search direction. Existing
+conventional options retain their historical behavior.</p>
+<p>The operator path rejects geometry-specific FDK and multigrid
+initializer strings. If a suitable initial reconstruction already
+exists, compute it separately and pass the volume. GMRES must use the
+selected operator's adjoint, not an unrelated FDK backprojector.</p>
+<h2 id="tv-controls-and-axes">TV controls and axes</h2>
+<p>TV operations act on the volume lattice. They do not independently
+correct an incorrect acquisition geometry. The current native
+regularizers use discrete voxel-axis differences; do not assume
+automatic physical-spacing compensation for anisotropic voxels.</p>
+<p><code>tviter</code> controls the regularizer's iterations. TV
+strength parameters differ between an explicit descent step and an
+ROF/proximal denoiser. A numeric value of <code>alpha</code> is not
+interchangeable with a numeric value of <code>tvlambda</code>.</p>
+<p>Weighted TV uses <code>delta</code>/<code>Delta</code>, a finite
+nonzero scalar or three thresholds. Directional vectors follow the
+language's volume axes: Python z,y,x; MATLAB x,y,z. Reverse the vector
+when exchanging equivalent geometry. Equal entries reproduce the scalar
+case. Zero thresholds are rejected before native execution.</p>
+<p>Native volume TV requires at least two voxels on each axis in the
+operator adapter; constant volumes and zero TV iterations bypass
+unnecessary denoising.</p>
+<h2 id="pocs-maxl2err">POCS maxl2err</h2>
+<p><code>maxl2err</code> is a scalar <strong>absolute L2 residual
+tolerance</strong>, not a function. There is currently no dedicated
+operator-aware estimator. Missing samples are excluded from its
+residual. Conventional FDK-derived defaults cannot be assumed for an
+arbitrary trajectory or detector surface.</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># manual-example: python-pocs</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>pocs_image, history <span class="op">=</span> algs.asd_pocs_surface(</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    surface_data, geo, surface, niter<span class="op">=</span><span class="dv">4</span>, gpuids<span class="op">=</span><span class="dv">0</span>,</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    maxl2err<span class="op">=</span><span class="fl">0.</span>, tviter<span class="op">=</span><span class="dv">2</span>, return_history<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> np.isfinite(pocs_image).<span class="bu">all</span>()</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(history[<span class="st">&#39;residual&#39;</span>]) <span class="op">&lt;=</span> <span class="dv">4</span></span></code></pre></div>
+<p>Zero is used here only for a noiseless synthetic demonstration.
+Select a measured data tolerance using the data's units, noise/reference
+model and number of valid measurements. A residual measured from an
+arbitrary candidate does not by itself estimate an appropriate noise
+tolerance.</p>
+<p>POCS history records post-TV <code>residual</code>, pre-TV
+<code>data_residual</code>, relaxation <code>beta</code>,
+<code>tv_step</code> and update-direction <code>cosine</code>. PCSD uses
+residual-ratio TV scaling; ASD uses its alpha/rmax adaptation. The
+operator PCSD path uses a consistent norm gate and a strict iteration
+bound, and guards a zero reference residual. See the operator guide for
+differences retained in conventional calls.</p>
+<h1 id="measured-projection-data">Measured projection data</h1>
+<h2 id="intensity-preparation">Intensity preparation</h2>
+<p>The ideal transmission model is
+<code>I/I0 = exp(-line_integral)</code>. Constructing line integrals
+from real measurements generally requires the detector's dark/flat
+corrections and a valid reference intensity. Account for invalid,
+saturated, dead or unilluminated samples before reconstruction.</p>
+<p>Do not hide a calibration failure by clipping every problematic
+measurement and calling the result a valid CT dataset. Preserve an
+explicit validity mask and record preprocessing decisions. Negative
+corrected line integrals can occur in some workflows; MLEM's nonnegative
+input requirement makes it unsuitable for those measurements without a
+justified data model.</p>
+<h2 id="geometry-must-correspond-to-the-data">Geometry must correspond
+to the data</h2>
+<p>Verify detector row/column orientation, acquisition order, units,
+source trajectory and image origin against calibration or scanner
+metadata. Compare forward projections of a simple known object before
+attempting a large unknown sample. View-dependent geometry must be
+subset along with its measurements.</p>
+<p>Python and MATLAB Varian/dual-energy workflows have different
+supported features. Read the <a href="Varian_loader.md">Varian guide</a>
+and <a href="Dual_energy.md">dual-energy guide</a>. The audit does not
+establish correctness for real acquisitions unavailable in this
+workspace. Measured GCT examples also require external projection
+files.</p>
+<h2 id="rebinning-and-remapping">Rebinning and remapping</h2>
+<p>Remapping measurements onto an idealized detector is a change of the
+data model, not a substitute for exact geometry. Interpolation can
+affect resolution, correlations and quantitative scaling. Preserve the
+original measurements and document the interpolation. Prefer exact
+surface operators when the acquisition can be represented directly.</p>
+<h1 id="geometry-files-and-interchange">Geometry files and
+interchange</h1>
+<h2 id="editable-recipes-versus-exact-rays">Editable recipes versus
+exact rays</h2>
+<p>Recipes describe construction parameters. Exact archives describe the
+source and measured pixel positions actually used by reconstruction.
+They answer different questions and should not be substituted
+silently.</p>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># manual-example: python-interchange</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tigre.utilities.geometry_io <span class="im">import</span> save_geometry_yaml, load_geometry_file</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>folder <span class="op">=</span> Path(<span class="st">&#39;manual_results&#39;</span>)</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>folder.mkdir(exist_ok<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>geometry_path <span class="op">=</span> folder <span class="op">/</span> <span class="st">&#39;surface.yaml&#39;</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>save_geometry_yaml(geometry_path, surface<span class="op">=</span>surface, geometry<span class="op">=</span>geo)</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>loaded <span class="op">=</span> load_geometry_file(geometry_path)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>np.testing.assert_array_equal(loaded.surface.valid_mask, surface.valid_mask)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>np.testing.assert_array_equal(loaded.surface.pixel_centers_mm, surface.pixel_centers_mm)</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>np.savez_compressed(folder <span class="op">/</span> <span class="st">&#39;reconstruction.npz&#39;</span>, image<span class="op">=</span>surface_image,</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>                    residuals<span class="op">=</span>residuals)</span></code></pre></div>
+<p>An exact YAML document can reference a uniquely named NPZ companion.
+Keep both files together. Exact numeric archives are loaded without
+Python pickle. A raw projection NPZ and a geometry NPZ are different
+records; distinguish them in file naming and metadata.</p>
+<p>MATLAB uses <code>geometryFile</code> for native MAT files and shared
+interchange. YAML/NPZ conversion can invoke Python in
+<code>recon</code>; native MAT geometry does not require the GUI
+application. The bridge handles axis ordering. A MATLAB recipe that
+cannot express a supplied source path must not silently simplify it: use
+an exact-surface archive for such acquisitions.</p>
+<h2 id="record-enough-information-to-reproduce-a-run">Record enough
+information to reproduce a run</h2>
+<p>Save the geometry or its immutable identifier, measurement
+preprocessing and mask, algorithm/options, initializer, iteration
+controls, environment/native build and output units. Save useful
+histories alongside the image. Retain a link to the original measured
+data instead of relying on a screenshot.</p>
+<h1 id="visualization-and-interpretation">Visualization and
+interpretation</h1>
+<p>Core plotting and animation are headless-capable scientific
+utilities. Set the Matplotlib backend to <code>Agg</code> for automated
+Python runs; use a desktop backend when interactive windows are
+intended. MATLAB figures can be hidden during tests with
+<code>set(groot,'defaultFigureVisible','off')</code>.</p>
+<p>Inspect geometry from several directions. A plausible central
+projection can hide reversed rows, incorrect source motion or an origin
+shift. Plot source positions, detector modules, the reconstruction
+volume and missing samples. See <a
+href="Detector_surface.md#visualizing-curved-and-modular-detectors">surface
+visualization</a>.</p>
+<p>Image contrast settings can hide scaling errors. Compare
+reconstructions with a shared display range and evaluate numerical
+attenuation in a known region where such a reference exists. A small
+relative data residual is not proof that every part of a limited-angle
+or truncated volume is recoverable.</p>
+<h1 id="performance-and-memory-planning">Performance and memory
+planning</h1>
+<h2 id="estimate-before-allocating">Estimate before allocating</h2>
+<p>A float32 volume occupies <code>4 * product(nVoxel)</code> bytes, and
+a float32 projection stack occupies
+<code>4 * views * rows * columns</code>. Exact pixel centres require
+three coordinates per sample, or approximately twelve bytes per dense
+sample before masks, source positions and metadata.</p>
+<p>Iterative methods need additional volumes, projection buffers or
+basis vectors. Krylov methods that retain bases can scale with iteration
+count. An acquisition that fits in memory for one projector call need
+not fit in memory for a hybrid solver. Geometry ownership and cached
+subsets can add another acquisition-sized allocation; the audit removed
+a redundant extra subset copy, not all such costs.</p>
+<p>Start with a reduced volume or fewer views, measure actual memory
+use, then scale. Reducing views changes the inverse problem; it is a
+development check, not a claim of equivalent image quality.</p>
+<h2 id="devices-slabs-and-optional-accelerators">Devices, slabs and
+optional accelerators</h2>
+<p>Python surface projection can split the reconstruction volume into
+z-slabs and process them across selected devices. The returned
+projection sums or assembled volume must still fit in host memory.
+Multi-device behavior depends on the available devices and build; the
+current audit used one physical GPU.</p>
+<p>CuPy filtering is explicit optional acceleration for applicable
+analytical filtering paths. It does not select the projector for an
+iterative method and does not remove the analytical geometry
+restrictions of FDK.</p>
+<h1 id="diagnostics-and-troubleshooting">Diagnostics and
+troubleshooting</h1>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Check first</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>New module not found</td>
+<td>Printed <code>tigre.__file__</code>, <code>PYTHONPATH</code>, active
+Conda environment</td>
+</tr>
+<tr>
+<td>DLL/MEX import failure</td>
+<td>Matching environment, CUDA/compiler runtime and binary
+provenance</td>
+</tr>
+<tr>
+<td>Wrong shape error</td>
+<td>Volume axes, view axis, detector rows/columns and geometry
+counts</td>
+</tr>
+<tr>
+<td>NaN/Inf at valid samples</td>
+<td>Preprocessing, masks, initializer, parameter validity</td>
+</tr>
+<tr>
+<td>Immediate Krylov failure on an exact start</td>
+<td>Use current audited code; exact stationary starts/breakdowns are
+handled</td>
+</tr>
+<tr>
+<td>Plausible image with wrong attenuation</td>
+<td>Length units, intensity conversion, geometry and algorithm
+scaling</td>
+</tr>
+<tr>
+<td>Different Python/MATLAB result</td>
+<td>Axis order, Delta reversal, explicit equivalent options and
+iteration semantics</td>
+</tr>
+<tr>
+<td>POCS asks for maxl2err</td>
+<td>Supply an absolute masked L2 tolerance; no estimator/default is
+implied</td>
+</tr>
+<tr>
+<td>Surface FDK rejects the scan</td>
+<td>Check its circular/extruded geometry requirements; use an
+appropriate iterative model</td>
+</tr>
+<tr>
+<td>Memory exhaustion</td>
+<td>Volume/projection size, exact coordinate arrays, saved bases and
+cached subsets</td>
+</tr>
+</tbody>
+</table>
+<p>When reporting a problem, provide the smallest reproducer, exact
+shapes and units, versions, selected devices, native build and complete
+error output. Distinguish a compilation error from a numerical failure
+and from missing external scanner data.</p>
+<h1 id="verification-and-contribution-workflow">Verification and
+contribution workflow</h1>
+<h2 id="run-the-intended-source">Run the intended source</h2>
+<p>From the repository root:</p>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode powershell"><code class="sourceCode powershell"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="va">$env</span><span class="op">:</span><span class="va">PYTHONPATH</span> <span class="op">=</span> <span class="fu">Join-Path</span> <span class="op">(</span><span class="fu">Get-Location</span><span class="op">)</span> <span class="st">&#39;Python&#39;</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>conda run <span class="op">-</span>n recon python <span class="op">-</span>m pytest Python<span class="op">/</span>tests <span class="op">-</span>q</span></code></pre></div>
+<p>The audit suite includes independent dense references, exact
+warm-start and breakdown checks, masks and subset metadata, native
+reconstructions, wrapper parity and legacy-call regressions. Some native
+error-path tests intentionally exercise CUDA failures; interpret their
+test assertions and exit status, not an isolated CUDA message alone.</p>
+<p>MATLAB validation regenerates Python reference results for equivalent
+rays:</p>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode matlab"><code class="sourceCode matlab"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="va">addpath</span>(<span class="va">genpath</span>(<span class="ss">&#39;MATLAB&#39;</span>))<span class="op">;</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="va">UseBlackwellBuild</span>()<span class="op">;</span> <span class="co">% only for this local build configuration</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="va">test_operatorAuditContract</span><span class="op">;</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="va">test_allOperatorAlgorithms</span><span class="op">;</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="va">test_operatorPocs</span><span class="op">;</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="va">test_userManualExamples</span><span class="op">;</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="va">test_surfaceProjectors</span><span class="op">;</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="va">test_surfaceFDK</span><span class="op">;</span></span></code></pre></div>
+<p>See the <a href="Validation.md">validation guide</a> and <a
+href="Projection_operator.md">operator guide</a> for results, commands
+and limits. A test that expects an unsupported input to fail does not
+establish reconstruction support for that input.</p>
+<h2 id="scope-of-numerical-agreement">Scope of numerical agreement</h2>
+<p>The cross-language fixture includes masks, a missing view and
+explicit equivalent parameters. Flexible LSQR-TV is particularly
+sensitive to rounding and its inner preconditioner; its agreement is
+tested to a finite tolerance, not assumed bit-identical on all hardware.
+The operator guide documents its bounded mean-free CG preconditioner and
+other operator-only numerical repairs.</p>
+<p>The current audit does not replace clean builds and tests on every
+supported platform. Real scanner calibration, multi-GPU scaling and
+other external-data workflows require additional evidence.</p>
+<h2 id="repository-boundary">Repository boundary</h2>
+<p>TIGRE owns detector models, recipes, geometry files, native
+projectors, reconstruction, diagnostics and scientific rendering.
+TIGRE-GUI owns desktop controls, interactive demo 27, script exporters,
+GUI tests, GUI manuals and their presentation assets. A core
+reconstruction must work without importing <code>tigre_gui</code> or Tk.
+Exported standalone scripts depend on TIGRE, not the GUI that created
+them.</p>
+<p>For a change to an adapted algorithm, update Python and MATLAB entry
+points, surface wrappers, meaningful numerical tests and this
+documentation together. Keep pure formatting, machine-specific binaries
+and unrelated environment changes out of an upstream correctness patch.
+Preserve the user's working tree when preparing isolated review
+branches.</p>
+<h1 id="companion-references">Companion references</h1>
+<ul>
+<li><a href="Projection_operator.md">Projection-operator API and
+numerical details</a></li>
+<li><a href="Detector_surface.md">Detector-surface model</a></li>
+<li><a href="Validation.md">Current validation procedure</a></li>
+<li><a href="Integration_audit_2026-11-06.md">Integration audit and
+remaining limitations</a></li>
+<li><a href="python_installation.md">Python installation</a></li>
+<li><a href="MATLAB_installation.md">MATLAB installation</a></li>
+<li><a href="Optional_CuPy.md">Optional CuPy filtering</a></li>
+<li><a href="Varian_loader.md">Varian loader</a></li>
+<li><a href="Dual_energy.md">Dual-energy workflow</a></li>
+<li><a href="../Python/demos/README.md">Python demos</a> and <a
+href="../MATLAB/Demos/README.md">MATLAB demos</a></li>
+<li><a href="../../TIGRE-GUI/README.md">TIGRE-GUI application and its
+manuals</a></li>
+<li><a href="../LICENSE.txt">License</a></li>
+</ul>
+</body>
+</html>

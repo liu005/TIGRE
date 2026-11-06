@@ -1,5 +1,5 @@
 function surface = buildModularSurface(s)
-%BUILDMODULARSURFACE Build explicit detector coordinates from GUI/YAML settings.
+%BUILDMODULARSURFACE Build explicit detector coordinates from recipe/YAML settings.
 % source_positions_mm: 3 x views; pixel_centers_mm: rows x cols x 3 x views;
 % valid_mask: rows x cols x views. Coordinates are world x/y/z, in mm.
 % module_slices: zero-based half-open [rowStart rowStop colStart colStop].

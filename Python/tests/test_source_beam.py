@@ -67,7 +67,7 @@ def test_beam_archives_and_mat_bridge(tmp_path, exact, aperture):
     if exact:
         save_geometry_yaml(target, surface=original)
     else:
-        from tigre.utilities.detector_geometry_gui import build_modular_surface
+        from tigre.utilities.detector_geometry_builder import build_modular_surface
         settings = dict(layout="Piecewise linear", n_views=3, source_radius_mm=300,
             source_z_mm=0, module_shape=[5, 7], pixel_spacing_mm=[5, 5],
             detector_radius_mm=200, column_gap=0, n_modules=1, angular_span_deg=20,

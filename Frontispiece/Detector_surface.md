@@ -1,29 +1,9 @@
 # Detector-surface geometry (curved, modular and U-shaped detectors)
 
-The [MATLAB detector builder and animation guide](./TIGRE_CT_Simulation_Builder_MATLAB.md)
-covers native surface projection/backprojection, CGLS/SIRT, circular surface
-FDK, visualization and YAML/MAT/NPZ interchange. Matching head-phantom examples
-are demo 25 (smooth cylinder) and demo 26 (tilted modular panels); see the
-[demo comparison](Demo_language_comparison.md).
-
-The CT Simulation Builder also includes **Sea cargo: 20-foot container
-(2D Digital Radiography)** in Python and MATLAB. Its fixed source and
-L-shaped detector acquire conveyor DR projections; this is not a 3D CT scan.
-The upper arm can have physical clearance while its joint edge remains aligned
-with the vertical arm in source projection. After saving its YAML,
-**Export DR simulation script...** produces forward projection only. See the
-[Python DR export guide](./TIGRE_CT_Simulation_Builder_Python.md#dr-simulation-export)
-or [MATLAB DR export guide](./TIGRE_CT_Simulation_Builder_MATLAB.md#dr-simulation-export)
-for attenuation inputs, output arrays and sampling limitations.
-
-The complete preset catalogues in the [Python manual](./TIGRE_CT_Simulation_Builder_Python.md#catalogue-of-gui-presets)
-and [MATLAB manual](./TIGRE_CT_Simulation_Builder_MATLAB.md#catalogue-of-gui-presets)
-describe the GUI examples, their uses and reconstruction/DR constraints.
-Python has 15 presets, including a [piecewise linear source path](./TIGRE_CT_Simulation_Builder_Python.md#piecewise-linear-source-movement)
-and [opposing L-shaped source/detector arrays forming a diamond](./TIGRE_CT_Simulation_Builder_Python.md#diamond-l-shaped-source--detector);
-MATLAB has the original 13. The Python mode joins straight source segments
-on one fixed detector, retains shared junctions once, and saves both editable
-waypoint recipes and exact per-view geometry for iterative reconstruction.
+The native detector-surface APIs are available in Python and MATLAB.
+See the [operator guide](Projection_operator.md) and the [core user manual](TIGRE_User_Manual.md).
+Head-phantom examples are demo 25 (smooth cylinder) and demo 26 (tilted panels).
+The optional desktop application and its manuals live in [TIGRE-GUI](../../TIGRE-GUI/README.md).
 
 TIGRE's standard geometry describes a flat detector. The *detector-surface* model
 describes every measured pixel by its physical position, so curved arrays, modules
@@ -81,7 +61,7 @@ including for iterative surface methods. No angular flux weighting is
 multiplied into log line integrals. Existing surfaces without `source_beam`
 retain their previous projection behavior.
 
-The Python GUI's diamond preset uses inward normals for the two source arms,
+The diamond acquisition recipe uses inward normals for the two source arms,
 95/20-degree contours at 50% flux and independent 140/40-degree apertures.
 Each shared source junction is acquired once using the incoming arm's beam.
 The Source tab allows beam roll and contour/aperture changes; zero roll puts
@@ -95,7 +75,7 @@ axis. Their end ellipses are display cross-sections, not detector footprints.
 
 YAML recipes and exact NPZ archives preserve the beam frames and masks.
 Python MAT-bridge round trips also preserve the metadata. MATLAB can use the
-effective mask, but its native GUI does not yet edit beam settings. View
+effective mask. View
 subsets and object-coordinate transformations preserve the beam definition.
 The preset illustrates geometry and transmission; it does not establish CT
 sampling completeness or model mechanical clearance at the diamond corners.
@@ -105,7 +85,7 @@ the complete Python suite reported **481 passed, 2 skipped, 4 warnings**.
 The two skips were existing CUDA error/memory checks whose ctypes CUDA-runtime
 query was unavailable; native projection and adjoint beam tests passed.
 The suite covers beam masks, ellipse contours, archive/MAT round trips,
-object transforms, the diamond GUI, and per-view envelope length/opacity.
+object transforms and per-view envelope length/opacity.
 No native extensions were rebuilt. The run log is
 `.codex-results/beam_diamond_validation_20261104.log`.
 
@@ -175,70 +155,18 @@ The layout follows source azimuth around z and assumes the detector is centered
 on that rotation axis. `DetectorModule` remains available for unequal module
 shapes, custom per-view poses, and other geometry.
 
-To configure a layout interactively and inspect a 3D preview, run
-`python -m tigre.utilities.detector_geometry_gui` from the `Python/` project
-directory, or run `python tigre/utilities/detector_geometry_gui.py` from that
-directory. The window offers cylindrical and piecewise-linear layouts,
-including U-shaped panels; rotating scans can specify an orbit start and scan
-span and COR. Both layouts support panel x/y tilts; stationary-detector modes
-support linear and circular-arc source motion. Panel angles and COR are
-constant during each GUI scan. See the
-[modular detector GUI manual](./TIGRE_CT_Simulation_Builder_Python.md) for launch
-instructions, control definitions, workflows, a TIGRE circular CT example, and
-reconstruction usage.
-
-The GUI exports `source_positions_mm`, `pixel_centers_mm`, and `valid_mask` in
-a compressed `.npz` file, with optional integer `module_slices` metadata. Its background compatibility check validates the
-surface geometry and reports whether it meets `fdk_surface`'s stricter
-circular-orbit requirements. This does not test CUDA availability or run a
-reconstruction. The GUI supports up to 6,000 views, 4,096 pixels per panel
-dimension, 256 panels, and 20,000,000 dense detector samples; these are upper
-bounds rather than a guarantee that the host has enough memory.
-If a circular-orbit detector is incompatible with `fdk_surface`'s extruded,
-view-invariant fan requirements, the GUI can optionally interpolate projection
-data onto an idealized circular/equiangular detector. This changes the
-measurements and cannot repair a non-circular source path; review the warnings
-and validation limits in the [GUI manual](./TIGRE_CT_Simulation_Builder_Python.md#remap-measured-projections).
-
-The GUI builder adds panel-centred rotations using
-`Rz(gantry + panel_z) @ Ry(panel_y) @ Rx(panel_x)`. Its x/y inputs are in
-degrees and accept one angle or one per panel. GUI labels name x/y/z rotations
-roll/pitch/yaw, respectively; the explicit axes and matrix define the
-convention, since rotation names vary between tools. COR shifts source and detector
-in the rotating transverse direction. Exported coordinates include these
-corrections; do not apply them twice. The low-level modular helpers retain
-their z-angle-only interfaces. Use `surface_from_geometry(geo, angles)` for
-per-view `rotDetector` or COR, or `DetectorModule` for custom poses.
-
-**Multi-panel alignment:** panel tilt is independently configurable, while
-COR is a single global scan correction that shifts the shared source and all
-panels together. In the GUI, x/y angles accept a shared value or one per panel;
-piecewise-linear z angles and transverse/normal/z offsets require one entry
-per panel. Cylindrical z angles come from the arc layout. Use panel offsets
-and tilts for individual panel calibration, rather than per-panel COR values.
-See the [multi-panel alignment instructions](./TIGRE_CT_Simulation_Builder_Python.md#multi-panel-alignment-individual-tilt-global-cor)
-for a three-panel example. The GUI provides **From list...** editors for panel
-angles and offsets, with the same enabled/disabled rules as the main fields.
-
-The GUI's **Load geometry...** opens surface or standard numeric TIGRE
-geometry archives in read-only inspection mode. Versioned modular YAML settings
-reopen in editable builder mode instead. **Save geometry YAML...** writes
-editable recipes or a small reference to an exact surface NPZ companion. Construction controls are
-disabled while playback, saving, and remapping remain available. Return to
-builder restores its retained settings. From scripts use
-`launch_detector_geometry_gui(geometry=geo, angles=angles)` or
-`launch_detector_geometry_gui(surface=surface, geometry=geo)`. See the
-[loading instructions and archive schema](./TIGRE_CT_Simulation_Builder_Python.md#load-existing-geometry-for-inspection).
-The GUI and `animate_geometry(surface=...)` both use `SurfaceRenderer` for
-mesh construction, source/volume display and frame updates. The legacy
-standard-geometry animation path remains available.
+The headless recipe builder `build_modular_surface` also supports panel-centred
+rotations `Rz(gantry + panel_z) @ Ry(panel_y) @ Rx(panel_x)` in degrees.
+COR is a shared scan correction, not a substitute for per-panel calibration.
+Exported pixel coordinates already contain these corrections; do not apply them
+again. Exact surface files preserve the rays independently of any desktop editor.
 
 Use `tigre.animate_geometry("geometry.yaml")` or
 `tigre.animate_geometry("surface.npz")` to visualize saved geometry with the
 same loader. File inputs provide their own trajectory. Existing geometry-object
 calls remain supported. YAML uses explicit mm/degree units and a versioned
 rotation convention; standard TIGRE arrays remain in radians. See the
-[YAML settings guide](./TIGRE_CT_Simulation_Builder_Python.md#save-and-reload-editable-yaml-settings)
+[geometry interchange guide](TIGRE_User_Manual.md#geometry-files-and-interchange)
 and `Python/demos/geometry_examples/three_panel.yaml` for an editable example.
 The shared loader API is `tigre.utilities.geometry_io.load_geometry_file`;
 `save_geometry_yaml` saves recipes or exact-surface references.
@@ -254,7 +182,7 @@ The shared loader API is `tigre.utilities.geometry_io.load_geometry_file`;
 | `animate_geometry(..., surface=)` | visualisation |
 | `cylindrical_modular_detector_surface` | equal-sized flat modules along a cylindrical arc |
 | `piecewise_linear_modular_detector_surface` | equal-sized flat, faceted, or U-shaped modules |
-| `tigre.utilities.detector_geometry_gui` | interactive layout preview and `.npz` export |
+| `tigre.utilities.detector_geometry_builder` | headless detector recipes and timing |
 | `linear_source_surface` | stationary detector, source on a line (limited angle; iterative recommended, experimental FDK opt-in) |
 | `remap_projections_for_fdk` | optional interpolation of projections onto a compatible circular detector; see limitations below |
 
@@ -346,11 +274,7 @@ and GPU information. This is a noiseless matched-Siddon simulation; a low error
 does not establish measured-data or real-scanner accuracy. The CUDA regression
 test is `Python/tests/test_yaml_reconstruction_demo.py`.
 
-The [GUI manual](./TIGRE_CT_Simulation_Builder_Python.md#tigre-circular-ct-example) uses
-TIGRE's low-resolution circular geometry from `d03_generateData.py`.
-`test_detector_geometry_examples.py` checks all 100 poses from
-`d17_DetectorRotation.py` and the geometry in `d01_CreateGeometry.py`, with
-additional COR sign checks. `test_detector_geometry.py` covers GUI geometry,
+The detector geometry and FDK rotation tests cover panel tilt and COR sign conventions. `test_detector_geometry.py` covers recipe geometry,
 preview and input validation; `test_detector_geometry_remap.py` covers data
 remapping. These CPU geometry tests do not run reconstruction. The manual
 includes their test command. Use the project's `recon` conda environment.
@@ -398,7 +322,7 @@ ax = tigre.animate_geometry(geo, surface=surf, pos=3, animate=False)
 
 The source marker, detector mesh, sampled points, and central ray update with
 the selected view, including views with no valid pixels. Surface mode supports
-`rotation="SD"` only. Origin arrows match the GUI: red x, green y, blue z at
+`rotation="SD"` only. Origin arrows use red x, green y, blue z at
 30 percent opacity. For thin scan layouts, the z-axis display range is expanded
 to at least half the larger x/y range, preserving equal millimetre scale across
 axes rather than stretching the detector. Surface coordinates already contain any COR correction;
