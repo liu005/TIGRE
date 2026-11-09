@@ -45,9 +45,9 @@ The manual covers Python and MATLAB installation, geometry, reconstruction,
 regularization, measured data, validation and troubleshooting.
 
 The optional desktop builder, its exporters, tests and full GUI manuals live
-in the separate [TIGRE-GUI repository](../TIGRE-GUI/README.md).
+in the separate [geometry design tool repository](../tigre-geometry-design-tool/README.md).
 Detector construction, file interchange, rendering and reconstruction remain
-headless TIGRE APIs. See the [repository boundary](Frontispiece/GUI_repository_split.md).
+headless TIGRE APIs. See the [repository boundary](Frontispiece/Geometry_Design_Tool_repository_split.md).
 
 The [MATLAB](MATLAB/Demos/README.md) and [Python](Python/demos/README.md) demo
 indexes use matching names where implementations are available. The

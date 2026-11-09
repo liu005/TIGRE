@@ -103,7 +103,7 @@ The subsequent piecewise linear source GUI change passed 122 targeted tests
 in `recon-new`, including native CUDA projection equivalence to two joined
 linear scans, CGLS consistency, editable/exact archives, MAT interchange, GUI
 transitions and retained CT/DR behavior. See [the validation guide](Validation.md)
-and [the version 1.7 Python manual](../../TIGRE-GUI/Frontispiece/TIGRE_CT_Simulation_Builder_Python.md#piecewise-linear-source-movement).
+and [the version 1.7 Python manual](../../tigre-geometry-design-tool/Frontispiece/TIGRE_Geometry_Design_Tool_Python.md#piecewise-linear-source-movement).
 This is additional feature validation; the demo counts above describe the
 earlier full demo runs. The final feature log is
 `.codex-results/piecewise_source_commit_final.log`.

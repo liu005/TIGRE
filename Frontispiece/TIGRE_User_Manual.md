@@ -6,7 +6,7 @@
 **Software scope: this development checkout, including explicit detector surfaces and projection operators.**
 
 This manual describes the reconstruction toolbox. The desktop application and
-its manuals are maintained in the separate [TIGRE-GUI repository](../../TIGRE-GUI/README.md).
+its manuals are maintained in the separate [tigre-geometry-design-tool repository](../../tigre-geometry-design-tool/README.md).
 Development APIs described here must not be assumed to exist in a stock upstream release.
 
 # Working with this manual
@@ -707,10 +707,10 @@ workflows require additional evidence.
 ## Repository boundary
 
 TIGRE owns detector models, recipes, geometry files, native projectors,
-reconstruction, diagnostics and scientific rendering. TIGRE-GUI owns desktop
+reconstruction, diagnostics and scientific rendering. tigre-geometry-design-tool owns desktop
 controls, interactive demo 27, script exporters, GUI tests, GUI manuals and
 their presentation assets. A core reconstruction must work without importing
-`tigre_gui` or Tk. Exported standalone scripts depend on TIGRE, not the GUI that
+`tigre_geometry_design_tool` or Tk. Exported standalone scripts depend on TIGRE, not the GUI that
 created them.
 
 For a change to an adapted algorithm, update Python and MATLAB entry points,
@@ -731,5 +731,5 @@ when preparing isolated review branches.
 - [Varian loader](Varian_loader.md)
 - [Dual-energy workflow](Dual_energy.md)
 - [Python demos](../Python/demos/README.md) and [MATLAB demos](../MATLAB/Demos/README.md)
-- [TIGRE-GUI application and its manuals](../../TIGRE-GUI/README.md)
+- [tigre-geometry-design-tool application and its manuals](../../tigre-geometry-design-tool/README.md)
 - [License](../LICENSE.txt)

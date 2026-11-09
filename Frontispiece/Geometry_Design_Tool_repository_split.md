@@ -1,7 +1,7 @@
-# GUI repository split
+# Geometry design tool repository split
 
-The Python and MATLAB desktop builders now live in the sibling `TIGRE-GUI`
-repository (`D:\works\software\TIGRE-GUI` for this extraction).
+The Python and MATLAB desktop builders now live in the sibling `tigre-geometry-design-tool`
+repository (`D:\works\software\tigre-geometry-design-tool` for this extraction).
 
 TIGRE retains detector surfaces and modular constructors, native CUDA
 projectors, surface reconstruction, geometry serialization, rendering,
@@ -11,13 +11,13 @@ animation and the headless detector recipe builder. YAML loading imports
 Install the desktop application from the new repository:
 
 ```powershell
-conda run -n recon python -m pip install --no-deps -e ..\TIGRE-GUI
-& ..\TIGRE-GUI\launch.ps1
+conda run -n recon python -m pip install --no-deps -e ..\tigre-geometry-design-tool
+& ..\tigre-geometry-design-tool\launch.ps1
 ```
 
 Update Python application imports from
-`tigre.utilities.detector_geometry_gui` to
-`tigre_gui.detector_geometry_gui`. For numerical recipe construction use
+`tigre.utilities.detector_geometry_gui` or `tigre_gui.detector_geometry_gui` to
+`tigre_geometry_design_tool.geometry_design_tool`. For numerical recipe construction use
 `from tigre.utilities.detector_geometry_builder import build_modular_surface`.
 
 For MATLAB, initialize TIGRE as usual, then add the new repository's

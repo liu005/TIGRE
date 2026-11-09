@@ -14,6 +14,9 @@ class ForbidGui(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if fullname == "tkinter" or fullname.startswith("tkinter.") or (
             fullname == "tigre_gui" or fullname.startswith("tigre_gui.")
+        ) or (
+            fullname == "tigre_geometry_design_tool"
+            or fullname.startswith("tigre_geometry_design_tool.")
         ) or fullname == "tigre.utilities.detector_geometry_gui":
             raise AssertionError("Unexpected GUI import: " + fullname)
         return None

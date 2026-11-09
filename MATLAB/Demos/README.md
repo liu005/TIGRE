@@ -41,4 +41,4 @@ their headers and the loader guides. YAML reconstruction examples use shared
 headless geometry-file APIs.
 
 The interactive demo 27, desktop tests, GUI preset catalogue and script exporters
-are maintained in [TIGRE-GUI](../../../TIGRE-GUI/README.md).
+are maintained in [tigre-geometry-design-tool](../../../tigre-geometry-design-tool/README.md).

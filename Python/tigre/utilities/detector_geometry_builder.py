@@ -1,7 +1,7 @@
 """Headless modular detector recipes, timing and compatibility checks.
 
 Kept in TIGRE so geometry archives and numerical workflows do not depend on
-the separately installed TIGRE-GUI desktop application.
+the separately installed tigre-geometry-design-tool desktop application.
 """
 
 import numpy as np

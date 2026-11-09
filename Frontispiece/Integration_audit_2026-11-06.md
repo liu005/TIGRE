@@ -8,18 +8,18 @@ algorithm, a security review or validation on measured scanner data.
 ## Findings and changes
 
 - The core Python export test was left behind after its implementation and
-  complete test moved to TIGRE-GUI. Its four tests failed with an undefined
+  complete test moved to tigre-geometry-design-tool. Its four tests failed with an undefined
   helper. The orphaned copy was removed; the GUI copy retains those tests.
 - MATLAB's GUI exporter could not find `ctReconstructionTemplate.txt` because
   the template remained in TIGRE. It was moved next to the exporter in
-  TIGRE-GUI and the split manifest was updated. The GUI builder and the
+  tigre-geometry-design-tool and the split manifest was updated. The GUI builder and the
   native exported CT scripts now pass their integration tests.
 - The manual referred to an absent audit report, export script and figure.
   References were corrected; a manual export script and PDF formatting assets
   were added. The Python and MATLAB example blocks now have executable tests.
 - Validation instructions included GUI tests no longer in TIGRE. The core
   commands now refer to retained tests, and a subprocess test guards recipe and
-  exact geometry round trips against imports of Tk and TIGRE-GUI.
+  exact geometry round trips against imports of Tk and tigre-geometry-design-tool.
 
 ## Evidence from this checkout
 

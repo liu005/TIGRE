@@ -53,7 +53,7 @@ CUDA extensions and hardware. Results and limitations for the operator fixture
 are recorded in the [operator guide](Projection_operator.md).
 
 Desktop builder tests, exported-script tests and their dependencies now belong
-to the separate TIGRE-GUI checkout. Follow its README and validation guide to
+to the separate tigre-geometry-design-tool checkout. Follow its README and validation guide to
 run them with a matching TIGRE checkout. Historical 3 November runs, before
 the extraction, are recorded in [the project audit](Project_audit_2026-11-03.md)
 and [demo report](Demo_validation_2026-11-03.md); their test names and counts
@@ -121,4 +121,4 @@ configuration. No real paired dual-energy or Varian acquisition is available
 locally. Python Varian DPS, object-scatter and beam-hardening corrections remain
 unported, and MATLAB surface reconstruction currently uses one GPU. See the
 [Varian](Varian_loader.md), [dual-energy](Dual_energy.md) and
-[MATLAB surface](../../TIGRE-GUI/Frontispiece/TIGRE_CT_Simulation_Builder_MATLAB.md) manuals for those limits.
+[MATLAB surface](../../tigre-geometry-design-tool/Frontispiece/TIGRE_Geometry_Design_Tool_MATLAB.md) manuals for those limits.

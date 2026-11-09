@@ -3,7 +3,7 @@
 The native detector-surface APIs are available in Python and MATLAB.
 See the [operator guide](Projection_operator.md) and the [core user manual](TIGRE_User_Manual.md).
 Head-phantom examples are demo 25 (smooth cylinder) and demo 26 (tilted panels).
-The optional desktop application and its manuals live in [TIGRE-GUI](../../TIGRE-GUI/README.md).
+The optional desktop application and its manuals live in [tigre-geometry-design-tool](../../tigre-geometry-design-tool/README.md).
 
 TIGRE's standard geometry describes a flat detector. The *detector-surface* model
 describes every measured pixel by its physical position, so curved arrays, modules

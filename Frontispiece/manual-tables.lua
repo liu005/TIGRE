@@ -8,3 +8,20 @@ function Table(tbl)
   end
   return tbl
 end
+
+-- Permit long inline code and paths to wrap at their existing separators.
+function Code(code)
+  if FORMAT ~= 'latex' or #code.text <= 20 then return nil end
+  local parts = {}
+  local start = 1
+  for index in code.text:gmatch('()[%._/\\%-]') do
+    table.insert(parts, pandoc.Code(code.text:sub(start, index), code.attr))
+    table.insert(parts, pandoc.RawInline('latex', '\\allowbreak{}'))
+    start = index + 1
+  end
+  if #parts == 0 then return nil end
+  if start <= #code.text then
+    table.insert(parts, pandoc.Code(code.text:sub(start), code.attr))
+  end
+  return parts
+end
