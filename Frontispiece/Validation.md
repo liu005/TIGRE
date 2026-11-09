@@ -37,8 +37,9 @@ checks do not establish CUDA build/install correctness or GPU coverage; run
 the full suite below in a native environment as well. Production imports and
 package build behavior are unchanged.
 
-Local validation on 9 November 2026 in `recon-new`: **111 passed**. This is a
-Windows/Python 3.12 local run; the hosted Ubuntu matrix has not yet run.
+Local validation on 9 November 2026 in `recon-new`: **111 passed** on
+Windows/Python 3.12. The hosted Ubuntu Python 3.10 and 3.12 jobs both
+[passed for commit d9550b3](https://github.com/liu005/TIGRE/actions/runs/42570119483).
 
 ### Full and native checks
 
