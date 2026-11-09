@@ -5,11 +5,22 @@ repository (`D:\works\software\tigre-geometry-design-tool` for this extraction).
 
 TIGRE retains detector surfaces and modular constructors, native CUDA
 projectors, surface reconstruction, geometry serialization, rendering,
-animation and the headless detector recipe builder. YAML loading imports
-`tigre.utilities.detector_geometry_builder` and requires no GUI installation.
+animation and the headless detector recipe builder. YAML loading needs no GUI
+installation. Applications use these through `tigre.design_api` (see below).
+
+## Supported interface
+
+External applications must import from `tigre.design_api`, not from
+`tigre.utilities`. It re-exports the builder, file I/O, validation, remapping
+and rendering helpers under stable names and carries `API_VERSION = (major,
+minor)`; `require_api(major, minor)` raises if the installed TIGRE is
+incompatible. Remove or change a name only with a major version bump, and add
+names with a minor bump. `Python/tests/test_design_api.py` checks the facade and
+that it does not import a desktop toolkit. The tool declares the API version it
+needs (`REQUIRED_DESIGN_API`) instead of a `pytigre` version pin, because a
+development build and a stock release can share a version number.
 
 Install the desktop application from the new repository:
-
 ```powershell
 conda run -n recon python -m pip install --no-deps -e ..\tigre-geometry-design-tool
 & ..\tigre-geometry-design-tool\launch.ps1
@@ -18,7 +29,7 @@ conda run -n recon python -m pip install --no-deps -e ..\tigre-geometry-design-t
 Update Python application imports from
 `tigre.utilities.detector_geometry_gui` or `tigre_gui.detector_geometry_gui` to
 `tigre_geometry_design_tool.geometry_design_tool`. For numerical recipe construction use
-`from tigre.utilities.detector_geometry_builder import build_modular_surface`.
+`from tigre.design_api import build_modular_surface`.
 
 For MATLAB, initialize TIGRE as usual, then add the new repository's
 `MATLAB/Utilities` directory to the path and call `detectorGeometryGUI`.

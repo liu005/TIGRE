@@ -1,6 +1,7 @@
 """CPU tests of curved and tiled detector rendering, without GPU fixtures."""
 import numpy as np
 import pytest
+from conftest import poly_vertices
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
@@ -145,7 +146,7 @@ def test_animation_updates_per_view_mesh_coordinates():
     assert isinstance(artists[2], Poly3DCollection)
     assert isinstance(artists[3], Line3DCollection)
     expected_faces, _ = _surface_mesh(surface, 1)
-    np.testing.assert_allclose(artists[2]._vec[:3].T.reshape(-1, 3, 3), expected_faces)
+    np.testing.assert_allclose(poly_vertices(artists[2])[:3].T.reshape(-1, 3, 3), expected_faces)
     np.testing.assert_allclose(artists[4]._offsets3d, surface.pixel_centers_mm[1].reshape(-1, 3).T)
     ani._fig.canvas.draw()
     ani._draw_was_started = True

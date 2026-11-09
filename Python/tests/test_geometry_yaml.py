@@ -1,6 +1,7 @@
 """YAML round trips, exact companion surfaces, animation and GUI loading."""
 import numpy as np
 import pytest
+from conftest import poly_vertices
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
@@ -40,10 +41,10 @@ def test_moving_volume_yaml_and_renderer(tmp_path):
     try:
         ax = fig.add_subplot(111, projection="3d")
         renderer = SurfaceRenderer(ax, loaded.surface, geo=loaded.geometry)
-        initial = renderer.volume._vec.copy()
+        initial = poly_vertices(renderer.volume).copy()
         renderer.update(2)
-        np.testing.assert_allclose(renderer.volume._vec[2] - initial[2], 200)
-        np.testing.assert_allclose(renderer.volume._vec[:2], initial[:2])
+        np.testing.assert_allclose(poly_vertices(renderer.volume)[2] - initial[2], 200)
+        np.testing.assert_allclose(poly_vertices(renderer.volume)[:2], initial[:2])
         assert ax.get_zlim3d()[0] < -110
         assert ax.get_zlim3d()[1] > 110
     finally:

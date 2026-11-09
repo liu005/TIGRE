@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
 import pytest
+from conftest import poly_vertices
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
@@ -66,10 +67,10 @@ def test_renderer_rotates_box_while_hardware_stays_fixed():
     fig = plt.figure()
     try:
         renderer = SurfaceRenderer(fig.add_subplot(111, projection="3d"), build_modular_surface(**settings()), geo=volume())
-        vertices = renderer.volume._vec.copy()
+        vertices = poly_vertices(renderer.volume).copy()
         source = np.asarray(renderer.source._offsets3d).copy()
         renderer.update(1)
-        assert not np.allclose(vertices, renderer.volume._vec)
+        assert not np.allclose(vertices, poly_vertices(renderer.volume))
         np.testing.assert_allclose(renderer.source._offsets3d, source)
     finally:
         plt.close(fig)
