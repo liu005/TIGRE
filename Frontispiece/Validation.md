@@ -3,6 +3,9 @@
 Python requires **3.8 or newer**. Choose compatible dependency versions and
 native extensions for the selected interpreter. The latest audit fixes and
 validation results are recorded in the [9 November follow-up](Audit_fixes_2026-11-09.md).
+The [clean-install integration report](Clean_install_integration_2026-11-09.md)
+records the user's `recon-new` core results and a separate agent-run GUI
+save/export followed by installed GPU reconstruction with GUI imports blocked.
 
 From the repository root, set `PYTHONPATH` to the checkout's `Python` folder.
 An older installed TIGRE copy may not contain the new modules. The commands
@@ -10,6 +13,34 @@ below use the local `recon` Conda environment; other installations should use
 their own environment and matching native extensions.
 
 ## Python regression checks
+
+### Automated CPU and headless checks
+
+`.github/workflows/cpu-headless.yml` runs on pushes, pull requests and manual
+dispatch, with Ubuntu and Python 3.10/3.12. It installs CPU test dependencies
+and runs a curated suite covering build configuration, phantom loading, the
+public design API, GUI-free file round trips, detector geometry/remapping,
+MATLAB file conversion and dense solver references. JUnit reports are uploaded
+for each Python version.
+
+Reproduce locally (the runner requires Python 3.10 or newer):
+
+```powershell
+conda run -n recon-new python Python/tests/run_cpu_checks.py --junitxml=cpu-results.xml
+```
+
+The runner stages Python source without native binaries in a temporary folder.
+Test-only import guards allow the current eager CUDA imports to resolve but
+raise on any native call. GUI imports are also forbidden, including in child
+processes. A preflight verifies the staged package path and both guards. These
+checks do not establish CUDA build/install correctness or GPU coverage; run
+the full suite below in a native environment as well. Production imports and
+package build behavior are unchanged.
+
+Local validation on 9 November 2026 in `recon-new`: **111 passed**. This is a
+Windows/Python 3.12 local run; the hosted Ubuntu matrix has not yet run.
+
+### Full and native checks
 
 Installation regression tests exercise installed phantom lookup, CUDA version
 parsing, mixed-device target filtering, headless builds, Python 3.8 syntax and
