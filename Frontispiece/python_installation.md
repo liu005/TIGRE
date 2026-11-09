@@ -1,6 +1,12 @@
 Installation Instructions for Python
 ======
 
+TIGRE requires **Python 3.8 or newer** on Windows and Linux. Package metadata
+declares `python_requires=">=3.8"`; Python 3.7 and earlier are unsupported.
+Use dependency versions that support your interpreter. The historical tested
+versions below do not impose an upper Python version limit; native extensions
+must be built for the interpreter and CUDA toolkit you use.
+
 ## Table of contents
 
 - [Windows](#windows)
@@ -12,13 +18,14 @@ Installation Instructions for Python
    - [Simple Instructions](#simple-instructions-1)
    - [Step by Step Instructions](#step-by-step-instructions1)
 - [Optional Code Style Enforcement](#Optional-Code-Style-Enforcement)
+- [CUDA targets and bundled data](#cuda-targets-and-bundled-data)
 - [Advanced](#advanced)
    *****
 ## Windows
 
 ### Requirements:
 
-1. Python 3.7-3.11
+1. Python 3.8 or newer
 2. MVS
 3. A CUDA capable GPU from NVIDIA with [compute capability greater or equal to 3.5](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)
 4. CUDA Toolkit
@@ -28,7 +35,7 @@ Tested on
 | Software        | Version           | 
 | ------------- |:-------------:|
 |**Windows**| 10, 11 |
-|**Python**| 3.7 3.8 3.9 3.10, 3.11|
+|**Python**| 3.8, 3.9, 3.10, 3.11 (historical test configurations) |
 |**CUDA**| 9.2>|
 |**MSVC**| 19.24 |
 
@@ -77,7 +84,7 @@ A successful installation should be able to execute the script at `TIGRE/Python/
 
 We strongly recommend using `conda` environments and doing the install in one specific for tigre. 
 
-1. Python 3
+1. Python 3.8 or newer
 2. gcc
 3. A CUDA capable GPU from NVIDIA with [compute capability greater or equal to 3.5](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)
 4. CUDA Toolkit
@@ -88,7 +95,7 @@ Tested on
 | Software        | Version           | 
 | ------------- |:-------------:|
 |**Ubuntu**| 16.04>|
-|**Python**| 3.7-3.11|
+|**Python**| 3.8-3.11 (historical test configurations) |
 |**CUDA**| 9.2>|
 |**gcc**|  7.6.0|
 
@@ -199,6 +206,30 @@ check blanket noqa.......................................................Passed
 ```
 
 **NOTE:** pre-commit may also be manually invoked against *all* files (staged and unstaged) using the `pre-commit run --all-files`. However, some changes made to Python's TIGRE codebase by `black` have been manually reverted for readability reasons and should not be committed in their blackened state.
+
+## CUDA targets and bundled data
+
+`setup.py` detects GPU compute capabilities and filters them against its CUDA
+compatibility table. Detected devices that the selected toolkit cannot compile
+for produce a warning and are excluded. A mixed-device build targets the
+remaining compatible devices; it does not make excluded devices usable. If no
+detected devices are compatible, the build stops and requests a compatible
+toolkit. With no detected GPUs (for example on a build server), the build uses
+all toolkit-compatible targets in the table.
+
+For example, CUDA 12.0 with capabilities 8.6 and 12.0 targets only 8.6, including
+its PTX target. Blackwell targets 10.0 and 12.0 require CUDA 12.8 or newer.
+CUDA 13 removes compilation support for architectures below 7.5. These bounds
+follow NVIDIA's [CUDA 12.8 compiler documentation](https://docs.nvidia.com/cuda/archive/12.8.0/cuda-compiler-driver-nvcc/index.html)
+and [CUDA 13 release notes](https://docs.nvidia.com/cuda/archive/13.0.0/cuda-toolkit-release-notes/).
+Unknown capabilities require updating the table against the selected toolkit's
+compiler documentation.
+
+`sample_loader.load_head_phantom()` searches the checkout's `Common/data` and
+legacy package-relative locations, then the installed environment's
+`data/head.mat` (`sys.prefix/data/head.mat`). This includes Linux wheel installs,
+where the dataset is outside `lib/pythonX.Y/site-packages`. If the file is
+absent, reinstall the bundled dataset; the loader raises `FileNotFoundError`.
 
 ## Advanced 
 

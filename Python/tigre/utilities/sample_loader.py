@@ -1,5 +1,6 @@
 from __future__ import division
 import os
+import sys
 import numpy as np
 import scipy.io
 import scipy.ndimage
@@ -14,9 +15,10 @@ def load_head_phantom(number_of_voxels=None):
         "../../../../data/head.mat",  # pip 
         "../data/head.mat" 
     ]
+    candidates = [os.path.join(os.path.dirname(__file__), path) for path in list_relative_path]
+    candidates.append(os.path.join(sys.prefix, "data", "head.mat"))
     found = False
-    for relative_path in list_relative_path:
-        abs_path = os.path.join(os.path.dirname(__file__), relative_path)
+    for abs_path in candidates:
         if os.path.isfile(abs_path):
             found = True
             break

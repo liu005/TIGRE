@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 import shutil
-import re
+import warnings
 
 from Cython.Distutils import build_ext
 import numpy
@@ -43,9 +43,6 @@ def detect_gpu_compute_capabilities():
             cap = line.strip().replace(".", "")
             if cap:
                 caps.add(cap)
-        if not caps:
-            caps = {"75"} # fall back minimum
-
         return sorted(caps, key=int)
 
     except Exception:
@@ -55,24 +52,24 @@ def detect_gpu_compute_capabilities():
 # Code from https://github.com/pytorch/pytorch/blob/master/torch/utils/cpp_extension.py
 
 CC_COMPATIBILITY_TABLE = [
-    (20, 20,  3.0, 8.0),
-    (21, 21,  3.0, 8.0),
-    (30, 30,  4.2, 10.2),
-    (32, 32,  4.2, 10.2),
-    (35, 35,  5.0, 11.4),
-    (37, 37,  6.5, 11.4), 
-    (50, 50,  6.5, 11.8), 
-    (52, 52,  6.5, 11.8), 
-    (60, 60,  8.0, 12.8), 
-    (61, 61,  8.0, 12.8), 
-    (70, 70,  9.0, 12.8), 
+    (20, 20,  3.0, 9.0),
+    (20, 21,  3.2, 9.0),
+    (30, 30,  4.2, 11.0),
+    (32, 32,  6.0, 11.0),
+    (35, 35,  5.0, 12.0),
+    (37, 37,  6.5, 12.0),
+    (50, 50,  6.5, 13.0),
+    (52, 52,  6.5, 13.0),
+    (60, 60,  8.0, 13.0),
+    (61, 61,  8.0, 13.0),
+    (70, 70,  9.0, 13.0),
     (75, 75, 10.0, 999 ), # From CUDA 10
     (80, 80, 11.0, 999 ), # From CUDA 11.0
     (86, 86, 11.1, 999 ), # From CUDA 11.1
     (87, 87, 11.5, 999 ),
     (89, 89, 11.8, 999 ),
-    (90, 90, 12.0, 999 ), # From CUDA 12
-    (100, 100, 12.6, 999),
+    (90, 90, 11.8, 999 ),
+    (100, 100, 12.8, 999),
     (120, 120, 12.8, 999)
 ]
 
@@ -90,17 +87,60 @@ def get_cuda_version(cuda_home):
     try:
         if os.path.isfile(version_file):
             with open(version_file) as f:
-                version_str = f.readline().replace("\n", "").replace("\r", "")
-                return version_str.split(" ")[2][:4]
+                version_str = f.readline()
         else:
             version_str = subprocess.check_output(
                 [os.path.join(cuda_home, "bin", "nvcc"), "--version"]
             )
-            version_str = str(version_str).replace("\n", "").replace("\r", "")
-            idx = version_str.find("release")
-            return version_str[idx + len("release ") : idx + len("release ") + 4]
-    except:
-        raise RuntimeError("Cannot read cuda version file")
+            version_str = version_str.decode("utf-8")
+        match = re.search(r"(?:release\s+|CUDA\s+Version\s+)(\d+\.\d+)", version_str)
+        if match is None:
+            raise ValueError("Unrecognized CUDA version output")
+        return match.group(1)
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        raise RuntimeError("Cannot read CUDA version from version.txt or nvcc --version") from error
+
+
+def cuda_version_tuple(version):
+    """Compare numeric major/minor components without truncation or float ordering."""
+    parts = str(version).split(".")
+    return int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+
+
+def compute_capability_args(cuda_version, gpu_caps):
+    """Select toolkit-compatible targets for detected GPUs or a headless build."""
+    version = cuda_version_tuple(cuda_version)
+    supported = {
+        str(sm): str(compute)
+        for compute, sm, begin, end in CC_COMPATIBILITY_TABLE
+        if cuda_version_tuple(begin) <= version < cuda_version_tuple(end)
+    }
+    if gpu_caps:
+        excluded = sorted(set(gpu_caps) - supported.keys(), key=int)
+        if excluded:
+            warnings.warn(
+                "CUDA {} cannot compile detected GPU capabilities {}; excluding these devices. "
+                "Use a toolkit compatible with those GPUs to target them.".format(
+                    cuda_version, ", ".join(excluded)
+                ), RuntimeWarning,
+            )
+        selected = sorted(set(gpu_caps) & supported.keys(), key=int)
+    else:
+        selected = sorted(supported, key=int)
+    if not selected:
+        raise RuntimeError(
+            "No supported GPU compilation targets for CUDA {} and detected capabilities {}. "
+            "Install a compatible CUDA toolkit or update CC_COMPATIBILITY_TABLE in setup.py."
+            .format(cuda_version, list(gpu_caps))
+        )
+    args = [
+        "-gencode=arch=compute_{},code=sm_{}".format(supported[cap], cap)
+        for cap in selected
+    ]
+    if gpu_caps and version >= (12, 0):
+        compute = supported[selected[-1]]
+        args.append("-gencode=arch=compute_{0},code=compute_{0}".format(compute))
+    return args
 
 
 def locate_cuda():
@@ -153,38 +193,12 @@ def _is_cuda_file(path):
 
 CUDA, CUDA_VERSION = locate_cuda()
 
-#cuda_version = 13.0
-try:
-    cuda_version = float(CUDA_VERSION)
-except ValueError:
-    cuda_list = re.findall(r'\d+', CUDA_VERSION)
-    cuda_version = float( str(cuda_list[0] + '.' + cuda_list[1]))
-
 # Auto detect gpus
 gpu_caps = detect_gpu_compute_capabilities()
 
 if gpu_caps:
     print("Detected GPU compute capabilities:", gpu_caps)
-    for cap in gpu_caps:
-        COMPUTE_CAPABILITY_ARGS.insert(
-            0, f"-gencode=arch=compute_{cap},code=sm_{cap}"
-        )
-else:
-    # fallback to original behavior
-    for item in CC_COMPATIBILITY_TABLE:
-        support_begin = item[2]
-        support_end = item[3]
-        if cuda_version < support_begin:
-            continue
-        if cuda_version >= support_end:
-            continue
-        str_arg = f"-gencode=arch=compute_{item[0]},code=sm_{item[1]}"
-        COMPUTE_CAPABILITY_ARGS.insert(0, str_arg)
-
-if gpu_caps and float(CUDA_VERSION) >= 12:
-    COMPUTE_CAPABILITY_ARGS.append(
-        f"-gencode=arch=compute_{gpu_caps[-1]},code=compute_{gpu_caps[-1]}"
-    )        
+COMPUTE_CAPABILITY_ARGS.extend(compute_capability_args(CUDA_VERSION, gpu_caps))
         
 # Obtain the numpy include directory.  This logic works across numpy versions.
 try:
@@ -572,6 +586,7 @@ RandomNumberGenerator_ext = Extension(
 
 setup(
     name="pytigre",
+    python_requires=">=3.8",
     version="3.2.0",
     author="Ander Biguri, Reuben Lindroos, Sam Loescher",
     packages=find_packages(),

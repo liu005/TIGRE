@@ -6,6 +6,7 @@ remain in NPZ companions, loaded without pickle. No Tk window is required.
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Optional
 import inspect
 import uuid
 import tempfile
@@ -129,7 +130,7 @@ def load_geometry_archive(path):
 class GeometryDocument:
     geometry: object
     surface: object
-    settings: dict | None = None
+    settings: Optional[dict] = None
 
 
 def _yaml():

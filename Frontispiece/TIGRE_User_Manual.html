@@ -385,8 +385,8 @@ id="toc-companion-references">Companion references</a></li>
 </nav>
 <p><strong>TIGRE</strong><br />
 <strong>User Manual — Python and MATLAB</strong></p>
-<p><strong>Manual version: 1.0</strong><br />
-<strong>Updated: 6 November 2026</strong><br />
+<p><strong>Manual version: 1.1</strong><br />
+<strong>Updated: 9 November 2026</strong><br />
 <strong>Software scope: this development checkout, including explicit
 detector surfaces and projection operators.</strong></p>
 <p>This manual describes the reconstruction toolbox. The desktop
@@ -480,6 +480,11 @@ new module appear missing or make tests exercise a different
 implementation.</p>
 <h2 id="python-build-and-dependencies">Python build and
 dependencies</h2>
+<p>TIGRE requires <strong>Python 3.8 or newer</strong> on Windows and
+Linux. The package declares <code>python_requires="&gt;=3.8"</code>;
+Python 3.7 and earlier are unsupported. Choose dependency versions
+compatible with your interpreter, and build native extensions for that
+interpreter and toolkit.</p>
 <p>This fork uses <code>Python/setup.py</code>. Build from its
 <code>Python</code> directory in a prepared CUDA/compiler environment;
 the local <a href="python_installation.md">installation guide</a>
@@ -492,6 +497,17 @@ tool. Resolve the CUDA toolkit, supported host compiler and dependencies
 first. Consult the actual build output if compilation fails. The build
 name <code>pytigre</code> and Python import name <code>tigre</code> are
 different names for different purposes.</p>
+<p>The build filters detected GPU capabilities against its CUDA
+compatibility table. In a mixed-device machine it warns about excluded
+devices and builds targets for the remaining compatible GPUs. If none
+can be targeted, it stops with guidance to use a compatible toolkit. If
+no GPUs are detected, it builds the table's toolkit-compatible targets.
+An excluded GPU is not a supported execution device for that build. See
+the <a href="python_installation.md">installation guide</a> for
+details.</p>
+<p>The bundled head phantom is found in the checkout's
+<code>Common/data</code> directory or the installed environment's
+<code>data</code> directory, including Linux installations.</p>
 <p>The source declares NumPy, SciPy, Matplotlib, Cython, tqdm and PyYAML
 dependencies. CuPy and PyTorch are optional capabilities; they are not
 prerequisites for the ordinary iterative examples below. See <a

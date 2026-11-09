@@ -1,5 +1,9 @@
 # Python demos
 
+Use Python 3.8 or newer with matching compiled CUDA extensions. See the
+[installation guide](../../Frontispiece/python_installation.md) for compatible
+toolkits, dependencies and bundled phantom lookup.
+
 Use the [core user manual](../../Frontispiece/TIGRE_User_Manual.md) for the complete
 workflow and [validation guide](../../Frontispiece/Validation.md) for reproducible checks.
 Run from a checkout with matching native binaries. Python execution uses `recon`;

@@ -1,11 +1,27 @@
 # Validation of the detector and demo workflows
 
+Python requires **3.8 or newer**. Choose compatible dependency versions and
+native extensions for the selected interpreter. The latest audit fixes and
+validation results are recorded in the [9 November follow-up](Audit_fixes_2026-11-09.md).
+
 From the repository root, set `PYTHONPATH` to the checkout's `Python` folder.
 An older installed TIGRE copy may not contain the new modules. The commands
 below use the local `recon` Conda environment; other installations should use
 their own environment and matching native extensions.
 
 ## Python regression checks
+
+Installation regression tests exercise installed phantom lookup, CUDA version
+parsing, mixed-device target filtering, headless builds, Python 3.8 syntax and
+minimum-version metadata without invoking a CUDA compiler:
+
+```powershell
+$env:PYTHONPATH = Join-Path $PWD 'Python'
+conda run -n recon python -m pytest Python/tests/test_build_configuration.py Python/tests/test_sample_loader.py -q
+```
+
+Syntax checks and annotation checks do not replace a native build and full
+runtime validation on Python 3.8.
 
 The [final 3 November project audit](Project_audit_2026-11-03.md) records
 451 passing Python tests, 25 passing MATLAB suites, dependency checks,

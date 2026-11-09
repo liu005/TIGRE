@@ -99,6 +99,9 @@ TIGRE is a GPU-based CT reconstruction software repository that contains a wide 
 
 MATLAB and Python builds are both fully supported.
 
+The Python package requires **Python 3.8 or newer**, a compatible NVIDIA CUDA
+toolkit and host compiler. Dependencies must support the selected Python version.
+
 - [Installation instructions and requirements for MATLAB](Frontispiece/MATLAB_installation.md).
 
 - [Installation instructions and requirements for Python](Frontispiece/python_installation.md). 

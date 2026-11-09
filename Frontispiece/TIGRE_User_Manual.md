@@ -1,8 +1,8 @@
 **TIGRE**\
 **User Manual — Python and MATLAB**
 
-**Manual version: 1.0**\
-**Updated: 6 November 2026**\
+**Manual version: 1.1**\
+**Updated: 9 November 2026**\
 **Software scope: this development checkout, including explicit detector surfaces and projection operators.**
 
 This manual describes the reconstruction toolbox. The desktop application and
@@ -68,6 +68,11 @@ or make tests exercise a different implementation.
 
 ## Python build and dependencies
 
+TIGRE requires **Python 3.8 or newer** on Windows and Linux. The package declares
+`python_requires=">=3.8"`; Python 3.7 and earlier are unsupported. Choose dependency
+versions compatible with your interpreter, and build native extensions for that
+interpreter and toolkit.
+
 This fork uses `Python/setup.py`. Build from its `Python` directory in a prepared
 CUDA/compiler environment; the local [installation guide](python_installation.md)
 documents the build configuration. A typical editable build command is:
@@ -80,6 +85,16 @@ That command is a build/install action, not an environment-discovery tool. Resol
 the CUDA toolkit, supported host compiler and dependencies first. Consult the
 actual build output if compilation fails. The build name `pytigre` and Python
 import name `tigre` are different names for different purposes.
+
+The build filters detected GPU capabilities against its CUDA compatibility table.
+In a mixed-device machine it warns about excluded devices and builds targets for
+the remaining compatible GPUs. If none can be targeted, it stops with guidance
+to use a compatible toolkit. If no GPUs are detected, it builds the table's
+toolkit-compatible targets. An excluded GPU is not a supported execution device
+for that build. See the [installation guide](python_installation.md) for details.
+
+The bundled head phantom is found in the checkout's `Common/data` directory or
+the installed environment's `data` directory, including Linux installations.
 
 The source declares NumPy, SciPy, Matplotlib, Cython, tqdm and PyYAML dependencies.
 CuPy and PyTorch are optional capabilities; they are not prerequisites for the

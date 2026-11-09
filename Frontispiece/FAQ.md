@@ -64,9 +64,10 @@ this. Hopefully we can find a solution for this without the need of restarting M
 
 *A: No. CUDA only allows windows compilation using Visual Studio. The free versions are good enough, however.*
 
-**Q: Is the pyhton version available for Windows?**
+**Q: Is the Python version available for Windows?**
 
-*A: Yes, but there are particular versions of python 3 that had caused problems, so please report back to us if you had issues. *
+*A: Yes. TIGRE requires Python 3.8 or newer on Windows and Linux, plus a compatible
+CUDA toolkit and compiler. See the [Python installation guide](python_installation.md).*
 
 **Q: Can I use your code for XXXXXX**
 
